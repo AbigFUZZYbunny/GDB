@@ -1,8 +1,0 @@
-{
-	"BuildId": "55116800",
-	"Modules": 
-	{
-		"GDB": "UnrealEditor-GDB.dll",
-		"GameAnimationSample": "UnrealEditor-GameAnimationSample.dll"
-	}
-}

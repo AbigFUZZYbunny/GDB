@@ -47,6 +47,24 @@ enum class ESequenceTriggerTiming : uint8 { TriggerWithEachSelection, TriggerAft
 UENUM(BlueprintType)
 enum class EThresholdTriggerType : uint8 { LevelUpAttribute, EvolveAttribute };
 
+UENUM(BlueprintType)
+enum class EEffectDurationPolicy : uint8 { Instant, Infinite, HasDuration };
+
+UENUM(BlueprintType)
+enum class EEffectModifierOp : uint8 { Additive, Multiplicative, Override };
+
+UENUM(BlueprintType)
+enum class EGameplayEffectInhibitionPolicy : uint8 { NeverInhibit, InhibitWithTags };
+
+UENUM(BlueprintType)
+enum class EGameplayEffectStackingPolicy : uint8 { None, AggregateBySource, AggregateByTarget };
+
+UENUM(BlueprintType)
+enum class EGameplayEffectStackExpirationPolicy : uint8 { ClearEntireStack, RemoveSingleStack, RefreshToZero };
+
+UENUM(BlueprintType)
+enum class EGameplayEffectStackDurationRefreshPolicy : uint8 { RefreshDuration, NeverRefresh };
+
 // --- UHT REPLICATION MAP WORKAROUND WRAPPERS ---
 
 USTRUCT(BlueprintType)
@@ -257,6 +275,89 @@ struct FDynamicAttributeDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     bool bDoesReplicate = true;
 };
+USTRUCT(BlueprintType)
+struct FDynamicEffectExecutionDef
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect")
+	FString ExecutionClassPath;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect")
+	FGameplayTag ScalingAttribute;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect")
+	float ScalingMultiplier = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicModifierDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    FGameplayTag TargetAttributeTag;
+
+    // How the calculation should be applied mathematically
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Modifiers")
+    EEffectModifierOp ModifierOp = EEffectModifierOp::Additive;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    float BaseMagnitude = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    FGameplayTagContainer SourceTagRequirements;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    FGameplayTagContainer TargetTagRequirements;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEffectDef
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Core")
+	EEffectDurationPolicy DurationPolicy = EEffectDurationPolicy::Instant;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Core")
+	float DurationMagnitude = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Core")
+	float Period = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Core")
+	EGameplayEffectInhibitionPolicy PeriodicInhibitionPolicy = EGameplayEffectInhibitionPolicy::NeverInhibit;
+
+	// --- Stacking Management Configurations ---
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Stacking")
+	EGameplayEffectStackingPolicy StackingPolicy = EGameplayEffectStackingPolicy::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Stacking")
+	int32 MaxStackCount = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Stacking")
+	EGameplayEffectStackExpirationPolicy StackExpirationPolicy = EGameplayEffectStackExpirationPolicy::ClearEntireStack;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Stacking")
+	EGameplayEffectStackDurationRefreshPolicy StackDurationRefreshPolicy = EGameplayEffectStackDurationRefreshPolicy::RefreshDuration;
+
+	// --- Dynamic Gameplay Tags & Visual Cue Streams ---
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Tags")
+	FGameplayTagContainer GameplayCues;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Tags")
+	FGameplayTagContainer GrantedTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Logic")
+	FName ConditionTreeLinkName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Logic")
+	TArray<FDynamicModifierDef> Modifiers;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Logic")
+	TArray<FDynamicEffectExecutionDef> ExecutionCalculations;
+};
 
 // --- FLATTENED TRUTH LOGIC TREES (FIX: No recursive wrappers) ---
 
@@ -394,24 +495,6 @@ struct FDynamicAbilityDef
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicModifierDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FGameplayTag TargetAttributeTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    float BaseMagnitude = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FGameplayTagContainer SourceTagRequirements;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FGameplayTagContainer TargetTagRequirements;
-};
-
-USTRUCT(BlueprintType)
 struct FDynamicMilestoneAction
 {
     GENERATED_BODY()
@@ -472,6 +555,121 @@ struct FDynamicThresholdContainer
     TArray<FDynamicThresholdRule> Rules;
 };
 
+USTRUCT(BlueprintType)
+struct FPhysicsCalculationSettings
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString CalculationMode = TEXT("ImpulseMagnitude");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MinImpulseThreshold = 350.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MaxImpulseCap = 25000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ImpulseToDamageScalar = 0.0085f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MassRatioExponent = 0.75f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MinRelativeVelocityThreshold = 200.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float VelocityToDamageScalar = 0.05f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float CooldownBetweenHitsPerLimb = 0.15f;
+};
+
+USTRUCT(BlueprintType)
+struct FLimbAttributeModifiers
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float HealthReductionMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float StabilityDamage = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float StunDuration = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FPhysicsLimbConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    uint8 LimbId = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag LimbTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString DisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float DamageMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ImpulseMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float StumbleThreshold = 1000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BreakRagdollThreshold = 2000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FName> Bones;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FLimbAttributeModifiers AssociatedAttributes;
+};
+
+USTRUCT(BlueprintType)
+struct FPhysicsDamageConfigData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Version = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ConfigName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FPhysicsCalculationSettings CalculationSettings;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FPhysicsLimbConfig> Limbs;
+};
+
+// Compact replicate-ready hit payload: total size ~24 bytes (instead of >100 bytes using FHitResult/FNames)
+USTRUCT(BlueprintType)
+struct FFastPhysicsHitRepData : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    uint8 TargetLimbId = 0; // Looked up via Bone-to-Limb runtime map
+
+    UPROPERTY()
+    uint16 PackedImpulseMagnitude = 0; // Half-float / quantized impulse
+
+    UPROPERTY()
+    FVector_NetQuantizeNormal HitNormal = FVector_NetQuantizeNormal::ZeroVector;
+
+    UPROPERTY()
+    FVector_NetQuantize10 HitLocation = FVector_NetQuantize10::ZeroVector;
+};
+
 // --- DATA PIPELINE ROUTING WRAPPERS FOR REPLICATION ---
 USTRUCT(BlueprintType)
 struct FTagAbilityDefPair
@@ -519,4 +717,12 @@ struct FTagThresholdPair
     GENERATED_BODY()
     UPROPERTY() FGameplayTag KeyTag;
     UPROPERTY() FDynamicThresholdContainer ValueContainer;
+};
+
+USTRUCT(BlueprintType)
+struct FTagEffectPair
+{
+    GENERATED_BODY()
+    UPROPERTY() FGameplayTag KeyTag;
+    UPROPERTY() FDynamicEffectDef ValueDef;
 };

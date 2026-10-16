@@ -1,0 +1,137 @@
+﻿{
+  "Version": 1,
+  "ConfigName": "DefaultPhysicsDamageConfig",
+  "CalculationSettings": {
+    "CalculationMode": "ImpulseMagnitude",
+    "MinImpulseThreshold": 350.0,
+    "MaxImpulseCap": 25000.0,
+    "ImpulseToDamageScalar": 0.0085,
+    "MassRatioExponent": 0.75,
+    "MinRelativeVelocityThreshold": 200.0,
+    "VelocityToDamageScalar": 0.05,
+    "CooldownBetweenHitsPerLimb": 0.15
+  },
+  "Limbs": [
+    {
+      "LimbId": 0,
+      "LimbTag": "HitReaction.Limb.Head",
+      "DisplayName": "Head",
+      "DamageMultiplier": 2.5,
+      "ImpulseMultiplier": 1.2,
+      "StumbleThreshold": 600.0,
+      "BreakRagdollThreshold": 1200.0,
+      "Bones": [
+        "head",
+        "neck_01",
+        "neck_02"
+      ],
+      "AssociatedAttributes": {
+        "HealthReductionMultiplier": 2.5,
+        "StabilityDamage": 100.0,
+        "StunDuration": 1.5
+      }
+    },
+    {
+      "LimbId": 1,
+      "LimbTag": "HitReaction.Limb.Torso",
+      "DisplayName": "Torso",
+      "DamageMultiplier": 1.0,
+      "ImpulseMultiplier": 1.0,
+      "StumbleThreshold": 1200.0,
+      "BreakRagdollThreshold": 2500.0,
+      "Bones": [
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "spine_04",
+        "spine_05",
+        "pelvis"
+      ],
+      "AssociatedAttributes": {
+        "HealthReductionMultiplier": 1.0,
+        "StabilityDamage": 50.0,
+        "StunDuration": 0.25
+      }
+    },
+    {
+      "LimbId": 2,
+      "LimbTag": "HitReaction.Limb.ArmLeft",
+      "DisplayName": "Left Arm",
+      "DamageMultiplier": 0.7,
+      "ImpulseMultiplier": 0.8,
+      "StumbleThreshold": 800.0,
+      "BreakRagdollThreshold": 1800.0,
+      "Bones": [
+        "clavicle_l",
+        "upperarm_l",
+        "lowerarm_l",
+        "hand_l"
+      ],
+      "AssociatedAttributes": {
+        "HealthReductionMultiplier": 0.7,
+        "StabilityDamage": 25.0,
+        "StunDuration": 0.0
+      }
+    },
+    {
+      "LimbId": 3,
+      "LimbTag": "HitReaction.Limb.ArmRight",
+      "DisplayName": "Right Arm",
+      "DamageMultiplier": 0.7,
+      "ImpulseMultiplier": 0.8,
+      "StumbleThreshold": 800.0,
+      "BreakRagdollThreshold": 1800.0,
+      "Bones": [
+        "clavicle_r",
+        "upperarm_r",
+        "lowerarm_r",
+        "hand_r"
+      ],
+      "AssociatedAttributes": {
+        "HealthReductionMultiplier": 0.7,
+        "StabilityDamage": 25.0,
+        "StunDuration": 0.0
+      }
+    },
+    {
+      "LimbId": 4,
+      "LimbTag": "HitReaction.Limb.LegLeft",
+      "DisplayName": "Left Leg",
+      "DamageMultiplier": 0.85,
+      "ImpulseMultiplier": 1.3,
+      "StumbleThreshold": 700.0,
+      "BreakRagdollThreshold": 1400.0,
+      "Bones": [
+        "thigh_l",
+        "calf_l",
+        "foot_l",
+        "ball_l"
+      ],
+      "AssociatedAttributes": {
+        "HealthReductionMultiplier": 0.85,
+        "StabilityDamage": 80.0,
+        "StunDuration": 0.5
+      }
+    },
+    {
+      "LimbId": 5,
+      "LimbTag": "HitReaction.Limb.LegRight",
+      "DisplayName": "Right Leg",
+      "DamageMultiplier": 0.85,
+      "ImpulseMultiplier": 1.3,
+      "StumbleThreshold": 700.0,
+      "BreakRagdollThreshold": 1400.0,
+      "Bones": [
+        "thigh_r",
+        "calf_r",
+        "foot_r",
+        "ball_r"
+      ],
+      "AssociatedAttributes": {
+        "HealthReductionMultiplier": 0.85,
+        "StabilityDamage": 80.0,
+        "StunDuration": 0.5
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+﻿{
+  "_comment": "This schema defines your FDynamicConditionTreeContainer validation nodes. It uses flat Index-Based Tracking (where Node 0 is the starting root evaluate node, pointing down to indices 1 and 2) to maintain complex logic branches while staying completely compliant with the Unreal Header Tool (UHT).",
+  "SharedConditionTrees": {
+    "Trigger.Condition.CanDodgeRoll": {
+      "FlatNodes": [
+        {
+          "ConditionType": "LogicalGateOnly",
+          "LogicOperator": "And",
+          "ChildIndices": [ 1, 2 ],
+          "UserDefinedKey": "None",
+          "bCheckSource": true,
+          "ComparisonOperator": "Equal",
+          "ComparisonValue": 0.0
+        },
+        {
+          "ConditionType": "AttributeValue",
+          "LogicOperator": "And",
+          "ChildIndices": [],
+          "UserDefinedKey": "Attribute.Stat.Stamina",
+          "bCheckSource": true,
+          "ComparisonOperator": "GreaterThanOrEqual",
+          "ComparisonValue": 15.0
+        },
+        {
+          "ConditionType": "TagExists",
+          "LogicOperator": "And",
+          "ChildIndices": [],
+          "UserDefinedKey": "State.Debuff.Crippled",
+          "bCheckSource": true,
+          "ComparisonOperator": "NotEqual",
+          "ComparisonValue": 1.0
+        }
+      ]
+    }
+  }
+}

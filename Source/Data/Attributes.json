@@ -1,0 +1,69 @@
+﻿{
+  "_comment":"This schema handles default attribute values via the FFastAttributeArray layout, automatic milestone modifiers such as stat gains on level up, and progressive breakthrough capping calculations",
+  "AttributeMasterRegistry": {
+    "Attribute.Stat.Health": {
+      "AttributeTag": "Attribute.Stat.Health",
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.MaxHealth": {
+      "AttributeTag": "Attribute.Stat.MaxHealth",
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Experience": {
+      "AttributeTag": "Attribute.Stat.Experience",
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.MaxExperience": {
+      "AttributeTag": "Attribute.Stat.MaxExperience",
+      "DefaultValue": 1000.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Level": {
+      "AttributeTag": "Attribute.Stat.Level",
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Modifier.XpGainRate": {
+      "AttributeTag": "Attribute.Modifier.XpGainRate",
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    }
+  },
+
+  "MasterMilestoneRegistry": {
+    "Attribute.Stat.Level": {
+      "MilestoneActions": [
+        {
+          "ExecutionTriggerConditionTag": "None",
+          "bIsIntervalRepeating": true,
+          "EffectsToApply": [
+            {
+              "TargetAttributeTag": "Attribute.Stat.MaxHealth",
+              "BaseMagnitude": 25.0,
+              "SourceTagRequirements": [],
+              "TargetTagRequirements": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+
+  "MasterThresholdRegistry": {
+    "Attribute.Stat.Experience": {
+      "Rules": [
+        {
+          "MonitoredAttributeTag": "Attribute.Stat.Experience",
+          "MaxThresholdAttributeTag": "Attribute.Stat.MaxExperience",
+          "TargetEvolvedAttributeTag": "Attribute.Stat.Level",
+          "TriggerBehavior": "SwapAttributes",
+          "GainModifierAttributeTag": "Attribute.Modifier.XpGainRate",
+          "LossModifierAttributeTag": "None"
+        }
+      ]
+    }
+  }
+}

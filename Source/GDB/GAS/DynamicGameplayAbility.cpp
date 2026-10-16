@@ -259,3 +259,4 @@ void UDynamicGameplayAbility::OnRep_AbilityConfig()
     // Notify local systems or UI elements that the ability configuration has changed
     OnAbilityConfigChanged.Broadcast(AbilityConfig);
 }
+

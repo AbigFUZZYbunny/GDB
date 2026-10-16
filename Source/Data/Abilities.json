@@ -1,0 +1,91 @@
+﻿{
+  "_comment":"This schema covers your extended execution layouts. It maps out your baseline parameter lookups, lifecycle rules, Aura parameters, Chain routing math, and UE 5.8 Mover dynamic mode specifications.",
+  "AbilityMasterRegistry": {
+    "Ability.Skill.ImmolationAura": {
+      "ExecutionType": "Aura",
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 15.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0 },
+      "ProjectileConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
+      "AoeConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
+      "AuraConfig": {
+        "AuraLinkTag": "Archetype.Aura.FireSwirl",
+        "AuraMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Aura.Param.Radius", "Value": 400.0 },
+            { "KeyTag": "Aura.Param.TickRate", "Value": 0.5 }
+          ]
+        }
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": { "PhysicsType": "LaunchVelocity", "MotionTagIdentifier": "None", "MovementMetrics": { "ReplicatedEntries": [] } }
+    },
+
+    "Ability.Skill.ChainLightning": {
+      "ExecutionType": "Chain",
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 100.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0 },
+      "ProjectileConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
+      "AoeConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
+      "AuraConfig": { "AuraLinkTag": "None", "AuraMetrics": { "ReplicatedEntries": [] } },
+      "ChainConfig": {
+        "MaxBounces": 4,
+        "DamageFalloffPerBounce": 0.75,
+        "BounceSearchRadius": 600.0,
+        "ForbiddenTargetTags": [ "State.Buff.Invulnerable", "State.Debuff.Grounded" ]
+      },
+      "MovementConfig": { "PhysicsType": "LaunchVelocity", "MotionTagIdentifier": "None", "MovementMetrics": { "ReplicatedEntries": [] } }
+    },
+
+    "Ability.Skill.DodgeRoll": {
+      "ExecutionType": "Movement",
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.CanDodgeRoll",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0 },
+      "ProjectileConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
+      "AoeConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
+      "AuraConfig": { "AuraLinkTag": "None", "AuraMetrics": { "ReplicatedEntries": [] } },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "Movement.State.Dashing",
+        "MovementMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Movement.Param.Velocity", "Value": 1500.0 },
+            { "KeyTag": "Movement.Param.Duration", "Value": 0.35 }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -45,6 +45,9 @@ public:
 
     UPROPERTY(ReplicatedUsing = OnRep_MasterThresholdRegistryArr)
     TArray<FTagThresholdPair> MasterThresholdRegistryArr;
+    
+    UPROPERTY(ReplicatedUsing = OnRep_MasterEffectRegistryArr)
+    TArray<FTagEffectPair> MasterEffectRegistryArr;
 
     // --- Local Fast Authoritative Lookups ---
     TMap<FGameplayTag, FDynamicAttributeDef> AttributeMasterRegistry; // FIX: Added missing map
@@ -54,15 +57,18 @@ public:
     TMap<FName, FDynamicConditionTreeContainer> SharedConditionTrees;
     TMap<FGameplayTag, FDynamicMilestoneContainer> MasterMilestoneRegistry;
     TMap<FGameplayTag, FDynamicThresholdContainer> MasterThresholdRegistry;
+    TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
 
     void RegisterNewDynamicAbility(FGameplayTag AbilityTag, FDynamicAbilityDef AbilityDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions);
+    void RegisterNewDynamicEffect(FGameplayTag EffectTag, FDynamicEffectDef EffectDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions);
 
 protected:
-    UFUNCTION() void OnRep_AttributeMasterRegistryArr(); // FIX: Added missing OnRep descriptor
+    UFUNCTION() void OnRep_AttributeMasterRegistryArr();
     UFUNCTION() void OnRep_ProjectileArchetypesArr();
     UFUNCTION() void OnRep_AoeArchetypesArr();
     UFUNCTION() void OnRep_AbilityMasterRegistryArr();
     UFUNCTION() void OnRep_SharedConditionTreesArr();
     UFUNCTION() void OnRep_MasterMilestoneRegistryArr();
     UFUNCTION() void OnRep_MasterThresholdRegistryArr();
+    UFUNCTION() void OnRep_MasterEffectRegistryArr();
 };

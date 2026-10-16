@@ -1,0 +1,57 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "Version": 1,
+  "Triggers": [
+    {
+      "TriggerId": 301,
+      "TriggerName": "OnSkeletalMeshCollisionImpact",
+      "TriggerType": "PhysicsCollision",
+      "Channel": "RagdollComponentHit",
+      "EvaluationCriteria": {
+        "MinImpulse": 350.0,
+        "TargetBoneFilter": [],
+        "IgnoreBoneFilter": ["root", "weapon_r"],
+        "RequiredTargetStateTags": [],
+        "BlockedTargetStateTags": ["State.Invulnerable"]
+      },
+      "ActionResponse": {
+        "ActionType": "TriggerAbility",
+        "TargetAbilityId": 201,
+        "TargetEffectId": 101,
+        "ForwardHitPayloadToContext": true
+      }
+    },
+    {
+      "TriggerId": 302,
+      "TriggerName": "OnStabilityZeroBreakPost",
+      "TriggerType": "AttributeThreshold",
+      "Channel": "DynamicAttributeSet.Stability",
+      "EvaluationCriteria": {
+        "ThresholdMode": "LesserThanOrEqual",
+        "ThresholdValue": 0.0,
+        "TriggerOncePerDrop": true
+      },
+      "ActionResponse": {
+        "ActionType": "ApplyEffect",
+        "TargetAbilityId": 0,
+        "TargetEffectId": 102,
+        "ForwardHitPayloadToContext": false
+      }
+    },
+    {
+      "TriggerId": 303,
+      "TriggerName": "OnGameplayTagRagdollKnockdown",
+      "TriggerType": "GameplayEvent",
+      "Channel": "Event.Physics.Knockdown",
+      "EvaluationCriteria": {
+        "EventTag": "Event.Physics.Knockdown"
+      },
+      "ActionResponse": {
+        "ActionType": "TriggerAbility",
+        "TargetAbilityId": 201,
+        "TargetEffectId": 0,
+        "ForwardHitPayloadToContext": true
+      }
+    }
+  ]
+}

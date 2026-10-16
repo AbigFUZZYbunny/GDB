@@ -12,5 +12,10 @@ class GDB_API UDynamicEffectExecution : public UGameplayEffectExecutionCalculati
 
 public:
 	UDynamicEffectExecution();
-	virtual void Execute_Implementation(const FGameplayEffectCustomExecutionParameters& ExecutionParams, FGameplayEffectCustomExecutionOutput& ExecutionOutput) const override;
+
+	// Native GAS execution gateway loop
+	virtual void Execute_Implementation(
+		const FGameplayEffectCustomExecutionParameters& ExecutionParams, 
+		FGameplayEffectCustomExecutionOutput& ExecutionOutput
+	) const override;
 };

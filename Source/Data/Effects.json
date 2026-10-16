@@ -1,0 +1,75 @@
+﻿{
+  "EffectMasterRegistry": {
+    "Effect.Damage.InstantStrike": {
+      "DurationPolicy": "Instant",
+      "DurationMagnitude": 0.0,
+      "Period": 0.0,
+      "PeriodicInhibitionPolicy": "NeverInhibit",
+      "StackingPolicy": "None",
+      "MaxStackCount": 1,
+      "StackExpirationPolicy": "ClearEntireStack",
+      "StackDurationRefreshPolicy": "RefreshDuration",
+      "GameplayCues": [],
+      "GrantedTags": [],
+      "ConditionTreeLinkName": "None",
+      "Modifiers": [
+        {
+          "TargetAttributeTag": "Attribute.Stat.Health",
+          "ModifierOp": "Additive",
+          "BaseMagnitude": -50.0,
+          "SourceTagRequirements": [],
+          "TargetTagRequirements": []
+        }
+      ],
+      "ExecutionCalculations": []
+    },
+
+    "Effect.Debuff.PoisonDOT": {
+      "DurationPolicy": "HasDuration",
+      "DurationMagnitude": 6.0,
+      "Period": 1.0,
+      "PeriodicInhibitionPolicy": "NeverInhibit",
+      "StackingPolicy": "AggregateByTarget",
+      "MaxStackCount": 5,
+      "StackExpirationPolicy": "RemoveSingleStack",
+      "StackDurationRefreshPolicy": "RefreshDuration",
+      "GameplayCues": [ "GameplayCue.Visual.PoisonDrip" ],
+      "GrantedTags": [ "State.Status.Poisoned", "State.Inhibition.DisableRegen" ],
+      "ConditionTreeLinkName": "None",
+      "Modifiers": [
+        {
+          "TargetAttributeTag": "Attribute.Stat.Health",
+          "ModifierOp": "Additive",
+          "BaseMagnitude": -12.0,
+          "SourceTagRequirements": [],
+          "TargetTagRequirements": []
+        }
+      ],
+      "ExecutionCalculations": []
+    },
+
+    "Effect.Buff.InfiniteBerserk": {
+      "DurationPolicy": "Infinite",
+      "DurationMagnitude": 0.0,
+      "Period": 0.0,
+      "PeriodicInhibitionPolicy": "NeverInhibit",
+      "StackingPolicy": "None",
+      "MaxStackCount": 1,
+      "StackExpirationPolicy": "ClearEntireStack",
+      "StackDurationRefreshPolicy": "RefreshDuration",
+      "GameplayCues": [ "GameplayCue.Visual.BerserkAura" ],
+      "GrantedTags": [ "State.Buff.Berserker" ],
+      "ConditionTreeLinkName": "None",
+      "Modifiers": [
+        {
+          "TargetAttributeTag": "Attribute.Stat.Strength",
+          "ModifierOp": "Multiplicative",
+          "BaseMagnitude": 0.25,
+          "SourceTagRequirements": [],
+          "TargetTagRequirements": []
+        }
+      ],
+      "ExecutionCalculations": []
+    }
+  }
+}

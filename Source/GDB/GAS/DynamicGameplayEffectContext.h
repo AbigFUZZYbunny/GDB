@@ -24,6 +24,9 @@ public:
 	UPROPERTY() float MassRatioFactor = 1.0f;
 	UPROPERTY() FVector_NetQuantizeNormal QuantizedImpactNormal = FVector::ZeroVector;
 	UPROPERTY() FVector_NetQuantize10 QuantizedImpactLocation = FVector::ZeroVector;
+	
+	UPROPERTY()
+	TArray<FSourcePassBackRule> SourcePassBackRules;
 
 	uint8 GetTargetLimbId() const { return TargetLimbId; }
 	float GetKineticImpulse() const { return KineticImpulse; }

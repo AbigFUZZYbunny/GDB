@@ -1,9 +1,11 @@
-﻿#pragma once
+﻿// DynamicGASTypes.h
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "Engine/NetSerialization.h"
 #include "GameplayTagContainer.h"
+#include "Animation/AnimMontage.h"
 #include "DynamicGASTypes.generated.h"
 
 class UDynamicAttributeSet;
@@ -12,7 +14,7 @@ class UDynamicForceComponent;
 
 // --- ENUMS ---
 UENUM(BlueprintType)
-enum class EAbilityExecutionType : uint8 { Instant, Channeled, Charging, Projectile, AreaOfEffect, Hitscan, Aura, Chain, Movement };
+enum class EAbilityExecutionType : uint8 { Instant, Channeled, Charging, SpatialDelivery, Hitscan, Chain, Movement };
 
 UENUM(BlueprintType)
 enum class EMovementPhysicsType : uint8 { LaunchVelocity, RootMotionSource, CustomWallRun };
@@ -34,9 +36,6 @@ enum class EValidationPhase : uint8 { Attempt, Charging, Release };
 
 UENUM(BlueprintType)
 enum class EMultiShotType : uint8 { Single, Repeated, Spread, MultiRepeated };
-
-UENUM(BlueprintType)
-enum class EAoeSpreadType : uint8 { Single, Pattern, RandomInRange, Sequence };
 
 UENUM(BlueprintType)
 enum class ESequenceTriggerTiming : uint8 { TriggerWithEachSelection, TriggerAfterAllSelections };
@@ -61,6 +60,45 @@ enum class EGameplayEffectStackExpirationPolicy : uint8 { ClearEntireStack, Remo
 
 UENUM(BlueprintType)
 enum class EGameplayEffectStackDurationRefreshPolicy : uint8 { RefreshDuration, NeverRefresh };
+
+// --- UNIFIED SPATIAL DELIVERY ENUMS ---
+UENUM(BlueprintType)
+enum class ESpatialDeliveryMotion : uint8
+{
+    StationaryGround,   // Ground AoE
+    AttachedToCaster,   // Aura or Caster-Centered Nova
+    StraightVelocity,   // Standard Ballistic / Linear Projectile
+    SourceGuided,       // Guided in real-time by Source Character Aim
+    Homing              // Seeks locked target actor
+};
+
+UENUM(BlueprintType)
+enum class ESpatialShapeBehavior : uint8
+{
+    PointImpact,        // Standard Projectile tip collision
+    StayFullSize,       // Constant radius Aura / AoE
+    ExpandOut,          // Nova wave or growing Aura (MinRadius -> MaxRadius)
+    ContractIn,         // Starts at MaxRadius and shrinks to MinRadius
+    ExpandAndContract,  // Ping-pongs between MinRadius and MaxRadius
+    PulseAtFullSize     // Sinusoidal pulse around MaxRadius
+};
+
+UENUM(BlueprintType)
+enum class EAuraEffectApplicationType : uint8
+{
+    SingleHit,      // Projectile impact or single-sweep Nova hit
+    TickInterval,   // Periodic application every TickInterval seconds (e.g., 0.5s)
+    ConstantRate,   // Continuous per-frame attribute change (+5/sec * DeltaTime)
+    PassiveWhileIn  // Grants flat bonus (+15 Strength) while inside radius, removes on exit
+};
+
+UENUM(BlueprintType)
+enum class EPassBackTriggerEvent : uint8
+{
+    OnCast,
+    OnCollision,
+    OnDamageDealt
+};
 
 
 // --- UHT REPLICATION MAP WORKAROUND WRAPPERS ---
@@ -99,6 +137,7 @@ struct FDynamicTagFloatMapWrapper
         else { FTagFloatPair NewPair; NewPair.KeyTag = Key; NewPair.Value = NewValue; ReplicatedEntries.Add(NewPair); }
     }
 };
+
 
 // --- ATTRIBUTE FAST ARRAY ---
 USTRUCT(BlueprintType)
@@ -142,7 +181,7 @@ struct FFastPhysicsHitRepItem : public FFastArraySerializerItem
     UPROPERTY() uint16 PackedImpulseMagnitude = 0;
     UPROPERTY() FVector_NetQuantizeNormal HitNormal = FVector_NetQuantizeNormal::ZeroVector;
     UPROPERTY() FVector_NetQuantize10 HitLocation = FVector_NetQuantize10::ZeroVector;
-    UPROPERTY() uint8 ReactionState = 0; // 0 = Flinch, 1 = Stumble, 2 = Ragdoll
+    UPROPERTY() uint8 ReactionState = 0;
 
     void PreReplicatedRemove(const struct FFastPhysicsHitRepArray& InArrayOwner) {}
     void PostReplicatedAdd(const struct FFastPhysicsHitRepArray& InArrayOwner);
@@ -165,17 +204,129 @@ struct FFastPhysicsHitRepArray : public FFastArraySerializer
 template<> struct TStructOpsTypeTraits<FFastPhysicsHitRepArray> : public TStructOpsTypeTraitsBase2<FFastPhysicsHitRepArray> { enum { WithNetDeltaSerializer = true }; };
 
 
-// --- DATA ARCHETYPES & PROFILES ---
+// --- GASP STAGE ANIMATION & VFX PRESENTATION ---
 USTRUCT(BlueprintType)
-struct FDynamicAuraProfile
+struct FAbilityStagePresentation
 {
     GENERATED_BODY()
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aura")
-    FGameplayTag AuraLinkTag;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aura")
-    FDynamicTagFloatMapWrapper AuraMetrics;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    TSoftObjectPtr<UAnimMontage> StageMontage;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FName MontageSectionName = NAME_None;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    float PlayRate = 1.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FName GaspPhysicsControlProfile = TEXT("UpperBodyCast");
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    float GaspKinematicBlendWeight = 0.85f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FGameplayTag StageVfxCueTag;
 };
 
+USTRUCT(BlueprintType)
+struct FDynamicAbilityStageVisuals
+{
+    GENERATED_BODY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FAbilityStagePresentation AttemptStage;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FAbilityStagePresentation ChargingStage;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FAbilityStagePresentation ReleaseStage;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FAbilityStagePresentation ImpactStage;
+};
+
+
+// --- SOURCE PASS-BACK ATTRIBUTE REWARDS ---
+USTRUCT(BlueprintType)
+struct FSourcePassBackRule
+{
+    GENERATED_BODY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PassBack")
+    EPassBackTriggerEvent TriggerEvent = EPassBackTriggerEvent::OnDamageDealt;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PassBack")
+    FGameplayTag SourceAttributeTag;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PassBack")
+    float BaseGrantAmount = 5.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PassBack")
+    bool bScaleWithDamageDealt = false;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PassBack")
+    float DamageRatioScalar = 0.25f;
+};
+
+
+// --- UNIFIED SPATIAL DELIVERY ARCHETYPE & CONFIG ---
+USTRUCT(BlueprintType)
+struct FDynamicDeliveryArchetype
+{
+    GENERATED_BODY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    TSoftObjectPtr<UStaticMesh> MeshAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FGameplayTag PrimaryGameplayCue;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FDynamicTagFloatMapWrapper Metrics;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicSpatialDeliveryDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FGameplayTag ArchetypeLinkTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    ESpatialDeliveryMotion MotionType = ESpatialDeliveryMotion::StraightVelocity;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    ESpatialShapeBehavior ShapeBehavior = ESpatialShapeBehavior::PointImpact;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    EAuraEffectApplicationType ApplicationType = EAuraEffectApplicationType::SingleHit;
+
+    // Spatial Dimensions & Timing
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float MinRadius = 16.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float MaxRadius = 400.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float Duration = 5.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float SpeedOrExpansionRate = 2000.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float HomingTurnRate = 240.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float TickInterval = 0.5f;
+
+    // Multi-Cast / Spread
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    EMultiShotType MultiShotType = EMultiShotType::Single;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    int32 SpawnCount = 1;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float SpreadAngleDegrees = 0.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float PowerDecayPerAdditional = 0.85f;
+
+    // Direct Attribute / Effect / Kinetic Payload
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FGameplayTag DirectTargetAttributeTag;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float DirectAttributeMagnitude = 0.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float KineticImpulseOnHit = 900.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    TArray<FGameplayTag> EffectsToApply;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FDynamicTagFloatMapWrapper RuntimeMetricModifiers;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FGameplayTagContainer PropagatedTriggerTags;
+};
+
+
+// --- OTHER PROFILES (CHAIN, MOVEMENT, ATTRIBUTES, EFFECTS) ---
 USTRUCT(BlueprintType)
 struct FDynamicChainProfile
 {
@@ -214,30 +365,6 @@ struct FDynamicMovementProfile
     FDynamicTagFloatMapWrapper MovementMetrics;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|GASP Integration")
     FGaspMotorConfig GaspMotorSettings;
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicProjectileArchetype
-{
-    GENERATED_BODY()
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    TSoftObjectPtr<UStaticMesh> ProjectileMesh;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    TSoftObjectPtr<UParticleSystem> LegacyParticleSystem;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FDynamicTagFloatMapWrapper Metrics;
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicAoeArchetype
-{
-    GENERATED_BODY()
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    TSoftObjectPtr<UParticleSystem> GroundTargetVisualFx;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    TSoftObjectPtr<UParticleSystem> ImpactExplosionFx;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FDynamicTagFloatMapWrapper Metrics;
 };
 
 USTRUCT(BlueprintType)
@@ -310,6 +437,8 @@ struct FDynamicEffectDef
     TArray<FDynamicModifierDef> Modifiers;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|Logic")
     TArray<FDynamicEffectExecutionDef> ExecutionCalculations;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|PassBack")
+    TArray<FSourcePassBackRule> SourcePassBackRules;
 };
 
 
@@ -342,7 +471,8 @@ struct FDynamicConditionTreeContainer
     TArray<FDynamicConditionNode> FlatNodes;
 };
 
-// --- LIFE CYCLES & ABILITIES ---
+
+// --- ABILITY DEFINITIONS ---
 USTRUCT(BlueprintType)
 struct FDynamicAbilityLifeCycleRules
 {
@@ -378,18 +508,6 @@ struct FDynamicChargeProfile
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicPayloadProfile
-{
-    GENERATED_BODY()
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FGameplayTag ArchetypeLinkTag;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FDynamicTagFloatMapWrapper RuntimeMetricModifiers;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FGameplayTagContainer PropagatedTriggerTags;
-};
-
-USTRUCT(BlueprintType)
 struct FDynamicAbilityDef
 {
     GENERATED_BODY()
@@ -401,16 +519,29 @@ struct FDynamicAbilityDef
     FDynamicAbilityLifeCycleRules LifeCycleRequirements;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FDynamicChargeProfile ChargeProfile;
+
+    // Unified Spatial Delivery (replaces separate Projectile, AoE, Aura, and Nova structs)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FDynamicPayloadProfile ProjectileConfig;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FDynamicPayloadProfile AoeConfig;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FDynamicAuraProfile AuraConfig;
+    FDynamicSpatialDeliveryDef SpatialDelivery;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FDynamicChainProfile ChainConfig;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FDynamicMovementProfile MovementConfig;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    FDynamicAbilityStageVisuals StageVisuals;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    TArray<FSourcePassBackRule> SourcePassBackRules;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicAbilitySlotChain
+{
+    GENERATED_BODY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Progression")
+    FGameplayTag SlotInputTag;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Progression")
+    TArray<FGameplayTag> ChainedAbilityTags;
 };
 
 USTRUCT(BlueprintType)
@@ -535,8 +666,7 @@ struct FPhysicsDamageConfigData
 
 // --- ROUTING MAP PAIRS ---
 USTRUCT(BlueprintType) struct FTagAbilityDefPair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicAbilityDef ValueDef; };
-USTRUCT(BlueprintType) struct FTagProjectilePair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicProjectileArchetype ValueArchetype; };
-USTRUCT(BlueprintType) struct FTagAoePair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicAoeArchetype ValueArchetype; };
+USTRUCT(BlueprintType) struct FTagDeliveryArchetypePair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicDeliveryArchetype ValueArchetype; };
 USTRUCT(BlueprintType) struct FNameConditionPair { GENERATED_BODY() UPROPERTY() FName KeyName; UPROPERTY() FDynamicConditionTreeContainer ValueNode; };
 USTRUCT(BlueprintType) struct FTagMilestonePair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicMilestoneContainer ValueContainer; };
 USTRUCT(BlueprintType) struct FTagThresholdPair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicThresholdContainer ValueContainer; };

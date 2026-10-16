@@ -1,8 +1,28 @@
 ﻿{
-  "_comment":"This schema covers your extended execution layouts. It maps out your baseline parameter lookups, lifecycle rules, Aura parameters, Chain routing math, and UE 5.8 Mover dynamic mode specifications.",
+  "_comment": "Unified Spatial Delivery Schema: Projectiles, Multi-Cast, Auras, Ground AoEs, and Novas are all driven by the flat SpatialDelivery block and pooled ADynamicSpatialActor.",
+  "DeliveryArchetypes": {
+    "Archetype.Delivery.Fireball": {
+      "MeshAsset": "/Game/Meshes/SM_FireballOrb.SM_FireballOrb",
+      "PrimaryGameplayCue": "GameplayCue.Projectile.FireballLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Movement.Speed", "Value": 2200.0 }
+        ]
+      }
+    },
+    "Archetype.Delivery.FireSwirl": {
+      "MeshAsset": "None",
+      "PrimaryGameplayCue": "GameplayCue.Aura.ImmolationActive",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Aura.Param.Radius", "Value": 400.0 }
+        ]
+      }
+    }
+  },
   "AbilityMasterRegistry": {
     "Ability.Skill.ImmolationAura": {
-      "ExecutionType": "Aura",
+      "ExecutionType": "SpatialDelivery",
       "NumericParams": {
         "ReplicatedEntries": [
           { "KeyTag": "Ability.Param.BaseDamage", "Value": 15.0 }
@@ -16,27 +36,122 @@
         "ReleaseCostConditionTag": "None",
         "ReleaseCooldownConditionTag": "None"
       },
-      "ChargeProfile": { "MaxChargeTime": 0.0 },
-      "ProjectileConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
-      "AoeConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
-      "AuraConfig": {
-        "AuraLinkTag": "Archetype.Aura.FireSwirl",
-        "AuraMetrics": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Aura.Param.Radius", "Value": 400.0 },
-            { "KeyTag": "Aura.Param.TickRate", "Value": 0.5 }
-          ]
-        }
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.FireSwirl",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "PulseAtFullSize",
+        "ApplicationType": "TickInterval",
+        "MinRadius": 100.0,
+        "MaxRadius": 400.0,
+        "Duration": 10.0,
+        "SpeedOrExpansionRate": 2.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.5,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Stat.Health",
+        "DirectAttributeMagnitude": -15.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [ "Effect.Debuff.PoisonDOT" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
       },
       "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
-      "MovementConfig": { "PhysicsType": "LaunchVelocity", "MotionTagIdentifier": "None", "MovementMetrics": { "ReplicatedEntries": [] } }
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Aura.ImmolationCast" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/AM_AuraBurst.AM_AuraBurst", "MontageSectionName": "Release", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Aura.ImmolationActive" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Aura.ImmolationTick" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.FireXP", "BaseGrantAmount": 2.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.2 }
+      ]
     },
-
-    "Ability.Skill.ChainLightning": {
-      "ExecutionType": "Chain",
+    "Ability.Skill.Fireball_1": {
+      "ExecutionType": "Charging",
       "NumericParams": {
         "ReplicatedEntries": [
-          { "KeyTag": "Ability.Param.BaseDamage", "Value": 100.0 }
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 45.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": true,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 1.25,
+        "MaxChargeResolution": "MutateToOtherAbility",
+        "MutationAbilityTag": "Ability.Skill.Fireball_2",
+        "CostScalingMultiplier": 0.5,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Fireball",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 18.0,
+        "MaxRadius": 18.0,
+        "Duration": 5.0,
+        "SpeedOrExpansionRate": 2200.0,
+        "HomingTurnRate": 180.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 0.85,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 850.0,
+        "EffectsToApply": [ "Effect.Damage.InstantStrike" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/AM_FireballCast.AM_FireballCast", "MontageSectionName": "Windup", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Fireball.IgniteHand" },
+        "ChargingStage": { "StageMontage": "/Game/Animations/GASP/AM_FireballCast.AM_FireballCast", "MontageSectionName": "ChargeLoop", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Fireball.ChargeLoop" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/AM_FireballCast.AM_FireballCast", "MontageSectionName": "Release", "PlayRate": 1.1, "GaspPhysicsControlProfile": "FullBodyRecoil", "GaspKinematicBlendWeight": 0.75, "StageVfxCueTag": "GameplayCue.Fireball.Launch" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Fireball.Explosion" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Skill.FireballXP", "BaseGrantAmount": 2.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Skill.FireballXP", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.5 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.FireXP", "BaseGrantAmount": 4.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.25 }
+      ]
+    },
+    "Ability.Skill.MultiFireball": {
+      "ExecutionType": "SpatialDelivery",
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 45.0 }
         ]
       },
       "LifeCycleRequirements": {
@@ -47,45 +162,116 @@
         "ReleaseCostConditionTag": "None",
         "ReleaseCooldownConditionTag": "None"
       },
-      "ChargeProfile": { "MaxChargeTime": 0.0 },
-      "ProjectileConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
-      "AoeConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
-      "AuraConfig": { "AuraLinkTag": "None", "AuraMetrics": { "ReplicatedEntries": [] } },
-      "ChainConfig": {
-        "MaxBounces": 4,
-        "DamageFalloffPerBounce": 0.75,
-        "BounceSearchRadius": 600.0,
-        "ForbiddenTargetTags": [ "State.Buff.Invulnerable", "State.Debuff.Grounded" ]
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.25
       },
-      "MovementConfig": { "PhysicsType": "LaunchVelocity", "MotionTagIdentifier": "None", "MovementMetrics": { "ReplicatedEntries": [] } }
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Fireball",
+        "MotionType": "Homing",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 18.0,
+        "MaxRadius": 18.0,
+        "Duration": 5.0,
+        "SpeedOrExpansionRate": 2400.0,
+        "HomingTurnRate": 240.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Spread",
+        "SpawnCount": 5,
+        "SpreadAngleDegrees": 35.0,
+        "PowerDecayPerAdditional": 0.85,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 700.0,
+        "EffectsToApply": [ "Effect.Damage.InstantStrike" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/AM_MultiCastSweep.AM_MultiCastSweep", "MontageSectionName": "ReleaseSpread", "PlayRate": 1.2, "GaspPhysicsControlProfile": "FullBodyRecoil", "GaspKinematicBlendWeight": 0.8, "StageVfxCueTag": "GameplayCue.Fireball.MultiLaunch" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Fireball.Explosion" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Skill.FireballXP", "BaseGrantAmount": 3.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.4 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.FireXP", "BaseGrantAmount": 3.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.25 }
+      ]
     },
-
-    "Ability.Skill.DodgeRoll": {
-      "ExecutionType": "Movement",
-      "NumericParams": { "ReplicatedEntries": [] },
+    "Ability.Skill.FrostNova": {
+      "ExecutionType": "SpatialDelivery",
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 65.0 }
+        ]
+      },
       "LifeCycleRequirements": {
-        "AttemptCostConditionTag": "Trigger.Condition.CanDodgeRoll",
+        "AttemptCostConditionTag": "None",
         "AttemptCooldownConditionTag": "None",
         "ChargingCostConditionTag": "None",
         "bApplyChargeCostSmoothly": false,
         "ReleaseCostConditionTag": "None",
         "ReleaseCooldownConditionTag": "None"
       },
-      "ChargeProfile": { "MaxChargeTime": 0.0 },
-      "ProjectileConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
-      "AoeConfig": { "ArchetypeLinkTag": "None", "RuntimeMetricModifiers": { "ReplicatedEntries": [] }, "PropagatedTriggerTags": [] },
-      "AuraConfig": { "AuraLinkTag": "None", "AuraMetrics": { "ReplicatedEntries": [] } },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "ExpandOut",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 35.0,
+        "MaxRadius": 750.0,
+        "Duration": 0.45,
+        "SpeedOrExpansionRate": 1600.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 1850.0,
+        "EffectsToApply": [ "Effect.Damage.InstantStrike" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
       "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
       "MovementConfig": {
         "PhysicsType": "LaunchVelocity",
-        "MotionTagIdentifier": "Movement.State.Dashing",
-        "MovementMetrics": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Movement.Param.Velocity", "Value": 1500.0 },
-            { "KeyTag": "Movement.Param.Duration", "Value": 0.35 }
-          ]
-        }
-      }
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/AM_NovaCast.AM_NovaCast", "MontageSectionName": "Gather", "PlayRate": 1.2, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Nova.FrostGather" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/AM_NovaCast.AM_NovaCast", "MontageSectionName": "ShockwaveBurst", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.95, "StageVfxCueTag": "GameplayCue.Nova.FrostRing" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Nova.FrostShatter" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.FrostXP", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.FrostXP", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 12.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.45 }
+      ]
     }
   }
 }

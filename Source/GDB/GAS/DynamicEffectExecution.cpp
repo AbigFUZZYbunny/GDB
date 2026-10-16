@@ -21,7 +21,6 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
     AActor* TargetActor = TargetASC->GetOwner();
     if (!TargetActor) return;
 
-    // Flattened Dynamic Condition Tree Validations
     if (!DynContext->CustomConditionTreeName.IsNone())
     {
         const FDynamicConditionTreeContainer* ConditionTree = UDynamicGASManagerComponent::GetConditionTreeByName(TargetActor, DynContext->CustomConditionTreeName);
@@ -29,18 +28,17 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
         {
             FGameplayTagContainer SourceTags;
             if (const FGameplayTagContainer* SourceTagsPtr = Spec.CapturedSourceTags.GetAggregatedTags()) SourceTags = *SourceTagsPtr;
-            
             FGameplayTagContainer TargetTags;
             if (const FGameplayTagContainer* TargetTagsPtr = Spec.CapturedTargetTags.GetAggregatedTags()) TargetTags = *TargetTagsPtr;
-            
-            if (!UDynamicLogicEvaluator::EvaluateConditionTree(*ConditionTree, SourceASC, TargetASC, SourceTags, TargetTags)) return; 
+            if (!UDynamicLogicEvaluator::EvaluateConditionTree(*ConditionTree, SourceASC, TargetASC, SourceTags, TargetTags)) return;
         }
     }
 
     const UDynamicAttributeSet* TargetAttributes = Cast<UDynamicAttributeSet>(TargetASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()));
     if (!TargetAttributes) return;
 
-    // Apply Authoritative Kinematic Physics Damage Calculation
+    float FinalHealthDamage = 0.0f;
+
     if (DynContext->GetKineticImpulse() > 0.0f)
     {
         UWorld* World = TargetASC->GetWorld();
@@ -51,14 +49,31 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
 
             const float LimbDamageMult = LimbData ? LimbData->DamageMultiplier : 1.0f;
             const float BaseKineticDamage = DynContext->GetKineticImpulse() * CalcSettings.ImpulseToDamageScalar * DynContext->GetMassRatioFactor();
-            const float FinalHealthDamage = BaseKineticDamage * LimbDamageMult;
+            FinalHealthDamage = BaseKineticDamage * LimbDamageMult;
 
             FGameplayTag HealthTag = FGameplayTag::RequestGameplayTag("Attribute.Stat.Health", false);
             if (HealthTag.IsValid() && FinalHealthDamage > 0.0f)
             {
-                // Utilize your custom tag-bound map cache
                 float CurrentHealth = TargetAttributes->GetDynamicAttributeValue(HealthTag);
                 const_cast<UDynamicAttributeSet*>(TargetAttributes)->SetDynamicAttributeValue(HealthTag, CurrentHealth - FinalHealthDamage);
+            }
+        }
+    }
+
+    // --- SOURCE PASS-BACK EXECUTION (XP / Skill XP / Mastery XP on Damage Dealt) ---
+    if (FinalHealthDamage > 0.0f && SourceASC && DynContext->SourcePassBackRules.Num() > 0)
+    {
+        if (const UDynamicAttributeSet* SourceAttributes = Cast<UDynamicAttributeSet>(SourceASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())))
+        {
+            for (const FSourcePassBackRule& Rule : DynContext->SourcePassBackRules)
+            {
+                if (Rule.TriggerEvent == EPassBackTriggerEvent::OnDamageDealt && Rule.SourceAttributeTag.IsValid())
+                {
+                    const float GrantAmount = Rule.BaseGrantAmount + (Rule.bScaleWithDamageDealt ? (FinalHealthDamage * Rule.DamageRatioScalar) : 0.0f);
+                    const float OldSourceVal = SourceAttributes->GetDynamicAttributeValue(Rule.SourceAttributeTag);
+                    // SetDynamicAttributeValue automatically triggers your Threshold & Level-Up Breakthrough rules!
+                    const_cast<UDynamicAttributeSet*>(SourceAttributes)->SetDynamicAttributeValue(Rule.SourceAttributeTag, OldSourceVal + GrantAmount);
+                }
             }
         }
     }

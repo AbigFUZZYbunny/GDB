@@ -104,9 +104,12 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
 
             FDynamicAttributeDef AttrDef;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &AttrDef, 0, 0);
-            
+
             TargetGameState->AttributeMasterRegistry.Add(KeyTag, AttrDef);
-            // Local fallback logic inside attribute sets automatically pulls data values natively on boot steps
+            FTagAttributePair SyncPair;
+            SyncPair.KeyTag = KeyTag;
+            SyncPair.ValueDef = AttrDef;
+            TargetGameState->AttributeMasterRegistryArr.Add(SyncPair);
         }
     }
 
@@ -126,14 +129,16 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             DeserializeMapWrapper(AbilityObj, TEXT("NumericParams"), AbilityDef.NumericParams);
             ParsePayloadProfile(AbilityObj->GetObjectField(TEXT("ProjectileConfig")), AbilityDef.ProjectileConfig);
             ParsePayloadProfile(AbilityObj->GetObjectField(TEXT("AoeConfig")), AbilityDef.AoeConfig);
-            
+
             // Appended Extensions: Auras, Movement, and GASP settings mapping
             DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("AuraConfig")), TEXT("AuraMetrics"), AbilityDef.AuraConfig.AuraMetrics);
             DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("MovementConfig")), TEXT("MovementMetrics"), AbilityDef.MovementConfig.MovementMetrics);
             DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("MovementConfig"))->GetObjectField(TEXT("GaspMotorSettings")), TEXT("RequiredAttributeThresholds"), AbilityDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds);
 
             TargetGameState->AbilityMasterRegistry.Add(KeyTag, AbilityDef);
-            FTagAbilityDefPair SyncPair; SyncPair.KeyTag = KeyTag; SyncPair.ValueDef = AbilityDef;
+            FTagAbilityDefPair SyncPair;
+            SyncPair.KeyTag = KeyTag;
+            SyncPair.ValueDef = AbilityDef;
             TargetGameState->AbilityMasterRegistryArr.Add(SyncPair);
         }
     }
@@ -147,7 +152,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FlattenAndParseJsonNode(Pair.Value->AsObject(), TreeContainer);
 
             TargetGameState->SharedConditionTrees.Add(FName(*Pair.Key), TreeContainer);
-            FNameConditionPair SyncPair; SyncPair.KeyName = FName(*Pair.Key); SyncPair.ValueNode = TreeContainer;
+            FNameConditionPair SyncPair;
+            SyncPair.KeyName = FName(*Pair.Key);
+            SyncPair.ValueNode = TreeContainer;
             TargetGameState->SharedConditionTreesArr.Add(SyncPair);
         }
     }
@@ -162,9 +169,11 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
 
             FDynamicMilestoneContainer Container;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Container, 0, 0);
-            
+
             TargetGameState->MasterMilestoneRegistry.Add(KeyTag, Container);
-            FTagMilestonePair SyncPair; SyncPair.KeyTag = KeyTag; SyncPair.ValueContainer = Container;
+            FTagMilestonePair SyncPair;
+            SyncPair.KeyTag = KeyTag;
+            SyncPair.ValueContainer = Container;
             TargetGameState->MasterMilestoneRegistryArr.Add(SyncPair);
         }
     }
@@ -181,8 +190,39 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Container, 0, 0);
 
             TargetGameState->MasterThresholdRegistry.Add(KeyTag, Container);
-            FTagThresholdPair SyncPair; SyncPair.KeyTag = KeyTag; SyncPair.ValueContainer = Container;
+            FTagThresholdPair SyncPair;
+            SyncPair.KeyTag = KeyTag;
+            SyncPair.ValueContainer = Container;
             TargetGameState->MasterThresholdRegistryArr.Add(SyncPair);
+        }
+    }
+
+    // 6. Deserialize Master Gameplay Effects Registry
+    if (RootObject->HasField(TEXT("EffectMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("EffectMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            FDynamicEffectDef EffectDef;
+            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &EffectDef, 0, 0);
+
+            TargetGameState->MasterEffectRegistry.Add(KeyTag, EffectDef);
+            FTagEffectPair SyncPair;
+            SyncPair.KeyTag = KeyTag;
+            SyncPair.ValueDef = EffectDef;
+            TargetGameState->MasterEffectRegistryArr.Add(SyncPair);
+        }
+    }
+
+    // 7. Deserialize Dedicated Server Physics Damage, Limb Mapping & Collision Thresholds
+    if (RootObject->HasField(TEXT("CalculationSettings")) && RootObject->HasField(TEXT("Limbs")))
+    {
+        FPhysicsDamageConfigData PhysicsConfig;
+        if (FJsonObjectConverter::JsonObjectToUStruct(RootObject.ToSharedRef(), &PhysicsConfig, 0, 0))
+        {
+            TargetGameState->SetPhysicsConfig(PhysicsConfig);
         }
     }
 
@@ -193,28 +233,149 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
 bool UDynamicDataSerializer::SerializeMasterRegistry(const ADynamicGameState* InGameState, FString& OutJsonString)
 {
     if (!InGameState) return false;
-    TSharedRef<FJsonObject> Root = MakeShareable(new FJsonObject());
 
-    TSharedPtr<FJsonObject> AbMap = MakeShareable(new FJsonObject());
-    for (const auto& Pair : InGameState->AbilityMasterRegistry)
+    TSharedRef<FJsonObject> RootObject = MakeShareable(new FJsonObject());
+
+    // 1. Serialize AttributeMasterRegistry
+    if (InGameState->AttributeMasterRegistry.Num() > 0)
     {
-        TSharedPtr<FJsonObject> AbObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
-        AbObj->SetObjectField(TEXT("NumericParams"), SerializeMapWrapper(Pair.Value.NumericParams));
-        AbObj->SetObjectField(TEXT("ProjectileConfig"), SerializePayloadProfile(Pair.Value.ProjectileConfig));
-        AbObj->SetObjectField(TEXT("AoeConfig"), SerializePayloadProfile(Pair.Value.AoeConfig));
-        AbMap->SetObjectField(Pair.Key.ToString(), AbObj);
+        TSharedRef<FJsonObject> AttrMapObj = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->AttributeMasterRegistry)
+        {
+            TSharedPtr<FJsonObject> AttrObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+            if (AttrObj.IsValid())
+            {
+                AttrMapObj->SetObjectField(Pair.Key.ToString(), AttrObj);
+            }
+        }
+        RootObject->SetObjectField(TEXT("AttributeMasterRegistry"), AttrMapObj);
     }
-    Root->SetObjectField(TEXT("AbilityMasterRegistry"), AbMap);
 
-    TSharedPtr<FJsonObject> CondMap = MakeShareable(new FJsonObject());
-    for (const auto& Pair : InGameState->SharedConditionTrees)
+    // 2. Serialize AbilityMasterRegistry
+    if (InGameState->AbilityMasterRegistry.Num() > 0)
     {
-        if (Pair.Value.FlatNodes.Num() > 0) CondMap->SetObjectField(Pair.Key.ToString(), ReconstructJsonFromFlatNode(0, Pair.Value));
-    }
-    Root->SetObjectField(TEXT("SharedConditionTrees"), CondMap);
+        TSharedRef<FJsonObject> AbilityMapObj = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->AbilityMasterRegistry)
+        {
+            TSharedPtr<FJsonObject> AbObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+            if (!AbObj.IsValid()) continue;
 
+            // Re-inject wrapped maps and nested profiles to ensure correct schema formatting
+            AbObj->SetObjectField(TEXT("NumericParams"), SerializeMapWrapper(Pair.Value.NumericParams));
+            AbObj->SetObjectField(TEXT("ProjectileConfig"), SerializePayloadProfile(Pair.Value.ProjectileConfig));
+            AbObj->SetObjectField(TEXT("AoeConfig"), SerializePayloadProfile(Pair.Value.AoeConfig));
+
+            // Serialize Aura Config Metrics
+            TSharedRef<FJsonObject> AuraConfigObj = MakeShareable(new FJsonObject());
+            AuraConfigObj->SetStringField(TEXT("AuraLinkTag"), Pair.Value.AuraConfig.AuraLinkTag.ToString());
+            AuraConfigObj->SetObjectField(TEXT("AuraMetrics"), SerializeMapWrapper(Pair.Value.AuraConfig.AuraMetrics));
+            AbObj->SetObjectField(TEXT("AuraConfig"), AuraConfigObj);
+
+            // Serialize Movement & GASP Motor Configurations
+            TSharedRef<FJsonObject> MovementConfigObj = MakeShareable(new FJsonObject());
+            MovementConfigObj->SetStringField(TEXT("PhysicsType"), EnumToString(TEXT("EMovementPhysicsType"), Pair.Value.MovementConfig.PhysicsType));
+            MovementConfigObj->SetStringField(TEXT("MotionTagIdentifier"), Pair.Value.MovementConfig.MotionTagIdentifier.ToString());
+            MovementConfigObj->SetObjectField(TEXT("MovementMetrics"), SerializeMapWrapper(Pair.Value.MovementConfig.MovementMetrics));
+
+            TSharedRef<FJsonObject> GaspMotorObj = MakeShareable(new FJsonObject());
+            GaspMotorObj->SetObjectField(TEXT("RequiredAttributeThresholds"), SerializeMapWrapper(Pair.Value.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds));
+            GaspMotorObj->SetNumberField(TEXT("NewtonReflectiveForceFactor"), Pair.Value.MovementConfig.GaspMotorSettings.NewtonReflectiveForceFactor);
+            GaspMotorObj->SetNumberField(TEXT("PhysicsBlendWeightMultiplier"), Pair.Value.MovementConfig.GaspMotorSettings.PhysicsBlendWeightMultiplier);
+            MovementConfigObj->SetObjectField(TEXT("GaspMotorSettings"), GaspMotorObj);
+
+            AbObj->SetObjectField(TEXT("MovementConfig"), MovementConfigObj);
+
+            AbilityMapObj->SetObjectField(Pair.Key.ToString(), AbObj);
+        }
+        RootObject->SetObjectField(TEXT("AbilityMasterRegistry"), AbilityMapObj);
+    }
+
+    // 3. Serialize SharedConditionTrees (Reconstructing hierarchical JSON from flat indices)
+    if (InGameState->SharedConditionTrees.Num() > 0)
+    {
+        TSharedRef<FJsonObject> CondMapObj = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->SharedConditionTrees)
+        {
+            if (Pair.Value.FlatNodes.Num() > 0)
+            {
+                CondMapObj->SetObjectField(Pair.Key.ToString(), ReconstructJsonFromFlatNode(0, Pair.Value));
+            }
+        }
+        RootObject->SetObjectField(TEXT("SharedConditionTrees"), CondMapObj);
+    }
+
+    // 4. Serialize MasterMilestoneRegistry
+    if (InGameState->MasterMilestoneRegistry.Num() > 0)
+    {
+        TSharedRef<FJsonObject> MilestoneMapObj = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->MasterMilestoneRegistry)
+        {
+            TSharedPtr<FJsonObject> MilestoneObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+            if (MilestoneObj.IsValid())
+            {
+                MilestoneMapObj->SetObjectField(Pair.Key.ToString(), MilestoneObj);
+            }
+        }
+        RootObject->SetObjectField(TEXT("MasterMilestoneRegistry"), MilestoneMapObj);
+    }
+
+    // 5. Serialize MasterThresholdRegistry
+    if (InGameState->MasterThresholdRegistry.Num() > 0)
+    {
+        TSharedRef<FJsonObject> ThresholdMapObj = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->MasterThresholdRegistry)
+        {
+            TSharedPtr<FJsonObject> ThresholdObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+            if (ThresholdObj.IsValid())
+            {
+                ThresholdMapObj->SetObjectField(Pair.Key.ToString(), ThresholdObj);
+            }
+        }
+        RootObject->SetObjectField(TEXT("MasterThresholdRegistry"), ThresholdMapObj);
+    }
+
+    // 6. Serialize EffectMasterRegistry
+    if (InGameState->MasterEffectRegistry.Num() > 0)
+    {
+        TSharedRef<FJsonObject> EffectMapObj = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->MasterEffectRegistry)
+        {
+            TSharedPtr<FJsonObject> EffectObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+            if (EffectObj.IsValid())
+            {
+                EffectMapObj->SetObjectField(Pair.Key.ToString(), EffectObj);
+            }
+        }
+        RootObject->SetObjectField(TEXT("EffectMasterRegistry"), EffectMapObj);
+    }
+
+    // 7. Serialize Physics Calculation Settings & Limb Profiles
+    const FPhysicsCalculationSettings& CalcSettings = InGameState->GetCalculationSettings();
+    TSharedPtr<FJsonObject> CalcSettingsObj = FJsonObjectConverter::UStructToJsonObject(CalcSettings);
+    if (CalcSettingsObj.IsValid())
+    {
+        RootObject->SetObjectField(TEXT("CalculationSettings"), CalcSettingsObj);
+    }
+
+    // Extract all limb profiles stored in the GameState's lookup map
+    const TMap<uint8, FPhysicsLimbConfig>& LimbsMap = InGameState->GetLimbLookupMap();
+    if (LimbsMap.Num() > 0)
+    {
+        TArray<TSharedPtr<FJsonValue>> LimbsJsonArray;
+        for (const auto& LimbPair : LimbsMap)
+        {
+            TSharedPtr<FJsonObject> LimbObj = FJsonObjectConverter::UStructToJsonObject(LimbPair.Value);
+            if (LimbObj.IsValid())
+            {
+                LimbsJsonArray.Add(MakeShareable(new FJsonValueObject(LimbObj)));
+            }
+        }
+        RootObject->SetArrayField(TEXT("Limbs"), LimbsJsonArray);
+    }
+
+    // Produce pretty-printed formatted JSON output
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonString);
-    return FJsonSerializer::Serialize(Root, Writer);
+    return FJsonSerializer::Serialize(RootObject, Writer);
 }
 
 TSharedPtr<FJsonObject> UDynamicDataSerializer::ReconstructJsonFromFlatNode(int32 NodeIndex, const FDynamicConditionTreeContainer& TreeContainer)

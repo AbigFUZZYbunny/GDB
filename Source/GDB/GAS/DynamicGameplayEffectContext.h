@@ -12,30 +12,38 @@ struct GDB_API FDynamicGameplayEffectContext : public FGameplayEffectContext
 	GENERATED_BODY()
 
 public:
-	// --- Custom Data-Driven Payload Fields ---
-    
-	// The specific logic tree string identifier to pass into UDynamicEffectExecution
 	UPROPERTY(BlueprintReadOnly, Category = "Dynamic Effect Context")
 	FName CustomConditionTreeName = NAME_None;
-
-	// Optional tag identifier used to pass structural payload overrides dynamically
+    
 	UPROPERTY(BlueprintReadOnly, Category = "Dynamic Effect Context")
 	FGameplayTag ContextPayloadTag;
 
-	// --- Mandatory Native Overrides for Custom Context Tracking ---
+	// --- Authoritative Physics Fields ---
+	UPROPERTY() uint8 TargetLimbId = 1;
+	UPROPERTY() float KineticImpulse = 0.0f;
+	UPROPERTY() float MassRatioFactor = 1.0f;
+	UPROPERTY() FVector_NetQuantizeNormal QuantizedImpactNormal = FVector::ZeroVector;
+	UPROPERTY() FVector_NetQuantize10 QuantizedImpactLocation = FVector::ZeroVector;
+
+	uint8 GetTargetLimbId() const { return TargetLimbId; }
+	float GetKineticImpulse() const { return KineticImpulse; }
+	float GetMassRatioFactor() const { return MassRatioFactor; }
+
+	void SetAuthoritativePhysicsPayload(uint8 InLimbId, float InImpulse, float InMassRatio, const FVector& InNormal, const FVector& InLocation)
+	{
+		TargetLimbId = InLimbId;
+		KineticImpulse = InImpulse;
+		MassRatioFactor = InMassRatio;
+		QuantizedImpactNormal = InNormal;
+		QuantizedImpactLocation = InLocation;
+	}
 
 	virtual UScriptStruct* GetScriptStruct() const override;
 	virtual FDynamicGameplayEffectContext* Duplicate() const override;
 	virtual bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess) override;
 };
 
-// --- Custom Type Traits to Enable Network Delta Serialization Support ---
-template<>
-struct TStructOpsTypeTraits<FDynamicGameplayEffectContext> : public TStructOpsTypeTraitsBase2<FDynamicGameplayEffectContext>
+template<> struct TStructOpsTypeTraits<FDynamicGameplayEffectContext> : public TStructOpsTypeTraitsBase2<FDynamicGameplayEffectContext>
 {
-	enum
-	{
-		WithNetSerializer = true, // Crucial to ensure NetSerialize executes over the network
-		WithCopy = true
-	};
+	enum { WithNetSerializer = true, WithCopy = true };
 };

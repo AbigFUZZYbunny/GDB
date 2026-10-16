@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameplayEffectTypes.h"
 #include "GameplayTagContainer.h"
+#include "DynamicGASTypes.h"
 #include "DynamicGameplayEffectContext.generated.h"
 
 USTRUCT(BlueprintType)
@@ -14,17 +15,26 @@ struct GDB_API FDynamicGameplayEffectContext : public FGameplayEffectContext
 public:
 	UPROPERTY(BlueprintReadOnly, Category = "Dynamic Effect Context")
 	FName CustomConditionTreeName = NAME_None;
-    
+
 	UPROPERTY(BlueprintReadOnly, Category = "Dynamic Effect Context")
 	FGameplayTag ContextPayloadTag;
 
 	// --- Authoritative Physics Fields ---
-	UPROPERTY() uint8 TargetLimbId = 1;
-	UPROPERTY() float KineticImpulse = 0.0f;
-	UPROPERTY() float MassRatioFactor = 1.0f;
-	UPROPERTY() FVector_NetQuantizeNormal QuantizedImpactNormal = FVector::ZeroVector;
-	UPROPERTY() FVector_NetQuantize10 QuantizedImpactLocation = FVector::ZeroVector;
-	
+	UPROPERTY()
+	uint8 TargetLimbId = 1;
+
+	UPROPERTY()
+	float KineticImpulse = 0.0f;
+
+	UPROPERTY()
+	float MassRatioFactor = 1.0f;
+
+	UPROPERTY()
+	FVector_NetQuantizeNormal QuantizedImpactNormal = FVector::ZeroVector;
+
+	UPROPERTY()
+	FVector_NetQuantize10 QuantizedImpactLocation = FVector::ZeroVector;
+
 	UPROPERTY()
 	TArray<FSourcePassBackRule> SourcePassBackRules;
 
@@ -46,7 +56,8 @@ public:
 	virtual bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess) override;
 };
 
-template<> struct TStructOpsTypeTraits<FDynamicGameplayEffectContext> : public TStructOpsTypeTraitsBase2<FDynamicGameplayEffectContext>
+template<>
+struct TStructOpsTypeTraits<FDynamicGameplayEffectContext> : public TStructOpsTypeTraitsBase2<FDynamicGameplayEffectContext>
 {
 	enum { WithNetSerializer = true, WithCopy = true };
 };

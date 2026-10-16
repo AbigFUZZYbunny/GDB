@@ -25,10 +25,13 @@ public:
     ADynamicCharacter(const FObjectInitializer& ObjectInitializer);
 
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
-    
-    // Mesh accessor for Pawn-derived DynamicCharacter
+
+    // Mesh accessors
     USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
     USkeletalMeshComponent* GetMesh() const { return MeshComponent; }
+
+    // Dynamic Attribute Set Accessor
+    const UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
 
     // Secure aim-input trace strictly evaluated on server
     UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category = "DynamicGAS|Combat")
@@ -41,39 +44,42 @@ protected:
     virtual void PossessedBy(AController* NewController) override;
     virtual void OnRep_PlayerState() override;
 
-    // Strictly server-bound Chaos collision handler
     UFUNCTION()
     void OnServerSkeletalMeshHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     UCapsuleComponent* CapsuleComponent;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     USkeletalMeshComponent* MeshComponent;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
     UMoverComponent* MoverComponent;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Physics", meta = (AllowPrivateAccess = "true"))
     UPhysicsControlComponent* PhysicsControlComponent;
-    
-    // Required to execute fast replication ring buffers for kinetic flinches
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Physics", meta = (AllowPrivateAccess = "true"))
     UDynamicForceComponent* ForceComponent;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
     UAbilitySystemComponent* AbilitySystemComponent;
+
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Abilities")
     const UDynamicAttributeSet* AttributeSet;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
     UDynamicGASManagerComponent* DynamicGASManager;
 
     UFUNCTION(BlueprintCallable, Category = "Abilities|Ragdoll")
     void StartRagdoll();
+
     UFUNCTION(BlueprintCallable, Category = "Abilities|Ragdoll")
     void RecoverFromRagdoll();
 
 private:
     void InitializeAbilitySystem();
     bool bIsRagdolling;
-    
-    // Cooldown map to prevent network saturation from physics jitter
+
     TMap<uint8, double> ServerLastLimbHitTimestamp;
 };

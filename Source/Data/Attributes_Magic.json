@@ -1,5 +1,5 @@
 ﻿{
-  "_comment": "RPG Magic System Attributes Schema: Integrates base attributes, Stats (Intelligence, Wit, Wisdom), Resources (Mana with elemental sub-pools), Titles (Pyromancer, Aquamancer, Wizard, Mage, etc.), and Mastery/Skill progression attributes across the 6 elements and 6 schools.",
+  "_comment": "Expanded Magic System Attributes Schema: Features fully symmetric Max, GainMod, and LossMod scaling parameters across all Stats, Masteries, and Titles, complete with elemental specializations.",
   "AttributeMasterRegistry": {
     "Attribute.Stat.Intelligence": {
       "AttributeTag": "Attribute.Stat.Intelligence",
@@ -13,6 +13,24 @@
         ]
       },
       "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Intelligence.Max": {
+      "AttributeTag": "Attribute.Stat.Intelligence.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Intelligence.GainMod": {
+      "AttributeTag": "Attribute.Stat.Intelligence.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Intelligence.LossMod": {
+      "AttributeTag": "Attribute.Stat.Intelligence.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
     "Attribute.Stat.Wit": {
@@ -29,6 +47,24 @@
       "DefaultValue": 10.0,
       "bDoesReplicate": true
     },
+    "Attribute.Stat.Wit.Max": {
+      "AttributeTag": "Attribute.Stat.Wit.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wit.GainMod": {
+      "AttributeTag": "Attribute.Stat.Wit.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wit.LossMod": {
+      "AttributeTag": "Attribute.Stat.Wit.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Stat.Wisdom": {
       "AttributeTag": "Attribute.Stat.Wisdom",
       "Localization": {
@@ -41,6 +77,24 @@
         ]
       },
       "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wisdom.Max": {
+      "AttributeTag": "Attribute.Stat.Wisdom.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wisdom.GainMod": {
+      "AttributeTag": "Attribute.Stat.Wisdom.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wisdom.LossMod": {
+      "AttributeTag": "Attribute.Stat.Wisdom.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
     "Attribute.Resource.Mana": {
@@ -63,6 +117,18 @@
       "DefaultValue": 100.0,
       "bDoesReplicate": true
     },
+    "Attribute.Resource.Mana.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Resource.Mana.Fire": {
       "AttributeTag": "Attribute.Resource.Mana.Fire",
       "Localization": {
@@ -74,6 +140,24 @@
         ]
       },
       "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Fire.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Fire.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Fire.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Fire.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Fire.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Fire.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
     "Attribute.Resource.Mana.Water": {
@@ -89,6 +173,24 @@
       "DefaultValue": 50.0,
       "bDoesReplicate": true
     },
+    "Attribute.Resource.Mana.Water.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Water.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Water.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Water.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Water.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Water.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Resource.Mana.Earth": {
       "AttributeTag": "Attribute.Resource.Mana.Earth",
       "Localization": {
@@ -100,6 +202,24 @@
         ]
       },
       "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Earth.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Earth.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Earth.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Earth.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Earth.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Earth.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
     "Attribute.Resource.Mana.Air": {
@@ -115,6 +235,24 @@
       "DefaultValue": 50.0,
       "bDoesReplicate": true
     },
+    "Attribute.Resource.Mana.Air.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Air.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Air.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Air.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Air.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Air.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Resource.Mana.Light": {
       "AttributeTag": "Attribute.Resource.Mana.Light",
       "Localization": {
@@ -126,6 +264,24 @@
         ]
       },
       "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Light.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Light.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Light.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Light.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Light.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Light.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
     "Attribute.Resource.Mana.Dark": {
@@ -141,6 +297,24 @@
       "DefaultValue": 50.0,
       "bDoesReplicate": true
     },
+    "Attribute.Resource.Mana.Dark.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Dark.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Dark.GainMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Dark.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Dark.LossMod": {
+      "AttributeTag": "Attribute.Resource.Mana.Dark.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Title.Mage": {
       "AttributeTag": "Attribute.Title.Mage",
       "Localization": {
@@ -151,6 +325,24 @@
           { "KeyTag": "Localization.Category", "Value": "Titles" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Mage.Max": {
+      "AttributeTag": "Attribute.Title.Mage.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Mage.GainMod": {
+      "AttributeTag": "Attribute.Title.Mage.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Mage.LossMod": {
+      "AttributeTag": "Attribute.Title.Mage.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -167,6 +359,55 @@
       "DefaultValue": 0.0,
       "bDoesReplicate": true
     },
+    "Attribute.Title.Wizard.Max": {
+      "AttributeTag": "Attribute.Title.Wizard.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Wizard.GainMod": {
+      "AttributeTag": "Attribute.Title.Wizard.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Wizard.LossMod": {
+      "AttributeTag": "Attribute.Title.Wizard.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Archmage": {
+      "AttributeTag": "Attribute.Title.Archmage",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Archmage Rank" },
+          { "KeyTag": "Localization.Description", "Value": "A grand authority on magic capable of bending reality and reshaping ambient mana fields." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ARCH" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Archmage.Max": {
+      "AttributeTag": "Attribute.Title.Archmage.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 5.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Archmage.GainMod": {
+      "AttributeTag": "Attribute.Title.Archmage.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Archmage.LossMod": {
+      "AttributeTag": "Attribute.Title.Archmage.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Title.Pyromancer": {
       "AttributeTag": "Attribute.Title.Pyromancer",
       "Localization": {
@@ -178,6 +419,24 @@
         ]
       },
       "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Pyromancer.Max": {
+      "AttributeTag": "Attribute.Title.Pyromancer.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Pyromancer.GainMod": {
+      "AttributeTag": "Attribute.Title.Pyromancer.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Pyromancer.LossMod": {
+      "AttributeTag": "Attribute.Title.Pyromancer.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
     "Attribute.Title.Aquamancer": {
@@ -193,6 +452,148 @@
       "DefaultValue": 0.0,
       "bDoesReplicate": true
     },
+    "Attribute.Title.Aquamancer.Max": {
+      "AttributeTag": "Attribute.Title.Aquamancer.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aquamancer.GainMod": {
+      "AttributeTag": "Attribute.Title.Aquamancer.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aquamancer.LossMod": {
+      "AttributeTag": "Attribute.Title.Aquamancer.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Geomancer": {
+      "AttributeTag": "Attribute.Title.Geomancer",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Geomancer Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An adept attuned to stone, earth density, and tectonic shifting." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "GEO" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Geomancer.Max": {
+      "AttributeTag": "Attribute.Title.Geomancer.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Geomancer.GainMod": {
+      "AttributeTag": "Attribute.Title.Geomancer.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Geomancer.LossMod": {
+      "AttributeTag": "Attribute.Title.Geomancer.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aeromancer": {
+      "AttributeTag": "Attribute.Title.Aeromancer",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Aeromancer Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An adept attuned to atmospheric currents, pressure fields, and static lightning." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AERO" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aeromancer.Max": {
+      "AttributeTag": "Attribute.Title.Aeromancer.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aeromancer.GainMod": {
+      "AttributeTag": "Attribute.Title.Aeromancer.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aeromancer.LossMod": {
+      "AttributeTag": "Attribute.Title.Aeromancer.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Hierophant": {
+      "AttributeTag": "Attribute.Title.Hierophant",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Hierophant Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An adept attuned to blinding luminescences, holy aura channels, and purification." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "HIER" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Hierophant.Max": {
+      "AttributeTag": "Attribute.Title.Hierophant.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Hierophant.GainMod": {
+      "AttributeTag": "Attribute.Title.Hierophant.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Hierophant.LossMod": {
+      "AttributeTag": "Attribute.Title.Hierophant.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Umbramancer": {
+      "AttributeTag": "Attribute.Title.Umbramancer",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Umbramancer Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An adept attuned to shadow fields, entropy, and gravitational singularities." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "UMBR" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Umbramancer.Max": {
+      "AttributeTag": "Attribute.Title.Umbramancer.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Umbramancer.GainMod": {
+      "AttributeTag": "Attribute.Title.Umbramancer.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Umbramancer.LossMod": {
+      "AttributeTag": "Attribute.Title.Umbramancer.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Mastery.School.Destruction": {
       "AttributeTag": "Attribute.Mastery.School.Destruction",
       "Localization": {
@@ -203,6 +604,24 @@
           { "KeyTag": "Localization.Category", "Value": "Mastery" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Destruction.Max": {
+      "AttributeTag": "Attribute.Mastery.School.Destruction.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Destruction.GainMod": {
+      "AttributeTag": "Attribute.Mastery.School.Destruction.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Destruction.LossMod": {
+      "AttributeTag": "Attribute.Mastery.School.Destruction.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -219,6 +638,24 @@
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
+    "Attribute.Mastery.School.Restoration.Max": {
+      "AttributeTag": "Attribute.Mastery.School.Restoration.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Restoration.GainMod": {
+      "AttributeTag": "Attribute.Mastery.School.Restoration.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Restoration.LossMod": {
+      "AttributeTag": "Attribute.Mastery.School.Restoration.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Mastery.School.Alteration": {
       "AttributeTag": "Attribute.Mastery.School.Alteration",
       "Localization": {
@@ -229,6 +666,24 @@
           { "KeyTag": "Localization.Category", "Value": "Mastery" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Alteration.Max": {
+      "AttributeTag": "Attribute.Mastery.School.Alteration.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Alteration.GainMod": {
+      "AttributeTag": "Attribute.Mastery.School.Alteration.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Alteration.LossMod": {
+      "AttributeTag": "Attribute.Mastery.School.Alteration.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -245,6 +700,24 @@
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
+    "Attribute.Mastery.School.Conjuration.Max": {
+      "AttributeTag": "Attribute.Mastery.School.Conjuration.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Conjuration.GainMod": {
+      "AttributeTag": "Attribute.Mastery.School.Conjuration.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Conjuration.LossMod": {
+      "AttributeTag": "Attribute.Mastery.School.Conjuration.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Mastery.School.Illusion": {
       "AttributeTag": "Attribute.Mastery.School.Illusion",
       "Localization": {
@@ -255,6 +728,24 @@
           { "KeyTag": "Localization.Category", "Value": "Mastery" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Illusion.Max": {
+      "AttributeTag": "Attribute.Mastery.School.Illusion.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Illusion.GainMod": {
+      "AttributeTag": "Attribute.Mastery.School.Illusion.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Illusion.LossMod": {
+      "AttributeTag": "Attribute.Mastery.School.Illusion.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -271,6 +762,24 @@
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
+    "Attribute.Mastery.School.Mysticism.Max": {
+      "AttributeTag": "Attribute.Mastery.School.Mysticism.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Mysticism.GainMod": {
+      "AttributeTag": "Attribute.Mastery.School.Mysticism.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Mysticism.LossMod": {
+      "AttributeTag": "Attribute.Mastery.School.Mysticism.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Mastery.Element.Fire": {
       "AttributeTag": "Attribute.Mastery.Element.Fire",
       "Localization": {
@@ -281,6 +790,24 @@
           { "KeyTag": "Localization.Category", "Value": "Mastery" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.Max": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -297,6 +824,24 @@
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
+    "Attribute.Mastery.Element.Water.Max": {
+      "AttributeTag": "Attribute.Mastery.Element.Water.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Water.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Water.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Water.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Water.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Mastery.Element.Earth": {
       "AttributeTag": "Attribute.Mastery.Element.Earth",
       "Localization": {
@@ -307,6 +852,24 @@
           { "KeyTag": "Localization.Category", "Value": "Mastery" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth.Max": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -323,6 +886,24 @@
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
+    "Attribute.Mastery.Element.Air.Max": {
+      "AttributeTag": "Attribute.Mastery.Element.Air.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Air.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Air.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Air.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Air.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
     "Attribute.Mastery.Element.Light": {
       "AttributeTag": "Attribute.Mastery.Element.Light",
       "Localization": {
@@ -333,6 +914,24 @@
           { "KeyTag": "Localization.Category", "Value": "Mastery" }
         ]
       },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light.Max": {
+      "AttributeTag": "Attribute.Mastery.Element.Light.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Light.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Light.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
@@ -348,6 +947,556 @@
       },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
-    }
+    },
+    "Attribute.Mastery.Element.Dark.Max": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Dark.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Dark.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.Blaze": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire.Blaze",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Blaze Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Advanced fusion of Fire and Earth magic, producing magma and searing solid-state thermal blasts." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-BLZ" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.Blaze.Max": { "AttributeTag": "Attribute.Mastery.Element.Fire.Blaze.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Fire.Blaze.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Fire.Blaze.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Fire.Blaze.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Fire.Blaze.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Fire.Electricity": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire.Electricity",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Plasma Electricity Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Advanced fusion of Fire and Air magic, channeling superheated lightning and plasma arcs." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-ELEC" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.Electricity.Max": { "AttributeTag": "Attribute.Mastery.Element.Fire.Electricity.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Fire.Electricity.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Fire.Electricity.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Fire.Electricity.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Fire.Electricity.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Fire.Immolate": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire.Immolate",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Immolation Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized mastery over self-sacrificial thermal combustion and absolute burning states." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-IMM" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire.Immolate.Max": { "AttributeTag": "Attribute.Mastery.Element.Fire.Immolate.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Fire.Immolate.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Fire.Immolate.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Fire.Immolate.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Fire.Immolate.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Earth.Nature": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth.Nature",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Nature Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Harmonious fusion of Earth and Water magic, governing flora, roots, and organic growth." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-NAT" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth.Nature.Max": { "AttributeTag": "Attribute.Mastery.Element.Earth.Nature.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Earth.Nature.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Earth.Nature.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Earth.Nature.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Earth.Nature.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Earth.Mountain": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth.Mountain",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Mountain Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Pure earth dominance over monolithic stone, seismic faults, and absolute structural density." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-MTN" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth.Mountain.Max": { "AttributeTag": "Attribute.Mastery.Element.Earth.Mountain.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Earth.Mountain.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Earth.Mountain.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Earth.Mountain.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Earth.Mountain.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Earth.Lava": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth.Lava",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Lava Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Volcanic fusion of Earth and Fire magic, shaping molten rock and searing crusts." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-LVA" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth.Lava.Max": { "AttributeTag": "Attribute.Mastery.Element.Earth.Lava.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Earth.Lava.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Earth.Lava.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Earth.Lava.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Earth.Lava.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Water.Mud": {
+      "AttributeTag": "Attribute.Mastery.Element.Water.Mud",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Mud Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Viscous fusion of Water and Earth magic, bogging down targets and creating quagmires." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-MUD" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Water.Mud.Max": { "AttributeTag": "Attribute.Mastery.Element.Water.Mud.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Water.Mud.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Water.Mud.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Water.Mud.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Water.Mud.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Water.Ice": {
+      "AttributeTag": "Attribute.Mastery.Element.Water.Ice",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Ice Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Cryogenic fusion of Water and Air magic, shattering moisture into razor-sharp frost and blizzards." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-ICE" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Water.Ice.Max": { "AttributeTag": "Attribute.Mastery.Element.Water.Ice.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Water.Ice.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Water.Ice.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Water.Ice.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Water.Ice.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Water.Flood": {
+      "AttributeTag": "Attribute.Mastery.Element.Water.Flood",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Flood Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Pure water dominance over torrential currents, pressure jets, and tidal displacement." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-FLD" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Water.Flood.Max": { "AttributeTag": "Attribute.Mastery.Element.Water.Flood.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Water.Flood.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Water.Flood.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Water.Flood.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Water.Flood.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Air.Storm": {
+      "AttributeTag": "Attribute.Mastery.Element.Air.Storm",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Storm Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Atmospheric fusion of Air and Water magic, summoning gales, downpours, and tempests." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-STM" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Air.Storm.Max": { "AttributeTag": "Attribute.Mastery.Element.Air.Storm.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Air.Storm.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Air.Storm.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Air.Storm.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Air.Storm.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Air.Wind": {
+      "AttributeTag": "Attribute.Mastery.Element.Air.Wind",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Wind Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Pure air dominance over high-speed pressure fronts, flight, and slicing vacuum blades." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-WND" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Air.Wind.Max": { "AttributeTag": "Attribute.Mastery.Element.Air.Wind.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Air.Wind.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Air.Wind.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Air.Wind.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Air.Wind.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Air.Scorch": {
+      "AttributeTag": "Attribute.Mastery.Element.Air.Scorch",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Scorch Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Combustive fusion of Air and Fire magic, creating super-heated blast waves and flame gales." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-SCR" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Air.Scorch.Max": { "AttributeTag": "Attribute.Mastery.Element.Air.Scorch.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Air.Scorch.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Air.Scorch.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Air.Scorch.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Air.Scorch.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Light.Angelic": {
+      "AttributeTag": "Attribute.Mastery.Element.Light.Angelic",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Angelic Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Higher celestial light affinity focusing on divine protection and transcendent wards." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-ANG" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light.Angelic.Max": { "AttributeTag": "Attribute.Mastery.Element.Light.Angelic.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Light.Angelic.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Light.Angelic.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Light.Angelic.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Light.Angelic.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Light.Holy": {
+      "AttributeTag": "Attribute.Mastery.Element.Light.Holy",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Holy Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Devoted light attunement governing absolute cleansing and bane magic against corruption." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-HLY" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light.Holy.Max": { "AttributeTag": "Attribute.Mastery.Element.Light.Holy.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Light.Holy.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Light.Holy.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Light.Holy.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Light.Holy.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Light.Radiant": {
+      "AttributeTag": "Attribute.Mastery.Element.Light.Radiant",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Radiant Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Intense thermal-optical illumination, focusing light into scorching laser beams." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-RAD" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light.Radiant.Max": { "AttributeTag": "Attribute.Mastery.Element.Light.Radiant.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Light.Radiant.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Light.Radiant.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Light.Radiant.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Light.Radiant.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Dark.Demonic": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark.Demonic",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Demonic Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Corruptive dark alignment focusing on hellfire, chaos pacts, and malicious bloodletting." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-DEM" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Dark.Demonic.Max": { "AttributeTag": "Attribute.Mastery.Element.Dark.Demonic.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Dark.Demonic.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Dark.Demonic.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Dark.Demonic.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Dark.Demonic.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Dark.Necromancy": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark.Necromancy",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Necromancy Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Dark affinity governing vital energy extraction, skeletal reanimation, and decay." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-NEC" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Dark.Necromancy.Max": { "AttributeTag": "Attribute.Mastery.Element.Dark.Necromancy.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Dark.Necromancy.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Dark.Necromancy.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Dark.Necromancy.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Dark.Necromancy.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Dark.Wiccan": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark.Wiccan",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Wiccan Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Hexcraft, occult ritualism, and curse-weaving based on shadow harmonics." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-WIC" },
+          { "KeyTag": "Localization.Category", "Value": "Advanced Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Dark.Wiccan.Max": { "AttributeTag": "Attribute.Mastery.Element.Dark.Wiccan.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Dark.Wiccan.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Dark.Wiccan.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Dark.Wiccan.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Dark.Wiccan.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Astral.Chronos": {
+      "AttributeTag": "Attribute.Mastery.Element.Astral.Chronos",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Chronos Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Transcendent mastery over temporal velocity, time dilation, and acceleration." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-CHR" },
+          { "KeyTag": "Localization.Category", "Value": "Astral Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Astral.Chronos.Max": { "AttributeTag": "Attribute.Mastery.Element.Astral.Chronos.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Astral.Chronos.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Astral.Chronos.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Astral.Chronos.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Astral.Chronos.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "Attribute.Mastery.Element.Astral.Cosmos": {
+      "AttributeTag": "Attribute.Mastery.Element.Astral.Cosmos",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Cosmos Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Transcendent mastery over stellar mechanics, spatial distance, and cosmic void fields." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-CSM" },
+          { "KeyTag": "Localization.Category", "Value": "Astral Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Astral.Cosmos.Max": { "AttributeTag": "Attribute.Mastery.Element.Astral.Cosmos.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Astral.Cosmos.GainMod": { "AttributeTag": "Attribute.Mastery.Element.Astral.Cosmos.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Mastery.Element.Astral.Cosmos.LossMod": { "AttributeTag": "Attribute.Mastery.Element.Astral.Cosmos.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "Attribute.Genetic.Affinity.Fire": {
+      "AttributeTag": "Attribute.Genetic.Affinity.Fire",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pyric Affinity" },
+          { "KeyTag": "Localization.Description", "Value": "Inherent genetic resonance with thermal heat and combustion." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AFF-F" },
+          { "KeyTag": "Localization.Category", "Value": "Genetic Affinity" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Genetic.Affinity.Fire.Max": { "AttributeTag": "Attribute.Genetic.Affinity.Fire.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Genetic.Affinity.Water": {
+      "AttributeTag": "Attribute.Genetic.Affinity.Water",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Glacial Affinity" },
+          { "KeyTag": "Localization.Description", "Value": "Inherent genetic resonance with fluid dynamics and cryogenic phases." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AFF-W" },
+          { "KeyTag": "Localization.Category", "Value": "Genetic Affinity" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Genetic.Affinity.Water.Max": { "AttributeTag": "Attribute.Genetic.Affinity.Water.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Genetic.Affinity.Earth": {
+      "AttributeTag": "Attribute.Genetic.Affinity.Earth",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Geomic Affinity" },
+          { "KeyTag": "Localization.Description", "Value": "Inherent genetic resonance with mineral density and stone." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AFF-E" },
+          { "KeyTag": "Localization.Category", "Value": "Genetic Affinity" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Genetic.Affinity.Earth.Max": { "AttributeTag": "Attribute.Genetic.Affinity.Earth.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Genetic.Affinity.Air": {
+      "AttributeTag": "Attribute.Genetic.Affinity.Air",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Tempest Affinity" },
+          { "KeyTag": "Localization.Description", "Value": "Inherent genetic resonance with atmospheric pressure and kinetic wind." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AFF-A" },
+          { "KeyTag": "Localization.Category", "Value": "Genetic Affinity" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Genetic.Affinity.Air.Max": { "AttributeTag": "Attribute.Genetic.Affinity.Air.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Genetic.Affinity.Light": {
+      "AttributeTag": "Attribute.Genetic.Affinity.Light",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Radiant Affinity" },
+          { "KeyTag": "Localization.Description", "Value": "Inherent genetic resonance with holy photons and optical luminescence." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AFF-L" },
+          { "KeyTag": "Localization.Category", "Value": "Genetic Affinity" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Genetic.Affinity.Light.Max": { "AttributeTag": "Attribute.Genetic.Affinity.Light.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Genetic.Affinity.Dark": {
+      "AttributeTag": "Attribute.Genetic.Affinity.Dark",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Umbral Affinity" },
+          { "KeyTag": "Localization.Description", "Value": "Inherent genetic resonance with shadow fields and entropy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AFF-D" },
+          { "KeyTag": "Localization.Category", "Value": "Genetic Affinity" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Genetic.Affinity.Dark.Max": { "AttributeTag": "Attribute.Genetic.Affinity.Dark.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "Attribute.Title.RondavonsBlessing": {
+      "AttributeTag": "Attribute.Title.RondavonsBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Rondavon's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Earth Titan, granting absolute structural resilience." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ROND" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.RondavonsBlessing.Max": { "AttributeTag": "Attribute.Title.RondavonsBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Title.FurionsBlessing": {
+      "AttributeTag": "Attribute.Title.FurionsBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Furion's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Flame Lord, elevating thermal combustion and kinetic force." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FURI" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.FurionsBlessing.Max": { "AttributeTag": "Attribute.Title.FurionsBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Title.ElerasBlessing": {
+      "AttributeTag": "Attribute.Title.ElerasBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Elera's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Wind Sovereign, increasing movement velocity and lightning agility." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ELER" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.ElerasBlessing.Max": { "AttributeTag": "Attribute.Title.ElerasBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Title.SenteronsBlessing": {
+      "AttributeTag": "Attribute.Title.SenteronsBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Senteron's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Void Monarch, enhancing umbral stealth and entropy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "SENT" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.SenteronsBlessing.Max": { "AttributeTag": "Attribute.Title.SenteronsBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Title.EtheriasBlessing": {
+      "AttributeTag": "Attribute.Title.EtheriasBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Etheria's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Radiant Goddess, enhancing healing throughput and holy light." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ETHI" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.EtheriasBlessing.Max": { "AttributeTag": "Attribute.Title.EtheriasBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Title.OrpheusBlessing": {
+      "AttributeTag": "Attribute.Title.OrpheusBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Orpheus's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Astral Weaver, warping space and temporal velocity." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ORPH" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.OrpheusBlessing.Max": { "AttributeTag": "Attribute.Title.OrpheusBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+
+    "Attribute.Title.AshuriasBlessing": {
+      "AttributeTag": "Attribute.Title.AshuriasBlessing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Ashuria's Blessing" },
+          { "KeyTag": "Localization.Description", "Value": "Divine favor bestowed by the Tide Mother, granting fluid restoration and cryogenic mastery." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ASHU" },
+          { "KeyTag": "Localization.Category", "Value": "Divine Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.AshuriasBlessing.Max": { "AttributeTag": "Attribute.Title.AshuriasBlessing.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true }
   }
 }

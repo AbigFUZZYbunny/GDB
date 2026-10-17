@@ -82,13 +82,8 @@ void ADynamicGameState::ReleaseSpatialActorToPool(ADynamicSpatialActor* ActorToR
 void ADynamicGameState::SetPhysicsConfig(const FPhysicsDamageConfigData& ConfigData)
 {
     CalculationSettings = ConfigData.CalculationSettings;
-    LimbLookupMap.Empty();
-    BoneToLimbMap.Empty();
-    for (const FPhysicsLimbConfig& Limb : ConfigData.Limbs)
-    {
-        LimbLookupMap.Add(Limb.LimbId, Limb);
-        for (const FName& BoneName : Limb.Bones) BoneToLimbMap.Add(BoneName, Limb.LimbId);
-    }
+    ReplicatedLimbs = ConfigData.Limbs;
+    RebuildLimbMapsFromTransport();
 }
 
 uint8 ADynamicGameState::GetLimbIdForBone(const FName& BoneName) const
@@ -155,6 +150,12 @@ void ADynamicGameState::OnRep_AbilityMasterRegistryArr()
         AbilityMasterRegistry.Add(Element.KeyTag, Element.ValueDef);
     }
 }
+
+void ADynamicGameState::OnRep_ReplicatedLimbs()
+{
+    RebuildLimbMapsFromTransport();
+}
+
 void ADynamicGameState::RebuildLimbMapsFromTransport()
 {
     LimbLookupMap.Empty(ReplicatedLimbs.Num());
@@ -168,6 +169,7 @@ void ADynamicGameState::RebuildLimbMapsFromTransport()
         Limb.AngularMotorAttributeScalars.SyncMapFromChangesArray();
         Limb.LinearMotorAttributeScalars.SyncMapFromChangesArray();
 
+        // Index multi-joint chain bones -> LimbId
         for (const FPhysicsJointNodeConfig& Joint : Limb.JointChain)
         {
             if (!Joint.BoneName.IsNone())
@@ -176,6 +178,7 @@ void ADynamicGameState::RebuildLimbMapsFromTransport()
                 BoneToJointMap.Add(Joint.BoneName, Joint);
             }
         }
+
         LimbLookupMap.Add(Limb.LimbId, Limb);
     }
 }

@@ -14,6 +14,7 @@
 #include "DynamicInteractableComponent.h"
 #include "DynamicEffectFactory.h"
 #include "DynamicGameplayEffectContext.h"
+#include "TimerManager.h"
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
 {
@@ -25,52 +26,26 @@ void UDynamicGameplayAbility::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(UDynamicGameplayAbility, AbilityConfig);
-    DOREPLIFETIME(UDynamicGameplayAbility, CustomSpecChainTags);
+    DOREPLIFETIME(UDynamicGameplayAbility, ActiveAbilityRegistryTag);
 }
 
-bool UDynamicGameplayAbility::IsValidNextTierTransition(const FDynamicAbilityDef& CurrentStageDef, const FDynamicAbilityDef& NextStageDef)
+bool UDynamicGameplayAbility::CanBypassComboGate(const FDynamicAbilityDef& DefToCheck, const UAbilitySystemComponent* CasterASC)
 {
-    // Strictly require sequential tier advancement (e.g., Tier 1 -> Tier 2 -> Tier 3)
-    return NextStageDef.BaseSpellTier == (CurrentStageDef.BaseSpellTier + 1);
-}
-
-bool UDynamicGameplayAbility::SetCustomSpecChain(const TArray<FGameplayTag>& InChainTags)
-{
-    CustomSpecChainTags.Empty();
-    CurrentChainStageIndex = 0;
-    if (InChainTags.Num() == 0) return false;
-
-    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS)
+    if (!DefToCheck.ComboGate.bRequiresComboTransitionToCast)
     {
-        CustomSpecChainTags = InChainTags;
         return true;
     }
-
-    const FDynamicAbilityDef* FirstDef = GS->AbilityMasterRegistry.Find(InChainTags[0]);
-    if (!FirstDef || FirstDef->BaseSpellTier != 1)
+    if (!CasterASC || !DefToCheck.ComboGate.BypassGateMasteryAttributeTag.IsValid())
     {
-        // Chain must start with a BaseSpellTier 1 ability
         return false;
     }
-
-    CustomSpecChainTags.Add(InChainTags[0]);
-    const FDynamicAbilityDef* PrevDef = FirstDef;
-
-    for (int32 i = 1; i < InChainTags.Num(); ++i)
+    const UDynamicAttributeSet* AttrSet = Cast<UDynamicAttributeSet>(CasterASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()));
+    if (!AttrSet)
     {
-        const FDynamicAbilityDef* CandidateDef = GS->AbilityMasterRegistry.Find(InChainTags[i]);
-        if (!CandidateDef || !IsValidNextTierTransition(*PrevDef, *CandidateDef))
-        {
-            // Rejects invalid tier jumps such as Tier 1 -> Tier 3
-            break;
-        }
-        CustomSpecChainTags.Add(InChainTags[i]);
-        PrevDef = CandidateDef;
+        return false;
     }
-
-    AbilityConfig = *FirstDef;
-    return true;
+    const float CurrentMastery = AttrSet->GetDynamicAttributeValue(DefToCheck.ComboGate.BypassGateMasteryAttributeTag, 0);
+    return CurrentMastery >= DefToCheck.ComboGate.BypassGateMasteryThreshold;
 }
 
 UDynamicInteractableComponent* UDynamicGameplayAbility::FindBestNearbyInteractable(const FGameplayAbilityActorInfo* ActorInfo) const
@@ -114,6 +89,14 @@ bool UDynamicGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
         return false;
     }
 
+    if (!bActivatedViaComboTransition && AbilityConfig.ComboGate.bRequiresComboTransitionToCast)
+    {
+        if (!CanBypassComboGate(AbilityConfig, ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr))
+        {
+            return false;
+        }
+    }
+
     if (AbilityConfig.ExecutionType == EAbilityExecutionType::Interaction)
     {
         if (!FindBestNearbyInteractable(ActorInfo))
@@ -140,7 +123,8 @@ bool UDynamicGameplayAbility::CheckCost(const FGameplayAbilitySpecHandle Handle,
     {
         case EValidationPhase::Attempt:  TargetTag = AbilityConfig.LifeCycleRequirements.AttemptCostConditionTag; break;
         case EValidationPhase::Charging: TargetTag = AbilityConfig.LifeCycleRequirements.ChargingCostConditionTag; break;
-        case EValidationPhase::Release:  TargetTag = AbilityConfig.LifeCycleRequirements.ReleaseCostConditionTag; break;
+        case EValidationPhase::Release:
+        case EValidationPhase::Recovery: TargetTag = AbilityConfig.LifeCycleRequirements.ReleaseCostConditionTag; break;
     }
     return EvaluateDynamicRule(TargetTag, ActorInfo);
 }
@@ -150,9 +134,11 @@ bool UDynamicGameplayAbility::EvaluateDynamicRule(const FGameplayTag& RuleTag, c
     if (!RuleTag.IsValid()) return true;
     const FDynamicConditionTreeContainer* ValidationTree = UDynamicGASManagerComponent::GetConditionTreeByName(ActorInfo->OwnerActor.Get(), RuleTag.GetTagName());
     if (!ValidationTree) return true;
+    
     UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
     FGameplayTagContainer SourceTags; FGameplayTagContainer TargetTags;
     if (ASC) ASC->GetOwnedGameplayTags(TargetTags);
+    
     return UDynamicLogicEvaluator::EvaluateConditionTree(*ValidationTree, ASC, ASC, SourceTags, TargetTags);
 }
 
@@ -191,6 +177,7 @@ void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentat
 void UDynamicGameplayAbility::GrantSourcePassBack(EPassBackTriggerEvent EventType, float Scalar) const
 {
     if (!HasAuthority(&CurrentActivationInfo)) return;
+    
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
     const UDynamicAttributeSet* SourceAttr = ASC ? Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())) : nullptr;
     if (!SourceAttr) return;
@@ -205,25 +192,153 @@ void UDynamicGameplayAbility::GrantSourcePassBack(EPassBackTriggerEvent EventTyp
     }
 }
 
+void UDynamicGameplayAbility::RefreshOpenComboWindows(float CurrentPhaseElapsed, float CurrentPhaseAlpha)
+{
+    FGameplayTagContainer NewOpenTags;
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    AActor* OwnerActor = GetOwningActorFromActorInfo();
+
+    for (const FComboWindowRule& Rule : AbilityConfig.ComboWindows)
+    {
+        if (Rule.ActivePhase != CurrentPhase || !Rule.AllowedComboAbilityTag.IsValid()) continue;
+
+        const float Metric = Rule.bUseNormalizedAlpha ? CurrentPhaseAlpha : CurrentPhaseElapsed;
+        if (Metric >= Rule.WindowStartTimeOrAlpha && Metric <= Rule.WindowEndTimeOrAlpha)
+        {
+            if (!Rule.OptionalConditionTreeName.IsNone() && OwnerActor)
+            {
+                if (const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(OwnerActor, Rule.OptionalConditionTreeName))
+                {
+                    FGameplayTagContainer STags, TTags;
+                    if (ASC) ASC->GetOwnedGameplayTags(TTags);
+                    if (!UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, ASC, ASC, STags, TTags))
+                    {
+                        continue;
+                    }
+                }
+            }
+            NewOpenTags.AddTag(Rule.AllowedComboAbilityTag);
+        }
+    }
+
+    for (const FGameplayTag& NewlyOpened : NewOpenTags)
+    {
+        if (!CurrentlyOpenComboTags.HasTagExact(NewlyOpened))
+        {
+            OnComboWindowChanged.Broadcast(NewlyOpened, true);
+        }
+    }
+    for (const FGameplayTag& PreviouslyOpen : CurrentlyOpenComboTags)
+    {
+        if (!NewOpenTags.HasTagExact(PreviouslyOpen))
+        {
+            OnComboWindowChanged.Broadcast(PreviouslyOpen, false);
+        }
+    }
+
+    CurrentlyOpenComboTags = NewOpenTags;
+}
+
+bool UDynamicGameplayAbility::IsComboWindowOpenForAbility(FGameplayTag RequestedComboTag) const
+{
+    if (!IsActive() || !RequestedComboTag.IsValid()) return false;
+
+    if (CurrentlyOpenComboTags.HasTagExact(RequestedComboTag))
+    {
+        return true;
+    }
+
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    const float PhaseElapsed = static_cast<float>(FMath::Max(0.0, Now - PhaseStartWorldTime));
+    float PhaseDuration = 1.0f;
+    if (CurrentPhase == EValidationPhase::Charging) PhaseDuration = FMath::Max(0.01f, AbilityConfig.ChargeProfile.MaxChargeTime);
+    else if (CurrentPhase == EValidationPhase::Recovery) PhaseDuration = FMath::Max(0.01f, AbilityConfig.LifeCycleRequirements.RecoveryWindowDuration);
+
+    const float PhaseAlpha = FMath::Clamp(PhaseElapsed / PhaseDuration, 0.0f, 1.0f);
+
+    for (const FComboWindowRule& Rule : AbilityConfig.ComboWindows)
+    {
+        if (Rule.ActivePhase == CurrentPhase && Rule.AllowedComboAbilityTag == RequestedComboTag)
+        {
+            const float Metric = Rule.bUseNormalizedAlpha ? PhaseAlpha : PhaseElapsed;
+            if (Metric >= Rule.WindowStartTimeOrAlpha && Metric <= Rule.WindowEndTimeOrAlpha)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool UDynamicGameplayAbility::TryTriggerComboTransition(FGameplayTag NextComboAbilityTag)
+{
+    if (!IsComboWindowOpenForAbility(NextComboAbilityTag))
+    {
+        return false;
+    }
+
+    if (!HasAuthority(&CurrentActivationInfo))
+    {
+        Server_TryTriggerComboTransition(NextComboAbilityTag);
+    }
+
+    return TransitionIntoComboAbilityInternal(NextComboAbilityTag);
+}
+
+bool UDynamicGameplayAbility::Server_TryTriggerComboTransition_Validate(FGameplayTag NextComboAbilityTag)
+{
+    return NextComboAbilityTag.IsValid();
+}
+
+void UDynamicGameplayAbility::Server_TryTriggerComboTransition_Implementation(FGameplayTag NextComboAbilityTag)
+{
+    if (IsComboWindowOpenForAbility(NextComboAbilityTag))
+    {
+        TransitionIntoComboAbilityInternal(NextComboAbilityTag);
+    }
+}
+
+bool UDynamicGameplayAbility::TransitionIntoComboAbilityInternal(FGameplayTag NextComboAbilityTag)
+{
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return false;
+
+    const FDynamicAbilityDef* NextDef = GS->AbilityMasterRegistry.Find(NextComboAbilityTag);
+    if (!NextDef) return false;
+
+    if (NextDef->ComboGate.ValidPrerequisiteAbilityTags.Num() > 0 && ActiveAbilityRegistryTag.IsValid())
+    {
+        if (!NextDef->ComboGate.ValidPrerequisiteAbilityTags.HasTag(ActiveAbilityRegistryTag))
+        {
+            return false;
+        }
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(TimerHandle_RecoveryWindow);
+    }
+
+    bActivatedViaComboTransition = true;
+    ActiveAbilityRegistryTag = NextComboAbilityTag;
+    AbilityConfig = *NextDef;
+    CurrentlyOpenComboTags.Reset();
+    OnAbilityConfigChanged.Broadcast(AbilityConfig);
+
+    ActivateAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, nullptr);
+    return true;
+}
+
 void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
     CurrentPhase = EValidationPhase::Attempt;
     RuntimeTrackedChargeTime = 0.0f;
-    CurrentChainStageIndex = 0;
-
-    if (CustomSpecChainTags.Num() > 0 && GetWorld())
-    {
-        if (ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>())
-        {
-            if (const FDynamicAbilityDef* BaseDef = GS->AbilityMasterRegistry.Find(CustomSpecChainTags[0]))
-            {
-                AbilityConfig = *BaseDef;
-            }
-        }
-    }
+    PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    CurrentlyOpenComboTags.Reset();
 
     if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
     {
+        bActivatedViaComboTransition = false;
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
@@ -231,12 +346,17 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
     bServerApprovedActivation = true;
     PlayStagePresentation(AbilityConfig.StageVisuals.AttemptStage);
     GrantSourcePassBack(EPassBackTriggerEvent::OnCast, 1.0f);
+    RefreshOpenComboWindows(0.0f, 0.0f);
 
     switch (AbilityConfig.ExecutionType)
     {
         case EAbilityExecutionType::Charging:
         {
+            CurrentPhase = EValidationPhase::Charging;
+            PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
             PlayStagePresentation(AbilityConfig.StageVisuals.ChargingStage);
+            RefreshOpenComboWindows(0.0f, 0.0f);
+
             UAT_WaitChargeTime* ChargeTask = UAT_WaitChargeTime::WaitChargeTime(this, AbilityConfig.ChargeProfile.MaxChargeTime);
             if (ChargeTask)
             {
@@ -248,11 +368,11 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
         }
         case EAbilityExecutionType::SpatialDelivery:
             ExecuteSpatialDelivery(1.0f);
-            EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+            EnterRecoveryPhase();
             break;
         case EAbilityExecutionType::Interaction:
             ExecuteInteractionBehavior(1.0f);
-            EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+            EnterRecoveryPhase();
             break;
         case EAbilityExecutionType::Chain:
             ExecuteChainBehavior(TriggerEventData);
@@ -261,7 +381,7 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
             ExecuteMovementBehavior();
             break;
         default:
-            EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+            EnterRecoveryPhase();
             break;
     }
 }
@@ -269,6 +389,11 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
 void UDynamicGameplayAbility::HandleTickDrain(float TotalElapsedTime, float DeltaTime)
 {
     RuntimeTrackedChargeTime = TotalElapsedTime;
+    const float MaxCharge = FMath::Max(0.01f, AbilityConfig.ChargeProfile.MaxChargeTime);
+    const float ChargeAlpha = FMath::Clamp(RuntimeTrackedChargeTime / MaxCharge, 0.0f, 1.0f);
+
+    RefreshOpenComboWindows(RuntimeTrackedChargeTime, ChargeAlpha);
+
     if (AbilityConfig.LifeCycleRequirements.bApplyChargeCostSmoothly)
     {
         CurrentPhase = EValidationPhase::Charging;
@@ -281,54 +406,18 @@ void UDynamicGameplayAbility::HandleTickDrain(float TotalElapsedTime, float Delt
 
 void UDynamicGameplayAbility::HandleMaxChargeReached()
 {
-    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    RuntimeTrackedChargeTime = AbilityConfig.ChargeProfile.MaxChargeTime;
+    RefreshOpenComboWindows(RuntimeTrackedChargeTime, 1.0f);
 
-    if (GS && CustomSpecChainTags.IsValidIndex(CurrentChainStageIndex + 1))
+    if (!AbilityConfig.ChargeProfile.bHoldAtMaxCharge)
     {
-        const FGameplayTag NextAbilityTag = CustomSpecChainTags[CurrentChainStageIndex + 1];
-        if (const FDynamicAbilityDef* NextDef = GS->AbilityMasterRegistry.Find(NextAbilityTag))
-        {
-            // Enforce strict tier step: Tier N -> Tier N + 1
-            if (IsValidNextTierTransition(AbilityConfig, *NextDef))
-            {
-                CurrentChainStageIndex++;
-                AbilityConfig = *NextDef;
-                OnAbilityConfigChanged.Broadcast(AbilityConfig);
-
-                if (AbilityConfig.ExecutionType == EAbilityExecutionType::Charging && AbilityConfig.ChargeProfile.MaxChargeTime > 0.0f)
-                {
-                    RuntimeTrackedChargeTime = 0.0f;
-                    PlayStagePresentation(AbilityConfig.StageVisuals.ChargingStage);
-                    UAT_WaitChargeTime* NextChargeTask = UAT_WaitChargeTime::WaitChargeTime(this, AbilityConfig.ChargeProfile.MaxChargeTime);
-                    if (NextChargeTask)
-                    {
-                        NextChargeTask->OnChargeTick.AddDynamic(this, &UDynamicGameplayAbility::HandleTickDrain);
-                        NextChargeTask->OnMaxChargeReached.AddDynamic(this, &UDynamicGameplayAbility::HandleMaxChargeReached);
-                        NextChargeTask->ReadyForActivation();
-                        return;
-                    }
-                }
-            }
-        }
+        FinalizeRelease(1.0f);
     }
-    else if (GS && AbilityConfig.ChargeProfile.MaxChargeResolution == EMaxChargeResolution::MutateToOtherAbility && AbilityConfig.ChargeProfile.MutationAbilityTag.IsValid())
-    {
-        if (const FDynamicAbilityDef* MutatedDef = GS->AbilityMasterRegistry.Find(AbilityConfig.ChargeProfile.MutationAbilityTag))
-        {
-            if (IsValidNextTierTransition(AbilityConfig, *MutatedDef))
-            {
-                AbilityConfig = *MutatedDef;
-                OnAbilityConfigChanged.Broadcast(AbilityConfig);
-            }
-        }
-    }
-
-    FinalizeRelease(1.0f);
 }
 
 void UDynamicGameplayAbility::InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    if (bServerApprovedActivation)
+    if (bServerApprovedActivation && CurrentPhase == EValidationPhase::Charging)
     {
         bServerApprovedActivation = false;
         const float MaxTime = FMath::Max(0.01f, AbilityConfig.ChargeProfile.MaxChargeTime);
@@ -339,6 +428,9 @@ void UDynamicGameplayAbility::InputReleased(const FGameplayAbilitySpecHandle Han
 void UDynamicGameplayAbility::FinalizeRelease(float FinalChargeAlpha)
 {
     CurrentPhase = EValidationPhase::Release;
+    PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    RefreshOpenComboWindows(0.0f, FinalChargeAlpha);
+
     if (!CommitAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo))
     {
         CancelAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true);
@@ -356,7 +448,44 @@ void UDynamicGameplayAbility::FinalizeRelease(float FinalChargeAlpha)
         ExecuteSpatialDelivery(FinalChargeAlpha);
     }
 
+    EnterRecoveryPhase();
+}
+
+void UDynamicGameplayAbility::EnterRecoveryPhase()
+{
+    const float RecoveryDuration = AbilityConfig.LifeCycleRequirements.RecoveryWindowDuration;
+    if (RecoveryDuration <= 0.0f)
+    {
+        ConcludeRecoveryPhase();
+        return;
+    }
+
+    CurrentPhase = EValidationPhase::Recovery;
+    PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PlayStagePresentation(AbilityConfig.StageVisuals.RecoveryStage);
+    RefreshOpenComboWindows(0.0f, 1.0f);
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().SetTimer(TimerHandle_RecoveryWindow, this, &UDynamicGameplayAbility::ConcludeRecoveryPhase, RecoveryDuration, false);
+    }
+}
+
+void UDynamicGameplayAbility::ConcludeRecoveryPhase()
+{
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+}
+
+void UDynamicGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(TimerHandle_RecoveryWindow);
+    }
+    bActivatedViaComboTransition = false;
+    CurrentlyOpenComboTags.Reset();
+    
+    Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
 void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
@@ -366,7 +495,6 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
 
     ADynamicCharacter* AvatarChar = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo());
 
-    // 1. Align GASP kinematic effector (e.g. "hand_r") to the target point (e.g. "Interaction.Target.DoorHandle") on Client & Server
     if (AvatarChar && AbilityConfig.InteractionConfig.KinematicTargetTag.IsValid())
     {
         FTransform HandleWorldTransform;
@@ -381,7 +509,6 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
 
     if (!HasAuthority(&CurrentActivationInfo)) return;
 
-    // 2. Server executes authoritative state transitions and physical impulses
     if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
     {
         PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
@@ -510,49 +637,50 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
 
 void UDynamicGameplayAbility::ExecuteChainBehavior(const FGameplayEventData* TriggerEventData)
 {
-    if (!HasAuthority(&CurrentActivationInfo)) return;
-    AActor* CurrentTarget = (TriggerEventData && TriggerEventData->Target.Get()) ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
-    if (!CurrentTarget) { EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false); return; }
-
-    int32 MaxBounces = AbilityConfig.ChainConfig.MaxBounces;
-    float Falloff = AbilityConfig.ChainConfig.DamageFalloffPerBounce;
-    float Radius = AbilityConfig.ChainConfig.BounceSearchRadius;
-    float BaseDamage = AbilityConfig.ChainConfig.DamageParamTag.IsValid()
-        ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
-        : 0.0f;
-
-    TArray<AActor*> IgnoredTargets;
-    IgnoredTargets.Add(GetAvatarActorFromActorInfo());
-
-    for (int32 CurrentBounce = 0; CurrentBounce < MaxBounces && CurrentTarget; ++CurrentBounce)
+    if (HasAuthority(&CurrentActivationInfo))
     {
-        float ModdedDamage = BaseDamage * FMath::Pow(Falloff, CurrentBounce);
-        IgnoredTargets.Add(CurrentTarget);
+        AActor* CurrentTarget = (TriggerEventData && TriggerEventData->Target.Get()) ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
+        if (CurrentTarget)
+        {
+            int32 MaxBounces = AbilityConfig.ChainConfig.MaxBounces;
+            float Falloff = AbilityConfig.ChainConfig.DamageFalloffPerBounce;
+            float Radius = AbilityConfig.ChainConfig.BounceSearchRadius;
+            float BaseDamage = AbilityConfig.ChainConfig.DamageParamTag.IsValid()
+                ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
+                : 0.0f;
 
-        TArray<AActor*> Hits;
-        TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
-        ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
-        UKismetSystemLibrary::SphereOverlapActors(GetWorld(), CurrentTarget->GetActorLocation(), Radius, ObjectTypes, nullptr, IgnoredTargets, Hits);
-        CurrentTarget = (Hits.Num() > 0) ? Hits[0] : nullptr;
+            TArray<AActor*> IgnoredTargets;
+            IgnoredTargets.Add(GetAvatarActorFromActorInfo());
+
+            for (int32 CurrentBounce = 0; CurrentBounce < MaxBounces && CurrentTarget; ++CurrentBounce)
+            {
+                float ModdedDamage = BaseDamage * FMath::Pow(Falloff, CurrentBounce);
+                IgnoredTargets.Add(CurrentTarget);
+
+                TArray<AActor*> Hits;
+                TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+                ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
+                UKismetSystemLibrary::SphereOverlapActors(GetWorld(), CurrentTarget->GetActorLocation(), Radius, ObjectTypes, nullptr, IgnoredTargets, Hits);
+                CurrentTarget = (Hits.Num() > 0) ? Hits[0] : nullptr;
+            }
+        }
     }
-    EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
 void UDynamicGameplayAbility::ExecuteMovementBehavior()
 {
-    ADynamicCharacter* CustomPawn = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo());
-    if (!CustomPawn) return;
+    if (ADynamicCharacter* CustomPawn = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo()))
+    {
+        if (UDynamicForceComponent* ForceComp = CustomPawn->FindComponentByClass<UDynamicForceComponent>())
+        {
+            float VelocityIntensity = AbilityConfig.MovementConfig.VelocityMetricTag.IsValid()
+                ? AbilityConfig.MovementConfig.MovementMetrics.LocalLookupMap.FindRef(AbilityConfig.MovementConfig.VelocityMetricTag)
+                : 1000.0f;
+            if (FMath::IsNearlyZero(VelocityIntensity)) VelocityIntensity = 1000.0f;
 
-    UDynamicForceComponent* ForceComp = CustomPawn->FindComponentByClass<UDynamicForceComponent>();
-    if (!ForceComp) return;
-
-    float VelocityIntensity = AbilityConfig.MovementConfig.VelocityMetricTag.IsValid()
-        ? AbilityConfig.MovementConfig.MovementMetrics.LocalLookupMap.FindRef(AbilityConfig.MovementConfig.VelocityMetricTag)
-        : 1000.0f;
-    if (FMath::IsNearlyZero(VelocityIntensity)) VelocityIntensity = 1000.0f;
-
-    ForceComp->QueueInstantMovementImpulse(CustomPawn->GetActorForwardVector(), VelocityIntensity);
-    EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+            ForceComp->QueueInstantMovementImpulse(CustomPawn->GetActorForwardVector(), VelocityIntensity);
+        }
+    }
 }
 
 void UDynamicGameplayAbility::UpdateConfigAtRuntime_Implementation(FDynamicAbilityDef NewConfigLayout)

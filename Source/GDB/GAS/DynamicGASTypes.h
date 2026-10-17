@@ -21,9 +21,6 @@ UENUM(BlueprintType)
 enum class EMovementPhysicsType : uint8 { LaunchVelocity, RootMotionSource, CustomWallRun };
 
 UENUM(BlueprintType)
-enum class EMaxChargeResolution : uint8 { LevelUpCurrent, MutateToOtherAbility, AutoRelease };
-
-UENUM(BlueprintType)
 enum class ELogicOperator : uint8 { And, Or, Nand, Nor };
 
 UENUM(BlueprintType)
@@ -32,8 +29,9 @@ enum class EConditionType : uint8 { LogicalGateOnly, TagExists, TagValuePair, At
 UENUM(BlueprintType)
 enum class EComparisonOp : uint8 { LessThan, LessThanOrEqual, Equal, NotEqual, GreaterThanOrEqual, GreaterThan };
 
+// Extended with Recovery phase to support melee/spell reset-window combos
 UENUM(BlueprintType)
-enum class EValidationPhase : uint8 { Attempt, Charging, Release };
+enum class EValidationPhase : uint8 { Attempt, Charging, Release, Recovery };
 
 UENUM(BlueprintType)
 enum class EMultiShotType : uint8 { Single, Repeated, Spread, MultiRepeated };
@@ -107,6 +105,14 @@ enum class EInteractionPhysicsMode : uint8
     PushAwayFromCaster,
     PullTowardCaster,
     AngularHingeTorque
+};
+
+// Defines how a numeric property contributes to the external Ability Score calculation
+UENUM(BlueprintType)
+enum class EAbilityScoreScalingMode : uint8
+{
+    DirectProportional, // Higher property value = Higher Ability Score (e.g., Damage, Radius, SpawnCount, Duration, Bounces)
+    InverseProportional // Lower property value = Higher Ability Score (e.g., Cooldown, Mana Cost, Charge Time, Tick Interval)
 };
 
 
@@ -377,6 +383,9 @@ struct FDynamicAbilityStageVisuals
     FAbilityStagePresentation ReleaseStage;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FAbilityStagePresentation RecoveryStage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
     FAbilityStagePresentation ImpactStage;
 };
 
@@ -431,7 +440,6 @@ struct FDynamicSpatialDeliveryDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     FGameplayTag ArchetypeLinkTag;
 
-    // Optional tag used to query Archetype Metrics for Speed/ExpansionRate (completely data-driven)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     FGameplayTag SpeedMetricTag;
 
@@ -509,7 +517,6 @@ struct FDynamicInteractionProfile
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     FGameplayTag KinematicTargetTag;
 
-    // Data-driven tag used to look up force/torque magnitude in InteractionMetrics
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     FGameplayTag ForceMetricTag;
 
@@ -554,7 +561,6 @@ struct FDynamicChainProfile
 {
     GENERATED_BODY()
 
-    // Data-driven tag used to query NumericParams for base chain damage
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Chain")
     FGameplayTag DamageParamTag;
 
@@ -597,7 +603,6 @@ struct FDynamicMovementProfile
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
     FGameplayTag MotionTagIdentifier;
 
-    // Data-driven tag used to look up velocity intensity in MovementMetrics
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
     FGameplayTag VelocityMetricTag;
 
@@ -752,6 +757,60 @@ struct FDynamicConditionTreeContainer
 };
 
 
+// --- STAGE-INTERVAL COMBO WINDOWS & MASTERY COMBO GATING ---
+USTRUCT(BlueprintType)
+struct FComboWindowRule
+{
+    GENERATED_BODY()
+
+    // Ability stage during which this combo window opens (Attempt, Charging, Release, Recovery)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    EValidationPhase ActivePhase = EValidationPhase::Charging;
+
+    // Normalized progress [0.0..1.0] or elapsed seconds within ActivePhase when the window opens
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    float WindowStartTimeOrAlpha = 0.5f;
+
+    // Normalized progress [0.0..1.0] or elapsed seconds within ActivePhase when the window closes
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    float WindowEndTimeOrAlpha = 1.0f;
+
+    // If true, WindowStart/End are evaluated as [0..1] charge/phase alpha; if false, evaluated as raw seconds
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    bool bUseNormalizedAlpha = true;
+
+    // Ability tag that the player is allowed to trigger during this window (e.g., Fireball_2, LargeFireball, MeleeSwing_2)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    FGameplayTag AllowedComboAbilityTag;
+
+    // Optional condition tree checked when the player attempts to trigger the combo
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    FName OptionalConditionTreeName = NAME_None;
+};
+
+USTRUCT(BlueprintType)
+struct FComboGateRule
+{
+    GENERATED_BODY()
+
+    // If true, this ability CANNOT be cast directly from neutral unless the Mastery Bypass is met
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    bool bRequiresComboTransitionToCast = false;
+
+    // Prerequisite abilities that can transition into this ability
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    FGameplayTagContainer ValidPrerequisiteAbilityTags;
+
+    // Mastery attribute checked to bypass the combo gate (e.g., Attribute.Mastery.Element.Fire)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    FGameplayTag BypassGateMasteryAttributeTag;
+
+    // Minimum mastery value required to cast this ability directly without charging/comboing into it
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    float BypassGateMasteryThreshold = 50.0f;
+};
+
+
 // --- ABILITY DEFINITIONS ---
 USTRUCT(BlueprintType)
 struct FDynamicAbilityLifeCycleRules
@@ -775,6 +834,17 @@ struct FDynamicAbilityLifeCycleRules
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FGameplayTag ReleaseCooldownConditionTag;
+
+    // Base cost and cooldown metrics used for execution and external Ability Score evaluation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    float BaseResourceCost = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    float BaseCooldownDuration = 1.5f;
+
+    // Duration of the post-release Recovery/Reset stage (allows melee/spell follow-up combos before ending)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    float RecoveryWindowDuration = 0.35f;
 };
 
 USTRUCT(BlueprintType)
@@ -785,11 +855,9 @@ struct FDynamicChargeProfile
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     float MaxChargeTime = 0.0f;
 
+    // If true, holding past MaxChargeTime keeps the ability in the charged state waiting for player release or combo input
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    EMaxChargeResolution MaxChargeResolution = EMaxChargeResolution::AutoRelease;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    FGameplayTag MutationAbilityTag;
+    bool bHoldAtMaxCharge = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     float CostScalingMultiplier = 1.0f;
@@ -806,8 +874,12 @@ struct FDynamicAbilityDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FDynamicLocalizationProfile Localization;
 
+    // Associated Mastery & Point Pool tags for learning requirements (e.g., Attribute.Mastery.Element.Fire & Attribute.Mastery.Element.Fire.Points)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Progression")
-    int32 BaseSpellTier = 1;
+    FGameplayTag RequiredMasteryAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Progression")
+    FGameplayTag RequiredMasteryPointsAttributeTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     EAbilityExecutionType ExecutionType = EAbilityExecutionType::Instant;
@@ -838,19 +910,130 @@ struct FDynamicAbilityDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     TArray<FSourcePassBackRule> SourcePassBackRules;
+
+    // Player-driven combo windows opened during Attempt, Charging, Release, or Recovery stages
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    TArray<FComboWindowRule> ComboWindows;
+
+    // Gating rules requiring a combo transition unless bypassed by high Mastery
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    FComboGateRule ComboGate;
 };
 
+
+// --- EXTERNAL ABILITY SCORE & DIFFICULTY SCALING SCHEMA ---
 USTRUCT(BlueprintType)
-struct FDynamicAbilitySlotChain
+struct FAbilityPropertyScoreRule
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Progression")
-    FGameplayTag SlotInputTag;
+    // Property identifier (e.g. "BaseCooldown", "BaseCost", "MaxChargeTime", "DirectMagnitude", "MaxRadius", "Speed", "SpawnCount", "KineticImpulse", "Duration", "MaxBounces")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    FName PropertyName = NAME_None;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Progression")
-    TArray<FGameplayTag> ChainedAbilityTags;
+    // Optional GameplayTag if scoring a dynamic entry inside NumericParams, MovementMetrics, or InteractionMetrics
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    FGameplayTag MetricTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    EAbilityScoreScalingMode ScalingMode = EAbilityScoreScalingMode::DirectProportional;
+
+    // Baseline reference value (for InverseProportional: Score += Weight * (ReferenceValue / Max(MinClamp, ActualValue))^Exponent)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float ReferenceBaseline = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float WeightScalar = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float Exponent = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float MinClampedValue = 0.05f;
 };
+
+USTRUCT(BlueprintType)
+struct FAbilityScoreDifficultyProfile
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    FGameplayTag DifficultyTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    FString DifficultyDisplayName = TEXT("Normal");
+
+    // Multiplies the computed Ability Score
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float GlobalScoreMultiplier = 1.0f;
+
+    // Converts Ability Score -> Mastery Points Cost to Learn (Cost = Round(AbilityScore * LearnPointCostPerScoreUnit * DifficultyMult))
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float LearnPointCostPerScoreUnit = 0.05f;
+
+    // Converts Ability Score -> Minimum Mastery Value Required to Learn (MinMastery = AbilityScore * MinMasteryRequiredPerScoreUnit)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float MinMasteryRequiredPerScoreUnit = 0.25f;
+
+    // Score ceiling that maps to Base Spell Level 10 (Levels 1..10 are interpolated between MinScoreForLevel1 and MaxScoreForLevel10)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float MinScoreForLevel1 = 25.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    float MaxScoreForLevel10 = 500.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FAbilityScoreConfigData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    int32 Version = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    FGameplayTag ActiveDifficultyTag;
+
+    // Base score weights per EAbilityExecutionType (mapped by enum string name or tag)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    FDynamicTagFloatMapWrapper ExecutionTypeWeights;
+
+    // Per-property scaling rules
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    TArray<FAbilityPropertyScoreRule> PropertyRules;
+
+    // Difficulty presets
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AbilityScore")
+    TArray<FAbilityScoreDifficultyProfile> DifficultyProfiles;
+};
+
+USTRUCT(BlueprintType)
+struct FComputedAbilityScoreInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    FGameplayTag AbilityTag;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    float RawAbilityScore = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    float DifficultyAdjustedScore = 0.0f;
+
+    // Dynamically derived base spell level between 1 and 10
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    int32 ComputedSpellLevel = 1;
+
+    // Calculated Attribute.Mastery.X.Points cost to learn
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    float LearnPointCost = 1.0f;
+
+    // Calculated minimum Attribute.Mastery.X value required to learn
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    float MinimumMasteryRequired = 1.0f;
+};
+
 
 // --- BIDIRECTIONAL MILESTONES ---
 USTRUCT(BlueprintType)
@@ -900,7 +1083,6 @@ struct FDynamicThresholdRule
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FGameplayTag TargetEvolvedAttributeTag;
 
-    // Optional gameplay event tag broadcast to the ASC when the threshold breaks through
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FGameplayTag BroadcastEventTag;
 
@@ -933,7 +1115,6 @@ struct FPhysicsCalculationSettings
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FString CalculationMode = TEXT("ImpulseMagnitude");
 
-    // Data-driven target attribute reduced by kinetic collisions and counted toward OnDamageDealt pass-backs
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FGameplayTag PrimaryDamageTargetAttributeTag;
 
@@ -1009,7 +1190,6 @@ struct FPhysicsLimbConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal")
     float BreakRagdollThreshold = 2000.0f;
 
-    // Data-driven tags for structural integrity (e.g. Health / MaxHealth) and endurance/damping (e.g. Stamina / MaxStamina)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal")
     FGameplayTag IntegrityAttributeTag;
 
@@ -1028,7 +1208,6 @@ struct FPhysicsLimbConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal")
     FDynamicTagFloatMapWrapper DefaultLimbAttributes;
 
-    // Maps any JSON-defined attribute tags to Angular or Linear motor drive multipliers
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal")
     FDynamicTagFloatMapWrapper AngularMotorAttributeScalars;
 

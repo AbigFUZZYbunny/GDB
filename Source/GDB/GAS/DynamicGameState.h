@@ -34,6 +34,7 @@ public:
     UPROPERTY(ReplicatedUsing = OnRep_MasterThresholdRegistryArr) TArray<FTagThresholdPair> MasterThresholdRegistryArr;
     UPROPERTY(ReplicatedUsing = OnRep_MasterEffectRegistryArr) TArray<FTagEffectPair> MasterEffectRegistryArr;
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedLimbs) TArray<FPhysicsLimbConfig> ReplicatedLimbs;
+    UPROPERTY(ReplicatedUsing = OnRep_AbilityScoreConfig) FAbilityScoreConfigData AbilityScoreConfig;
 
     // --- Local Fast Authoritative Lookups ---
     TMap<FGameplayTag, FDynamicAttributeDef> AttributeMasterRegistry;
@@ -44,8 +45,26 @@ public:
     TMap<FGameplayTag, FDynamicThresholdContainer> MasterThresholdRegistry;
     TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
 
+    // Pre-computed O(1) cache of Ability Scores, Spell Levels (1-10), and Learn Costs for the active Difficulty
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|AbilityScore")
+    TMap<FGameplayTag, FComputedAbilityScoreInfo> ComputedAbilityScoresCache;
+
     void RegisterNewDynamicAbility(FGameplayTag AbilityTag, FDynamicAbilityDef AbilityDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions);
     void RegisterNewDynamicEffect(FGameplayTag EffectTag, FDynamicEffectDef EffectDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions);
+
+    // --- Ability Score & Difficulty Engine ---
+    void SetAbilityScoreConfig(const FAbilityScoreConfigData& InScoreConfig);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|AbilityScore")
+    void SetActiveDifficultyTag(FGameplayTag NewDifficultyTag);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|AbilityScore")
+    FComputedAbilityScoreInfo EvaluateAbilityScore(FGameplayTag AbilityTag, const FDynamicAbilityDef& AbilityDef) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|AbilityScore")
+    bool GetComputedAbilityScore(FGameplayTag AbilityTag, FComputedAbilityScoreInfo& OutScoreInfo) const;
+
+    void RebuildAllAbilityScores();
 
     // --- Unified Spatial Actor Pooling (Server Authority) ---
     ADynamicSpatialActor* AcquireSpatialActor(const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
@@ -68,9 +87,11 @@ protected:
     UFUNCTION() void OnRep_MasterThresholdRegistryArr();
     UFUNCTION() void OnRep_MasterEffectRegistryArr();
     UFUNCTION() void OnRep_ReplicatedLimbs();
+    UFUNCTION() void OnRep_AbilityScoreConfig();
 
 private:
     void RebuildLimbMapsFromTransport();
+    float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;
 
     UPROPERTY(Replicated) FPhysicsCalculationSettings CalculationSettings;
     TMap<FName, uint8> BoneToLimbMap;

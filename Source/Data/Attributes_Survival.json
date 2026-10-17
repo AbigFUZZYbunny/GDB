@@ -1,0 +1,322 @@
+﻿{
+  "_comment": "Survival and Status Attributes Schema: Integrates core survival resources, traits, sicknesses, immunities, and survival titles. Prefixed with GDBSurvival.",
+  "AttributeMasterRegistry": {
+    "GDBSurvival.Attribute.Resource.Hunger": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Hunger",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Hunger" },
+          { "KeyTag": "Localization.Description", "Value": "Measures nutritional fullness. Reaching zero induces starvation penalties." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "HNGR" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Decreases over time and during physical exertion." },
+          { "KeyTag": "Localization.Category", "Value": "Survival" }
+        ]
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Hunger.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Hunger.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Hunger.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Hunger.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Hunger.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Hunger.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Thirst": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Thirst",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Thirst" },
+          { "KeyTag": "Localization.Description", "Value": "Measures bodily hydration. Reaching zero induces dehydration and stamina fatigue." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "THST" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Depletes faster in hot environments or heavy combat." },
+          { "KeyTag": "Localization.Category", "Value": "Survival" }
+        ]
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Thirst.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Thirst.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Thirst.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Thirst.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Thirst.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Thirst.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Energy": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Energy",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Sleep / Energy" },
+          { "KeyTag": "Localization.Description", "Value": "Measures mental and physical alertness. Low energy induces exhaustion and hallucinations." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "NRG" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Restored by sleeping in beds or magical sanctuaries." },
+          { "KeyTag": "Localization.Category", "Value": "Survival" }
+        ]
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Energy.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Energy.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Energy.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Energy.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Energy.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Energy.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Hygiene": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Hygiene",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Hygiene" },
+          { "KeyTag": "Localization.Description", "Value": "Measures cleanliness. Low hygiene attracts pests, reduces stealth, and lowers social standing." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "HYG" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Washed away in rivers, baths, or via cleaning spells." },
+          { "KeyTag": "Localization.Category", "Value": "Survival" }
+        ]
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Hygiene.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Hygiene.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Hygiene.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Hygiene.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Hygiene.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Hygiene.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Food Poisoning" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Sickness.Malaria": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.Malaria",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Malaria" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Sickness.Malaria.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.Malaria.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Sickness.Malaria.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.Malaria.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Sickness.Malaria.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.Malaria.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Sickness.ManaRot": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.ManaRot",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Mana Rot" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Sickness.ManaRot.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.ManaRot.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Sickness.ManaRot.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.ManaRot.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Sickness.ManaRot.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Sickness.ManaRot.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Immunity.Disease": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Disease",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Disease Immunity" }] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Immunity.Disease.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Disease.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Immunity.Disease.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Disease.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Immunity.Disease.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Disease.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Immunity.Magic": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Magic",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Magical Pathogen Immunity" }] },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Immunity.Magic.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Magic.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Immunity.Magic.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Magic.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Immunity.Magic.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Magic.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Addiction.Alcohol": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Alcohol",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Alcohol Dependency" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Addiction.Alcohol.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Alcohol.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.Alcohol.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Alcohol.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.Alcohol.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Alcohol.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Addiction.Nicotine": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Nicotine",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Nicotine Dependency" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Addiction.Nicotine.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Nicotine.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.Nicotine.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Nicotine.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.Nicotine.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Nicotine.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Addiction.Skooma": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Skooma",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Skooma Dependency" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Addiction.Skooma.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Skooma.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.Skooma.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Skooma.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.Skooma.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.Skooma.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Addiction.ManaSpore": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.ManaSpore",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Aether Spore Addiction" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Addiction.ManaSpore.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.ManaSpore.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.ManaSpore.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.ManaSpore.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.ManaSpore.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.ManaSpore.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Resource.Addiction.BloodThirst": {
+      "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.BloodThirst",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Hemophilia / Blood Thirst" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Resource.Addiction.BloodThirst.Max": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.BloodThirst.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.BloodThirst.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.BloodThirst.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Resource.Addiction.BloodThirst.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Resource.Addiction.BloodThirst.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.NightOwl": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.NightOwl",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Night Owl" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.NightOwl.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.NightOwl.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Narcoleptic": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Narcoleptic",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Narcoleptic" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Narcoleptic.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Narcoleptic.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.EarlyBird": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.EarlyBird",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Early Bird" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.EarlyBird.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.EarlyBird.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.HeavySleeper": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.HeavySleeper",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Heavy Sleeper" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.HeavySleeper.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.HeavySleeper.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.LightSleeper": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.LightSleeper",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Light Sleeper" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.LightSleeper.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.LightSleeper.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Gourmand": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Gourmand",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Gourmand" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Gourmand.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Gourmand.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Cannibal": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Cannibal",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Cannibal" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Cannibal.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Cannibal.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Vegetarian": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Vegetarian",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Vegetarian" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Vegetarian.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Vegetarian.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Vegan": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Vegan",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Vegan" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Vegan.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Vegan.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Carnivore": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Carnivore",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Carnivore" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Carnivore.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Carnivore.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.Sickly": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.Sickly",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Sickly" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.Sickly.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.Sickly.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Trait.ImmuneBoost": {
+      "AttributeTag": "GDBSurvival.Attribute.Trait.ImmuneBoost",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Immune Boost" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Trait.ImmuneBoost.Max": { "AttributeTag": "GDBSurvival.Attribute.Trait.ImmuneBoost.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Title.Glutton": {
+      "AttributeTag": "GDBSurvival.Attribute.Title.Glutton",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Glutton Rank" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Title.Glutton.Max": { "AttributeTag": "GDBSurvival.Attribute.Title.Glutton.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 10.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Glutton.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Glutton.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Glutton.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Glutton.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Title.Drunkard": {
+      "AttributeTag": "GDBSurvival.Attribute.Title.Drunkard",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Drunkard Rank" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Title.Drunkard.Max": { "AttributeTag": "GDBSurvival.Attribute.Title.Drunkard.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 10.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Drunkard.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Drunkard.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Drunkard.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Drunkard.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Title.Ascetic": {
+      "AttributeTag": "GDBSurvival.Attribute.Title.Ascetic",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Ascetic Rank" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Title.Ascetic.Max": { "AttributeTag": "GDBSurvival.Attribute.Title.Ascetic.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 10.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Ascetic.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Ascetic.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Ascetic.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Ascetic.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Title.Feral": {
+      "AttributeTag": "GDBSurvival.Attribute.Title.Feral",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Feral Rank" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Title.Feral.Max": { "AttributeTag": "GDBSurvival.Attribute.Title.Feral.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 10.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Feral.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Feral.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Feral.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Feral.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBSurvival.Attribute.Title.Junkie": {
+      "AttributeTag": "GDBSurvival.Attribute.Title.Junkie",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Junkie Rank" }] },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "GDBSurvival.Attribute.Title.Junkie.Max": { "AttributeTag": "GDBSurvival.Attribute.Title.Junkie.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 10.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Junkie.GainMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Junkie.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBSurvival.Attribute.Title.Junkie.LossMod": { "AttributeTag": "GDBSurvival.Attribute.Title.Junkie.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true }
+  }
+}

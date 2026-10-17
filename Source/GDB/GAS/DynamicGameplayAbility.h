@@ -6,6 +6,8 @@
 #include "DynamicGASTypes.h"
 #include "DynamicGameplayAbility.generated.h"
 
+class UDynamicInteractableComponent;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FDynamicAbilityConfigChangedSignature, const FDynamicAbilityDef&, NewConfig);
 
 UCLASS()
@@ -29,6 +31,7 @@ public:
     void OnRep_AbilityConfig();
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, OUT FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
     virtual bool CheckCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const override;
     virtual bool CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const override;
     virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
@@ -37,15 +40,19 @@ public:
     UFUNCTION(BlueprintCallable, Server, Reliable, Category = "Dynamic Ability")
     void UpdateConfigAtRuntime(FDynamicAbilityDef NewConfigLayout);
 
-    void SetCustomSpecChain(const TArray<FGameplayTag>& InChainTags);
+    // Validates and assigns sequential tier chain (e.g. Tier 1 -> Tier 2 -> Tier 3)
+    bool SetCustomSpecChain(const TArray<FGameplayTag>& InChainTags);
+
+    static bool IsValidNextTierTransition(const FDynamicAbilityDef& CurrentStageDef, const FDynamicAbilityDef& NextStageDef);
 
 protected:
     bool EvaluateDynamicRule(const FGameplayTag& RuleTag, const FGameplayAbilityActorInfo* ActorInfo) const;
+    UDynamicInteractableComponent* FindBestNearbyInteractable(const FGameplayAbilityActorInfo* ActorInfo) const;
     void PlayStagePresentation(const FAbilityStagePresentation& StageVisual) const;
-    void GrantSourcePassBackOnCast() const;
+    void GrantSourcePassBack(EPassBackTriggerEvent EventType, float Scalar = 1.0f) const;
 
-    // Unified Spatial Execution (handles Projectiles, Multi-Cast, Auras, Ground AoEs, and Novas)
     void ExecuteSpatialDelivery(float ChargeAlpha);
+    void ExecuteInteractionBehavior(float ChargeAlpha);
     void ExecuteChainBehavior(const FGameplayEventData* TriggerEventData);
     void ExecuteMovementBehavior();
     void FinalizeRelease(float FinalChargeAlpha);

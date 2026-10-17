@@ -1,5 +1,5 @@
 ﻿{
-  "_comment": "Unified Spatial Delivery Schema: Projectiles, Multi-Cast, Auras, Ground AoEs, and Novas are all driven by the flat SpatialDelivery block and pooled ADynamicSpatialActor.",
+  "_comment": "Unified Spatial Delivery and Dynamic Interaction Schema: Projectiles, Multi-Cast, Auras, Ground AoEs, Novas, and World Interactions (Open, Close, Lock, Unlock, Push, Pull) are driven by flat data blocks and pooled ADynamicSpatialActor or UDynamicInteractableComponent.",
   "DeliveryArchetypes": {
     "Archetype.Delivery.Fireball": {
       "MeshAsset": "/Game/Meshes/SM_FireballOrb.SM_FireballOrb",
@@ -23,6 +23,15 @@
   "AbilityMasterRegistry": {
     "Ability.Skill.ImmolationAura": {
       "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
       "NumericParams": {
         "ReplicatedEntries": [
           { "KeyTag": "Ability.Param.BaseDamage", "Value": 15.0 }
@@ -65,6 +74,19 @@
         "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
         "PropagatedTriggerTags": []
       },
+      "InteractionConfig": {
+        "InteractionActionTag": "None",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
       "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
       "MovementConfig": {
         "PhysicsType": "LaunchVelocity",
@@ -83,8 +105,198 @@
         { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.FireXP", "BaseGrantAmount": 2.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.2 }
       ]
     },
+    "Ability.Skill.ChainLightning": {
+      "ExecutionType": "Chain",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 100.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "None",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": {
+        "MaxBounces": 4,
+        "DamageFalloffPerBounce": 0.75,
+        "BounceSearchRadius": 600.0,
+        "ForbiddenTargetTags": [ "State.Buff.Invulnerable", "State.Debuff.Grounded" ]
+      },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/AM_LightningCast.AM_LightningCast", "MontageSectionName": "Start", "PlayRate": 1.15, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Lightning.HandSpark" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/AM_LightningCast.AM_LightningCast", "MontageSectionName": "Release", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Lightning.ChainArc" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Lightning.ImpactShock" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Skill.ChainLightningXP", "BaseGrantAmount": 4.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.35 }
+      ]
+    },
+    "Ability.Skill.DodgeRoll": {
+      "ExecutionType": "Movement",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.CanDodgeRoll",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "None",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "Movement.State.Dashing",
+        "MovementMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Movement.Param.Velocity", "Value": 1500.0 },
+            { "KeyTag": "Movement.Param.Duration", "Value": 0.35 }
+          ]
+        },
+        "GaspMotorSettings": {
+          "RequiredAttributeThresholds": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Agility", "Value": 15.0 }
+            ]
+          },
+          "NewtonReflectiveForceFactor": 0.25,
+          "PhysicsBlendWeightMultiplier": 0.75
+        }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/AM_DodgeRoll.AM_DodgeRoll", "MontageSectionName": "RollForward", "PlayRate": 1.25, "GaspPhysicsControlProfile": "FullBodyAgileRoll", "GaspKinematicBlendWeight": 0.75, "StageVfxCueTag": "GameplayCue.Movement.DashDust" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 3.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
     "Ability.Skill.Fireball_1": {
       "ExecutionType": "Charging",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
       "NumericParams": {
         "ReplicatedEntries": [
           { "KeyTag": "Ability.Param.BaseDamage", "Value": 45.0 }
@@ -124,8 +336,25 @@
         "DirectAttributeMagnitude": 0.0,
         "KineticImpulseOnHit": 850.0,
         "EffectsToApply": [ "Effect.Damage.InstantStrike" ],
-        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "RuntimeMetricModifiers": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Metric.Movement.Speed", "Value": 2200.0 }
+          ]
+        },
         "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "None",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
       },
       "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
       "MovementConfig": {
@@ -149,6 +378,15 @@
     },
     "Ability.Skill.MultiFireball": {
       "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
       "NumericParams": {
         "ReplicatedEntries": [
           { "KeyTag": "Ability.Param.BaseDamage", "Value": 45.0 }
@@ -191,6 +429,19 @@
         "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
         "PropagatedTriggerTags": []
       },
+      "InteractionConfig": {
+        "InteractionActionTag": "None",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
       "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
       "MovementConfig": {
         "PhysicsType": "LaunchVelocity",
@@ -212,6 +463,15 @@
     },
     "Ability.Skill.FrostNova": {
       "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
       "NumericParams": {
         "ReplicatedEntries": [
           { "KeyTag": "Ability.Param.BaseDamage", "Value": 65.0 }
@@ -254,6 +514,19 @@
         "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
         "PropagatedTriggerTags": []
       },
+      "InteractionConfig": {
+        "InteractionActionTag": "None",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
       "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
       "MovementConfig": {
         "PhysicsType": "LaunchVelocity",
@@ -271,6 +544,505 @@
         { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.FrostXP", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
         { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.FrostXP", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
         { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 12.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.45 }
+      ]
+    },
+    "Ability.Interaction.Open": {
+      "ExecutionType": "Interaction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0, "MaxChargeResolution": "AutoRelease", "MutationAbilityTag": "None", "CostScalingMultiplier": 1.0, "CooldownScalingMultiplier": 1.0 },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Open",
+        "MaxInteractionDistance": 220.0,
+        "TargetSweepRadius": 45.0,
+        "RequiredTargetTags": [ "State.Interactable.Closed" ],
+        "BlockedTargetTags": [ "State.Interactable.Open", "State.Interactable.Locked" ],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [ "State.Interactable.Open" ],
+        "TagsToRemoveFromTarget": [ "State.Interactable.Closed" ],
+        "PhysicsMode": "AngularHingeTorque",
+        "InteractionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Interaction.Param.ForceMagnitude", "Value": 450.0 }
+          ]
+        },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": {
+          "StageMontage": "/Game/Animations/GASP/AM_InteractReach.AM_InteractReach",
+          "MontageSectionName": "Open",
+          "PlayRate": 1.0,
+          "GaspPhysicsControlProfile": "UpperBodyReach",
+          "GaspKinematicBlendWeight": 0.9,
+          "StageVfxCueTag": "GameplayCue.Interaction.DoorOpen"
+        },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 2.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Interaction.Close": {
+      "ExecutionType": "Interaction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0, "MaxChargeResolution": "AutoRelease", "MutationAbilityTag": "None", "CostScalingMultiplier": 1.0, "CooldownScalingMultiplier": 1.0 },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Close",
+        "MaxInteractionDistance": 220.0,
+        "TargetSweepRadius": 45.0,
+        "RequiredTargetTags": [ "State.Interactable.Open" ],
+        "BlockedTargetTags": [ "State.Interactable.Closed" ],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [ "State.Interactable.Closed" ],
+        "TagsToRemoveFromTarget": [ "State.Interactable.Open" ],
+        "PhysicsMode": "AngularHingeTorque",
+        "InteractionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Interaction.Param.ForceMagnitude", "Value": -450.0 }
+          ]
+        },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": {
+          "StageMontage": "/Game/Animations/GASP/AM_InteractReach.AM_InteractReach",
+          "MontageSectionName": "Close",
+          "PlayRate": 1.0,
+          "GaspPhysicsControlProfile": "UpperBodyReach",
+          "GaspKinematicBlendWeight": 0.9,
+          "StageVfxCueTag": "GameplayCue.Interaction.DoorClose"
+        },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": []
+    },
+    "Ability.Interaction.Unlock": {
+      "ExecutionType": "Interaction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0, "MaxChargeResolution": "AutoRelease", "MutationAbilityTag": "None", "CostScalingMultiplier": 1.0, "CooldownScalingMultiplier": 1.0 },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Unlock",
+        "MaxInteractionDistance": 180.0,
+        "TargetSweepRadius": 35.0,
+        "RequiredTargetTags": [ "State.Interactable.Locked", "State.Interactable.Closed" ],
+        "BlockedTargetTags": [ "State.Interactable.Open" ],
+        "TargetValidationConditionTree": "Trigger.Condition.CanUnlockTarget",
+        "TagsToAddToTarget": [ "State.Interactable.Unlocked" ],
+        "TagsToRemoveFromTarget": [ "State.Interactable.Locked" ],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": {
+          "StageMontage": "/Game/Animations/GASP/AM_InteractLockpick.AM_InteractLockpick",
+          "MontageSectionName": "Unlock",
+          "PlayRate": 1.0,
+          "GaspPhysicsControlProfile": "UpperBodyPrecision",
+          "GaspKinematicBlendWeight": 0.95,
+          "StageVfxCueTag": "GameplayCue.Interaction.UnlockClick"
+        },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Skill.LockpickingXP", "BaseGrantAmount": 15.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Stat.Experience", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Interaction.Lock": {
+      "ExecutionType": "Interaction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0, "MaxChargeResolution": "AutoRelease", "MutationAbilityTag": "None", "CostScalingMultiplier": 1.0, "CooldownScalingMultiplier": 1.0 },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Lock",
+        "MaxInteractionDistance": 180.0,
+        "TargetSweepRadius": 35.0,
+        "RequiredTargetTags": [ "State.Interactable.Unlocked", "State.Interactable.Closed" ],
+        "BlockedTargetTags": [ "State.Interactable.Locked", "State.Interactable.Open" ],
+        "TargetValidationConditionTree": "Trigger.Condition.CanUnlockTarget",
+        "TagsToAddToTarget": [ "State.Interactable.Locked" ],
+        "TagsToRemoveFromTarget": [ "State.Interactable.Unlocked" ],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": {
+          "StageMontage": "/Game/Animations/GASP/AM_InteractLockpick.AM_InteractLockpick",
+          "MontageSectionName": "Lock",
+          "PlayRate": 1.0,
+          "GaspPhysicsControlProfile": "UpperBodyPrecision",
+          "GaspKinematicBlendWeight": 0.95,
+          "StageVfxCueTag": "GameplayCue.Interaction.LockLatch"
+        },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": []
+    },
+    "Ability.Interaction.Push": {
+      "ExecutionType": "Charging",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 1.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Push",
+        "MaxInteractionDistance": 200.0,
+        "TargetSweepRadius": 55.0,
+        "RequiredTargetTags": [ "State.Interactable.Moveable" ],
+        "BlockedTargetTags": [ "State.Interactable.Anchored" ],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "PushAwayFromCaster",
+        "InteractionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Interaction.Param.ForceMagnitude", "Value": 35000.0 }
+          ]
+        },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": {
+          "StageMontage": "/Game/Animations/GASP/AM_HeavyShove.AM_HeavyShove",
+          "MontageSectionName": "Shove",
+          "PlayRate": 1.0,
+          "GaspPhysicsControlProfile": "FullBodyBrace",
+          "GaspKinematicBlendWeight": 0.8,
+          "StageVfxCueTag": "GameplayCue.Interaction.HeavyPush"
+        },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Stat.StrengthXP", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Interaction.Pull": {
+      "ExecutionType": "Interaction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Lays waste to enemies with a blazing orb of concentrated thermal energy." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FB-1" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Hold to charge up size, speed, and impact force. Mutates into enhanced variants upon full charge." },
+          { "KeyTag": "Localization.Category", "Value": "Pyromancy Skills" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "None",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": { "MaxChargeTime": 0.0, "MaxChargeResolution": "AutoRelease", "MutationAbilityTag": "None", "CostScalingMultiplier": 1.0, "CooldownScalingMultiplier": 1.0 },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Pull",
+        "MaxInteractionDistance": 220.0,
+        "TargetSweepRadius": 55.0,
+        "RequiredTargetTags": [ "State.Interactable.Moveable" ],
+        "BlockedTargetTags": [ "State.Interactable.Anchored" ],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "PullTowardCaster",
+        "InteractionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Interaction.Param.ForceMagnitude", "Value": 25000.0 }
+          ]
+        },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": {
+          "StageMontage": "/Game/Animations/GASP/AM_HeavyPull.AM_HeavyPull",
+          "MontageSectionName": "Yank",
+          "PlayRate": 1.0,
+          "GaspPhysicsControlProfile": "FullBodyBrace",
+          "GaspKinematicBlendWeight": 0.85,
+          "StageVfxCueTag": "GameplayCue.Interaction.HeavyPull"
+        },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Stat.StrengthXP", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
       ]
     }
   }

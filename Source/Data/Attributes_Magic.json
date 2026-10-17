@@ -1,0 +1,353 @@
+﻿{
+  "_comment": "RPG Magic System Attributes Schema: Integrates base attributes, Stats (Intelligence, Wit, Wisdom), Resources (Mana with elemental sub-pools), Titles (Pyromancer, Aquamancer, Wizard, Mage, etc.), and Mastery/Skill progression attributes across the 6 elements and 6 schools.",
+  "AttributeMasterRegistry": {
+    "Attribute.Stat.Intelligence": {
+      "AttributeTag": "Attribute.Stat.Intelligence",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Intelligence" },
+          { "KeyTag": "Localization.Description", "Value": "Raw magical potency and capacity for arcane calculation." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "INT" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Directly scales spell base damage and elemental scaling efficiency." },
+          { "KeyTag": "Localization.Category", "Value": "Core Stats" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wit": {
+      "AttributeTag": "Attribute.Stat.Wit",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Wit" },
+          { "KeyTag": "Localization.Description", "Value": "Mental acuity determining spell casting speed and critical strike proficiency." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "WIT" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Reduces ability charge-up times and increases critical magic strike chance." },
+          { "KeyTag": "Localization.Category", "Value": "Core Stats" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Stat.Wisdom": {
+      "AttributeTag": "Attribute.Stat.Wisdom",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Wisdom" },
+          { "KeyTag": "Localization.Description", "Value": "Spiritual attunement governing maximum mana pools and magical resistance." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "WIS" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Increases max mana, mana regeneration rate, and resistance against elemental status debuffs." },
+          { "KeyTag": "Localization.Category", "Value": "Core Stats" }
+        ]
+      },
+      "DefaultValue": 10.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana": {
+      "AttributeTag": "Attribute.Resource.Mana",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Mana Pool" },
+          { "KeyTag": "Localization.Description", "Value": "Universal arcane energy consumed to cast active spells and channel magical auras." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Total available mana across all elemental domains." },
+          { "KeyTag": "Localization.Category", "Value": "Resources" }
+        ]
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Max": {
+      "AttributeTag": "Attribute.Resource.Mana.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Fire": {
+      "AttributeTag": "Attribute.Resource.Mana.Fire",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pyre Mana" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized thermal mana dedicated to Fire spells." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP-F" },
+          { "KeyTag": "Localization.Category", "Value": "Elemental Resources" }
+        ]
+      },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Water": {
+      "AttributeTag": "Attribute.Resource.Mana.Water",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Glacial Mana" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized fluid mana dedicated to Water spells." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP-W" },
+          { "KeyTag": "Localization.Category", "Value": "Elemental Resources" }
+        ]
+      },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Earth": {
+      "AttributeTag": "Attribute.Resource.Mana.Earth",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Geomic Mana" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized density mana dedicated to Earth spells." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP-E" },
+          { "KeyTag": "Localization.Category", "Value": "Elemental Resources" }
+        ]
+      },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Air": {
+      "AttributeTag": "Attribute.Resource.Mana.Air",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Tempest Mana" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized kinetic mana dedicated to Air spells." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP-A" },
+          { "KeyTag": "Localization.Category", "Value": "Elemental Resources" }
+        ]
+      },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Light": {
+      "AttributeTag": "Attribute.Resource.Mana.Light",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Radiant Mana" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized holy mana dedicated to Light spells." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP-L" },
+          { "KeyTag": "Localization.Category", "Value": "Elemental Resources" }
+        ]
+      },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Mana.Dark": {
+      "AttributeTag": "Attribute.Resource.Mana.Dark",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Umbral Mana" },
+          { "KeyTag": "Localization.Description", "Value": "Specialized void mana dedicated to Dark spells." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MP-D" },
+          { "KeyTag": "Localization.Category", "Value": "Elemental Resources" }
+        ]
+      },
+      "DefaultValue": 50.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Mage": {
+      "AttributeTag": "Attribute.Title.Mage",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Mage Rank" },
+          { "KeyTag": "Localization.Description", "Value": "A practitioner initiated into the foundational mysteries of the arcane." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAGE" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Wizard": {
+      "AttributeTag": "Attribute.Title.Wizard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Wizard Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An academic scholar who has mastered complex spellcraft and structural geometry." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "WZRD" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Pyromancer": {
+      "AttributeTag": "Attribute.Title.Pyromancer",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pyromancer Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An adept attuned to thermal volatility and destructive combustion." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "PYRO" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Title.Aquamancer": {
+      "AttributeTag": "Attribute.Title.Aquamancer",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Aquamancer Rank" },
+          { "KeyTag": "Localization.Description", "Value": "An adept attuned to fluid flow, cryogenic freezing, and restoration." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AQUA" },
+          { "KeyTag": "Localization.Category", "Value": "Titles" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Destruction": {
+      "AttributeTag": "Attribute.Mastery.School.Destruction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Destruction Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Proficiency in raw offensive spells, kinetic force, and elemental payloads." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "DEST" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Restoration": {
+      "AttributeTag": "Attribute.Mastery.School.Restoration",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Restoration Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Proficiency in healing, purifying, and bolstering structural integrity." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "REST" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Alteration": {
+      "AttributeTag": "Attribute.Mastery.School.Alteration",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Alteration Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Proficiency in transmuting physical properties, armor hardening, and lock manipulating." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ALTR" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Conjuration": {
+      "AttributeTag": "Attribute.Mastery.School.Conjuration",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Conjuration Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Proficiency in tearing spatial rifts, summoning entities, and void gravity." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "CONJ" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Illusion": {
+      "AttributeTag": "Attribute.Mastery.School.Illusion",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Illusion Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Proficiency in bending light, creating phantasms, and high-velocity mirage dashes." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ILUS" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.School.Mysticism": {
+      "AttributeTag": "Attribute.Mastery.School.Mysticism",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Mysticism Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Proficiency in telekinesis, soul manipulation, and ethereal manipulation." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MYST" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Fire": {
+      "AttributeTag": "Attribute.Mastery.Element.Fire",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fire Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Affinity and efficiency with thermal and combustion magic." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-F" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Water": {
+      "AttributeTag": "Attribute.Mastery.Element.Water",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Water Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Affinity and efficiency with fluid, ice, and restorative magic." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-W" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Earth": {
+      "AttributeTag": "Attribute.Mastery.Element.Earth",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Earth Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Affinity and efficiency with geologic and physical transmutation magic." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-E" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Air": {
+      "AttributeTag": "Attribute.Mastery.Element.Air",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Air Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Affinity and efficiency with lightning, tempest, and wind magic." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-A" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Light": {
+      "AttributeTag": "Attribute.Mastery.Element.Light",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Light Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Affinity and efficiency with radiant and holy magic." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-L" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Element.Dark": {
+      "AttributeTag": "Attribute.Mastery.Element.Dark",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Dark Mastery" },
+          { "KeyTag": "Localization.Description", "Value": "Affinity and efficiency with umbral and void gravity magic." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MAST-D" },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    }
+  }
+}

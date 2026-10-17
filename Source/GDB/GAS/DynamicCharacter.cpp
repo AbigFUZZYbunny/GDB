@@ -15,21 +15,23 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
 
     CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
     RootComponent = CapsuleComponent;
+
     MeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComponent"));
     MeshComponent->SetupAttachment(RootComponent);
+
     MoverComponent = CreateDefaultSubobject<UMoverComponent>(TEXT("MoverComponent"));
     PhysicsControlComponent = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControlComponent"));
-    
+
     ForceComponent = CreateDefaultSubobject<UDynamicForceComponent>(TEXT("ForceComponent"));
     ForceComponent->SetIsReplicated(true);
 
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
     AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+
     DynamicGASManager = CreateDefaultSubobject<UDynamicGASManagerComponent>(TEXT("DynamicGASManager"));
     AttributeSet = CreateDefaultSubobject<UDynamicAttributeSet>(TEXT("DynamicAttributeSet"));
 
-    // Crucial for headless server bone evaluation
     MeshComponent->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     MeshComponent->SetNotifyRigidBodyCollision(true);
@@ -47,30 +49,64 @@ void ADynamicCharacter::BeginPlay()
     }
 }
 
-void ADynamicCharacter::PossessedBy(AController* NewController) { Super::PossessedBy(NewController); InitializeAbilitySystem(); }
-void ADynamicCharacter::OnRep_PlayerState() { Super::OnRep_PlayerState(); InitializeAbilitySystem(); }
+void ADynamicCharacter::PossessedBy(AController* NewController)
+{
+    Super::PossessedBy(NewController);
+    InitializeAbilitySystem();
+}
+
+void ADynamicCharacter::OnRep_PlayerState()
+{
+    Super::OnRep_PlayerState();
+    InitializeAbilitySystem();
+}
 
 void ADynamicCharacter::InitializeAbilitySystem()
 {
-    if (AbilitySystemComponent) AbilitySystemComponent->InitAbilityActorInfo(this, this);
-    if (const UDynamicAttributeSet* DynSet = Cast<UDynamicAttributeSet>(AttributeSet))
-        const_cast<UDynamicAttributeSet*>(DynSet)->OnRep_FastAttributes();
+    if (AbilitySystemComponent)
+    {
+        AbilitySystemComponent->InitAbilityActorInfo(this, this);
+    }
+
+    UDynamicAttributeSet* MutableAttrSet = const_cast<UDynamicAttributeSet*>(AttributeSet);
+    if (!MutableAttrSet) return;
+
+    if (HasAuthority() && !bAttributesInitializedOnServer)
+    {
+        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        {
+            for (const auto& AttrPair : GS->AttributeMasterRegistry)
+            {
+                MutableAttrSet->SetDynamicAttributeValue(AttrPair.Key, AttrPair.Value.DefaultValue, 0);
+            }
+            MutableAttrSet->InitializeLimbAttributesFromConfig(GS->GetLimbLookupMap());
+            bAttributesInitializedOnServer = true;
+        }
+    }
+    else
+    {
+        MutableAttrSet->OnRep_FastAttributes();
+    }
 }
 
-void ADynamicCharacter::StartRagdoll() {
+void ADynamicCharacter::StartRagdoll()
+{
     if (bIsRagdolling) return;
     bIsRagdolling = true;
     if (MoverComponent) MoverComponent->Deactivate();
-    if (MeshComponent && PhysicsControlComponent) {
+    if (MeshComponent && PhysicsControlComponent)
+    {
         MeshComponent->SetCollisionProfileName(TEXT("Ragdoll"));
         MeshComponent->SetSimulatePhysics(true);
     }
 }
 
-void ADynamicCharacter::RecoverFromRagdoll() {
+void ADynamicCharacter::RecoverFromRagdoll()
+{
     if (!bIsRagdolling) return;
     bIsRagdolling = false;
-    if (MeshComponent) {
+    if (MeshComponent)
+    {
         MeshComponent->SetSimulatePhysics(false);
         MeshComponent->AttachToComponent(CapsuleComponent, FAttachmentTransformRules::KeepRelativeTransform);
         MeshComponent->SetRelativeLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
@@ -107,7 +143,7 @@ void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_N
     const FVector Start = FVector(AimOrigin);
     const FVector End = Start + (FVector(AimDirection) * 10000.0f);
     FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ServerAuthoritativeBoneTrace), false, this);
-    
+
     FHitResult ServerHit;
     if (GetWorld()->LineTraceSingleByChannel(ServerHit, Start, End, ECC_Pawn, QueryParams))
     {
@@ -140,4 +176,100 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(ADynamicCharacter* Tar
     {
         TargetForceComp->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, ClampedImpulse, HitLocation, HitNormal);
     }
+}
+
+void ADynamicCharacter::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren)
+{
+    if (!AttributeSet || LimbId == 0) return;
+    ADynamicGameState* DynamicGS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!DynamicGS) return;
+
+    const FPhysicsLimbConfig* LimbConfig = DynamicGS->GetLimbData(LimbId);
+    if (!LimbConfig) return;
+
+    // 1. Evaluate Data-Driven Structural Integrity Ratio
+    float IntegrityRatio = 1.0f;
+    if (LimbConfig->IntegrityAttributeTag.IsValid() && LimbConfig->MaxIntegrityAttributeTag.IsValid())
+    {
+        const float MaxIntegrity = FMath::Max(1.0f, AttributeSet->GetDynamicAttributeValue(LimbConfig->MaxIntegrityAttributeTag, LimbId));
+        IntegrityRatio = FMath::Clamp(AttributeSet->GetDynamicAttributeValue(LimbConfig->IntegrityAttributeTag, LimbId) / MaxIntegrity, 0.0f, 1.0f);
+    }
+
+    // 2. Evaluate Data-Driven Endurance / Stamina Ratio
+    float EnduranceRatio = 1.0f;
+    if (LimbConfig->EnduranceAttributeTag.IsValid() && LimbConfig->MaxEnduranceAttributeTag.IsValid())
+    {
+        const float MaxEndurance = FMath::Max(1.0f, AttributeSet->GetDynamicAttributeValue(LimbConfig->MaxEnduranceAttributeTag, LimbId));
+        EnduranceRatio = FMath::Clamp(AttributeSet->GetDynamicAttributeValue(LimbConfig->EnduranceAttributeTag, LimbId) / MaxEndurance, 0.15f, 1.0f);
+    }
+
+    // 3. Evaluate Parent Limb Integrity
+    float ParentIntegrity = 1.0f;
+    if (LimbConfig->ParentLimbId > 0 && LimbConfig->ParentLimbId != LimbId)
+    {
+        if (const FPhysicsLimbConfig* ParentConfig = DynamicGS->GetLimbData(LimbConfig->ParentLimbId))
+        {
+            if (ParentConfig->IntegrityAttributeTag.IsValid() && ParentConfig->MaxIntegrityAttributeTag.IsValid())
+            {
+                const float ParentMax = FMath::Max(1.0f, AttributeSet->GetDynamicAttributeValue(ParentConfig->MaxIntegrityAttributeTag, LimbConfig->ParentLimbId));
+                ParentIntegrity = FMath::Clamp(AttributeSet->GetDynamicAttributeValue(ParentConfig->IntegrityAttributeTag, LimbConfig->ParentLimbId) / ParentMax, 0.0f, 1.0f);
+            }
+        }
+    }
+
+    // 4. Accumulate Angular & Linear Motor Multipliers from arbitrary JSON-configured attribute tags
+    float AngularAttributeBonus = 0.0f;
+    for (const auto& Pair : LimbConfig->AngularMotorAttributeScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid())
+        {
+            AngularAttributeBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, LimbId) * Pair.Value;
+        }
+    }
+
+    float LinearAttributeBonus = 0.0f;
+    for (const auto& Pair : LimbConfig->LinearMotorAttributeScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid())
+        {
+            LinearAttributeBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, LimbId) * Pair.Value;
+        }
+    }
+
+    const float BaseIntegrity = IntegrityRatio * EnduranceRatio * ParentIntegrity;
+    const float AngularDriveMult = BaseIntegrity * FMath::Max(0.0f, 1.0f + AngularAttributeBonus);
+    const float LinearDriveMult = BaseIntegrity * FMath::Max(0.0f, 1.0f + LinearAttributeBonus);
+    const float DampingMult = FMath::Lerp(0.25f, 1.0f, EnduranceRatio);
+
+    for (const FPhysicsJointNodeConfig& JointNode : LimbConfig->JointChain)
+    {
+        if (!JointNode.BoneName.IsNone())
+        {
+            ApplyJointMotorMultipliers(
+                JointNode.BoneName,
+                JointNode.JointChainIndex,
+                AngularDriveMult * JointNode.MotorDriveWeight,
+                LinearDriveMult * JointNode.MotorDriveWeight,
+                DampingMult);
+        }
+    }
+
+    if (bCascadeToChildren)
+    {
+        for (const auto& Pair : DynamicGS->GetLimbLookupMap())
+        {
+            if (Pair.Value.ParentLimbId == LimbId && Pair.Key != LimbId)
+            {
+                RecalculateLimbPhysicsMotors(Pair.Key, false);
+            }
+        }
+    }
+}
+
+void ADynamicCharacter::ApplyJointMotorMultipliers_Implementation(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier)
+{
+}
+
+void ADynamicCharacter::AlignLimbToInteractionTarget_Implementation(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent)
+{
 }

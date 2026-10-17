@@ -1,0 +1,141 @@
+﻿{
+  "_comment":"This schema handles combat related attribute values via the FFastAttributeArray layout, including weapon type mastery definitions, physical damage type definitions, ",
+  "AttributeMasterRegistry": {
+    "Attribute.Resource.Fury": {
+      "AttributeTag": "Attribute.Resource.Fury",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fury" },
+          { "KeyTag": "Localization.Description", "Value": "How Furious" },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FURY" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Effects damage, attack speed, and more" },
+          { "KeyTag": "Localization.Category", "Value": "Resource" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Fury.Max": {
+      "AttributeTag": "Attribute.Resource.Fury.Max",
+      "Localization": {
+        "ReplicatedEntries": []
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Fury.GainMod": {
+      "AttributeTag": "Attribute.Resource.Fury.GainMod",
+      "Localization": {
+        "ReplicatedEntries": []
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Fury.LossMod": {
+      "AttributeTag": "Attribute.Resource.Fury.LossMod",
+      "Localization": {
+        "ReplicatedEntries": []
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Ammunition": {
+      "AttributeTag": "Attribute.Resource.Ammunition",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Ammunition" },
+          { "KeyTag": "Localization.Description", "Value": "How much ammunition is readily in reach to use" },
+          { "KeyTag": "Localization.Abbreviated", "Value": "AMMO" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Includes any bandolier, belt pouch, magazine, quiver, etc..." },
+          { "KeyTag": "Localization.Category", "Value": "Resource" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Resource.Ammunition.Max": {
+      "AttributeTag": "Attribute.Resource.Ammunition.Max",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Tooltip", "Value": "Includes all ammunition, including that in deep storage" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Sword": {
+      "AttributeTag": "Attribute.Mastery.Movement",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Movement   " },
+          { "KeyTag": "Localization.Description", "Value": "Your mastery of movement. Increases with body movement." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MOVE" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Affects all aspects of movement, from jumping to sprinting." },
+          { "KeyTag": "Localization.Category", "Value": "Mastery" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Movement.Points": {
+      "AttributeTag": "Attribute.Mastery.Movement.Points",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Movement Mastery Points Available" },
+          { "KeyTag": "Localization.Description", "Value": "Spend these points on the %Stat Skill Tree%{Link::SkillTreeWidget.Stat} to increase your abilities" }
+        ]
+      },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Movement.Max": {
+      "AttributeTag": "Attribute.Mastery.Movement.Max",
+      "DefaultValue": 1000.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Movement.GainMod": {
+      "AttributeTag": "Attribute.Mastery.Movement.GainMod",
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Mastery.Movement.LossMod": {
+      "AttributeTag": "Attribute.Mastery.Movement.LossMod",
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    }
+  },
+
+  "MasterMilestoneRegistry": {
+    "Attribute.Stat.Level": {
+      "MilestoneActions": [
+        {
+          "ExecutionTriggerConditionTag": "None",
+          "bIsIntervalRepeating": true,
+          "EffectsToApply": [
+            {
+              "TargetAttributeTag": "Attribute.Resource.Health.Max",
+              "BaseMagnitude": 25.0,
+              "SourceTagRequirements": [],
+              "TargetTagRequirements": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+
+  "MasterThresholdRegistry": {
+    "Attribute.Resource.Experience": {
+      "Rules": [
+        {
+          "MonitoredAttributeTag": "Attribute.Resource.Experience",
+          "MaxThresholdAttributeTag": "Attribute.Resource.Experience.Max",
+          "TargetEvolvedAttributeTag": "Attribute.Stat.Level",
+          "TriggerBehavior": "LevelUpAttribute",
+          "GainModifierAttributeTag": "Attribute.Resource.Experience.GainMod",
+          "LossModifierAttributeTag": "Attribute.Resource.Experience.LossMod"
+        }
+      ]
+    }
+  }
+}

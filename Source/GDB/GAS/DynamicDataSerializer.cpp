@@ -116,9 +116,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
 
             DeserializeMapWrapper(AbilityObj, TEXT("NumericParams"), AbilityDef.NumericParams);
             DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("SpatialDelivery")), TEXT("RuntimeMetricModifiers"), AbilityDef.SpatialDelivery.RuntimeMetricModifiers);
+            DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("InteractionConfig")), TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
             DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("MovementConfig")), TEXT("MovementMetrics"), AbilityDef.MovementConfig.MovementMetrics);
             DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("MovementConfig"))->GetObjectField(TEXT("GaspMotorSettings")), TEXT("RequiredAttributeThresholds"), AbilityDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds);
-
+            
             TargetGameState->AbilityMasterRegistry.Add(KeyTag, AbilityDef);
             FTagAbilityDefPair SyncPair; SyncPair.KeyTag = KeyTag; SyncPair.ValueDef = AbilityDef;
             TargetGameState->AbilityMasterRegistryArr.Add(SyncPair);
@@ -189,6 +190,15 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         FPhysicsDamageConfigData PhysicsConfig;
         if (FJsonObjectConverter::JsonObjectToUStruct(RootObject.ToSharedRef(), &PhysicsConfig, 0, 0))
         {
+            const TArray<TSharedPtr<FJsonValue>>& LimbsJsonArr = RootObject->GetArrayField(TEXT("Limbs"));
+            for (int32 i = 0; i < LimbsJsonArr.Num() && PhysicsConfig.Limbs.IsValidIndex(i); ++i)
+            {
+                TSharedPtr<FJsonObject> LimbObj = LimbsJsonArr[i]->AsObject();
+                DeserializeLocalizationMap(LimbObj, TEXT("Localization"), PhysicsConfig.Limbs[i].Localization);
+                DeserializeMapWrapper(LimbObj, TEXT("DefaultLimbAttributes"), PhysicsConfig.Limbs[i].DefaultLimbAttributes);
+                DeserializeMapWrapper(LimbObj, TEXT("AngularMotorAttributeScalars"), PhysicsConfig.Limbs[i].AngularMotorAttributeScalars);
+                DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), PhysicsConfig.Limbs[i].LinearMotorAttributeScalars);
+            }
             TargetGameState->SetPhysicsConfig(PhysicsConfig);
         }
     }
@@ -248,6 +258,10 @@ bool UDynamicDataSerializer::SerializeMasterRegistry(const ADynamicGameState* In
                     MovObj->GetObjectField(TEXT("GaspMotorSettings"))->SetObjectField(TEXT("RequiredAttributeThresholds"), SerializeMapWrapper(Pair.Value.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds));
                 }
             }
+            if (AbObj->HasField(TEXT("InteractionConfig")))
+            {
+                AbObj->GetObjectField(TEXT("InteractionConfig"))->SetObjectField(TEXT("InteractionMetrics"), SerializeMapWrapper(Pair.Value.InteractionConfig.InteractionMetrics));
+            }
             AbMap->SetObjectField(Pair.Key.ToString(), AbObj);
         }
         Root->SetObjectField(TEXT("AbilityMasterRegistry"), AbMap);
@@ -300,12 +314,20 @@ bool UDynamicDataSerializer::SerializeMasterRegistry(const ADynamicGameState* In
         Root->SetObjectField(TEXT("EffectMasterRegistry"), EffectMap);
     }
 
-    // 8. Serialize Physics Calculation Settings & Limbs
+    // 8. Serialize Physics Calculation Settings & Limbs (inside SerializeMasterRegistry)
     Root->SetObjectField(TEXT("CalculationSettings"), FJsonObjectConverter::UStructToJsonObject(InGameState->GetCalculationSettings()));
     TArray<TSharedPtr<FJsonValue>> LimbsJson;
     for (const auto& Pair : InGameState->GetLimbLookupMap())
     {
-        LimbsJson.Add(MakeShareable(new FJsonValueObject(FJsonObjectConverter::UStructToJsonObject(Pair.Value))));
+        TSharedPtr<FJsonObject> LimbObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+        if (LimbObj.IsValid())
+        {
+            LimbObj->SetObjectField(TEXT("Localization"), SerializeLocalizationMap(Pair.Value.Localization));
+            LimbObj->SetObjectField(TEXT("DefaultLimbAttributes"), SerializeMapWrapper(Pair.Value.DefaultLimbAttributes));
+            LimbObj->SetObjectField(TEXT("AngularMotorAttributeScalars"), SerializeMapWrapper(Pair.Value.AngularMotorAttributeScalars));
+            LimbObj->SetObjectField(TEXT("LinearMotorAttributeScalars"), SerializeMapWrapper(Pair.Value.LinearMotorAttributeScalars));
+            LimbsJson.Add(MakeShareable(new FJsonValueObject(LimbObj)));
+        }
     }
     Root->SetArrayField(TEXT("Limbs"), LimbsJson);
 
@@ -399,4 +421,49 @@ int32 UDynamicDataSerializer::FlattenAndParseJsonNode(const TSharedPtr<FJsonObje
         }
     }
     return NewNodeIndex;
+}
+
+void UDynamicDataSerializer::DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile)
+{
+    OutProfile.ReplicatedEntries.Empty();
+    if (!InObject.IsValid() || !InObject->HasField(FieldName)) return;
+
+    TSharedPtr<FJsonObject> MapSection = InObject->GetObjectField(FieldName);
+    if (!MapSection.IsValid()) return;
+
+    if (MapSection->HasField(TEXT("ReplicatedEntries")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>& ArrayField = MapSection->GetArrayField(TEXT("ReplicatedEntries"));
+        for (const auto& Element : ArrayField)
+        {
+            TSharedPtr<FJsonObject> EntryObj = Element->AsObject();
+            if (EntryObj.IsValid())
+            {
+                FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("KeyTag"))), false);
+                if (KeyTag.IsValid())
+                {
+                    FTagStringPair Entry;
+                    Entry.KeyTag = KeyTag;
+                    Entry.DisplayValue = EntryObj->GetStringField(TEXT("Value"));
+                    OutProfile.ReplicatedEntries.Add(Entry);
+                }
+            }
+        }
+    }
+    OutProfile.SyncMapFromChangesArray();
+}
+
+TSharedPtr<FJsonObject> UDynamicDataSerializer::SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile)
+{
+    TSharedRef<FJsonObject> WrapperObj = MakeShareable(new FJsonObject());
+    TArray<TSharedPtr<FJsonValue>> ArrayJson;
+    for (const FTagStringPair& Pair : InProfile.ReplicatedEntries)
+    {
+        TSharedRef<FJsonObject> EntryObj = MakeShareable(new FJsonObject());
+        EntryObj->SetStringField(TEXT("KeyTag"), Pair.KeyTag.ToString());
+        EntryObj->SetStringField(TEXT("Value"), Pair.DisplayValue);
+        ArrayJson.Add(MakeShareable(new FJsonValueObject(EntryObj)));
+    }
+    WrapperObj->SetArrayField(TEXT("ReplicatedEntries"), ArrayJson);
+    return WrapperObj;
 }

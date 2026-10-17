@@ -26,11 +26,10 @@ public:
 
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
-    // Mesh accessors
+    // Component & Attribute Set Accessors
     USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
     USkeletalMeshComponent* GetMesh() const { return MeshComponent; }
-
-    // Dynamic Attribute Set Accessor
+    UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
     const UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
 
     // Secure aim-input trace strictly evaluated on server
@@ -38,6 +37,18 @@ public:
     void Server_RequestAimedStrike(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, float ClientStrikeForce);
 
     void ServerProcessAuthoritativeLimbHit(ADynamicCharacter* TargetCharacter, const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor);
+
+    // Recomputes GASP PhysicsControl joint motor strengths for a specific dynamic limb (and any child limbs attached to it)
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
+    void RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren = true);
+
+    // Blueprint/Native hook called per joint in the limb's JointChain with computed motor multipliers
+    UFUNCTION(BlueprintNativeEvent, Category = "DynamicGAS|Physics")
+    void ApplyJointMotorMultipliers(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier);
+
+    // Drives GASP PhysicsControl / IK effector bone (e.g. "hand_r") to the resolved interaction target transform (e.g. DoorHandle)
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "DynamicGAS|Interaction")
+    void AlignLimbToInteractionTarget(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent);
 
 protected:
     virtual void BeginPlay() override;
@@ -80,6 +91,7 @@ protected:
 private:
     void InitializeAbilitySystem();
     bool bIsRagdolling;
+    bool bAttributesInitializedOnServer = false;
 
     TMap<uint8, double> ServerLastLimbHitTimestamp;
 };

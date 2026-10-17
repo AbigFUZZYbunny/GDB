@@ -11,6 +11,7 @@
 #include "DynamicGameState.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicSpatialActor.h"
+#include "DynamicInteractableComponent.h"
 #include "DynamicEffectFactory.h"
 #include "DynamicGameplayEffectContext.h"
 
@@ -27,20 +28,101 @@ void UDynamicGameplayAbility::GetLifetimeReplicatedProps(TArray<FLifetimePropert
     DOREPLIFETIME(UDynamicGameplayAbility, CustomSpecChainTags);
 }
 
-void UDynamicGameplayAbility::SetCustomSpecChain(const TArray<FGameplayTag>& InChainTags)
+bool UDynamicGameplayAbility::IsValidNextTierTransition(const FDynamicAbilityDef& CurrentStageDef, const FDynamicAbilityDef& NextStageDef)
 {
-    CustomSpecChainTags = InChainTags;
+    // Strictly require sequential tier advancement (e.g., Tier 1 -> Tier 2 -> Tier 3)
+    return NextStageDef.BaseSpellTier == (CurrentStageDef.BaseSpellTier + 1);
+}
+
+bool UDynamicGameplayAbility::SetCustomSpecChain(const TArray<FGameplayTag>& InChainTags)
+{
+    CustomSpecChainTags.Empty();
     CurrentChainStageIndex = 0;
-    if (CustomSpecChainTags.Num() > 0 && GetWorld())
+    if (InChainTags.Num() == 0) return false;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS)
     {
-        if (ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>())
+        CustomSpecChainTags = InChainTags;
+        return true;
+    }
+
+    const FDynamicAbilityDef* FirstDef = GS->AbilityMasterRegistry.Find(InChainTags[0]);
+    if (!FirstDef || FirstDef->BaseSpellTier != 1)
+    {
+        // Chain must start with a BaseSpellTier 1 ability
+        return false;
+    }
+
+    CustomSpecChainTags.Add(InChainTags[0]);
+    const FDynamicAbilityDef* PrevDef = FirstDef;
+
+    for (int32 i = 1; i < InChainTags.Num(); ++i)
+    {
+        const FDynamicAbilityDef* CandidateDef = GS->AbilityMasterRegistry.Find(InChainTags[i]);
+        if (!CandidateDef || !IsValidNextTierTransition(*PrevDef, *CandidateDef))
         {
-            if (const FDynamicAbilityDef* Def = GS->AbilityMasterRegistry.Find(CustomSpecChainTags[0]))
+            // Rejects invalid tier jumps such as Tier 1 -> Tier 3
+            break;
+        }
+        CustomSpecChainTags.Add(InChainTags[i]);
+        PrevDef = CandidateDef;
+    }
+
+    AbilityConfig = *FirstDef;
+    return true;
+}
+
+UDynamicInteractableComponent* UDynamicGameplayAbility::FindBestNearbyInteractable(const FGameplayAbilityActorInfo* ActorInfo) const
+{
+    if (!ActorInfo || !ActorInfo->AvatarActor.IsValid()) return nullptr;
+    AActor* Avatar = ActorInfo->AvatarActor.Get();
+    UWorld* World = Avatar->GetWorld();
+    if (!World) return nullptr;
+
+    const FDynamicInteractionProfile& Profile = AbilityConfig.InteractionConfig;
+    const FVector Start = Avatar->GetActorLocation();
+    const FVector Forward = Avatar->GetActorForwardVector();
+    const FVector End = Start + (Forward * Profile.MaxInteractionDistance);
+
+    TArray<FHitResult> Hits;
+    FCollisionShape SweepShape = FCollisionShape::MakeSphere(Profile.TargetSweepRadius);
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(DynamicInteractionSweep), false, Avatar);
+
+    World->SweepMultiByChannel(Hits, Start, End, FQuat::Identity, ECC_Visibility, SweepShape, Params);
+
+    for (const FHitResult& Hit : Hits)
+    {
+        if (AActor* HitActor = Hit.GetActor())
+        {
+            if (UDynamicInteractableComponent* Interactable = HitActor->FindComponentByClass<UDynamicInteractableComponent>())
             {
-                AbilityConfig = *Def;
+                if (Interactable->CanAcceptInteraction(Profile, Avatar))
+                {
+                    return Interactable;
+                }
             }
         }
     }
+    return nullptr;
+}
+
+bool UDynamicGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const
+{
+    if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+    {
+        return false;
+    }
+
+    if (AbilityConfig.ExecutionType == EAbilityExecutionType::Interaction)
+    {
+        if (!FindBestNearbyInteractable(ActorInfo))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool UDynamicGameplayAbility::CheckCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const
@@ -106,7 +188,7 @@ void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentat
     }
 }
 
-void UDynamicGameplayAbility::GrantSourcePassBackOnCast() const
+void UDynamicGameplayAbility::GrantSourcePassBack(EPassBackTriggerEvent EventType, float Scalar) const
 {
     if (!HasAuthority(&CurrentActivationInfo)) return;
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
@@ -115,10 +197,10 @@ void UDynamicGameplayAbility::GrantSourcePassBackOnCast() const
 
     for (const FSourcePassBackRule& Rule : AbilityConfig.SourcePassBackRules)
     {
-        if (Rule.TriggerEvent == EPassBackTriggerEvent::OnCast && Rule.SourceAttributeTag.IsValid())
+        if (Rule.TriggerEvent == EventType && Rule.SourceAttributeTag.IsValid())
         {
             float Cur = SourceAttr->GetDynamicAttributeValue(Rule.SourceAttributeTag);
-            const_cast<UDynamicAttributeSet*>(SourceAttr)->SetDynamicAttributeValue(Rule.SourceAttributeTag, Cur + Rule.BaseGrantAmount);
+            const_cast<UDynamicAttributeSet*>(SourceAttr)->SetDynamicAttributeValue(Rule.SourceAttributeTag, Cur + (Rule.BaseGrantAmount * Scalar));
         }
     }
 }
@@ -148,7 +230,7 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
 
     bServerApprovedActivation = true;
     PlayStagePresentation(AbilityConfig.StageVisuals.AttemptStage);
-    GrantSourcePassBackOnCast();
+    GrantSourcePassBack(EPassBackTriggerEvent::OnCast, 1.0f);
 
     switch (AbilityConfig.ExecutionType)
     {
@@ -166,6 +248,10 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
         }
         case EAbilityExecutionType::SpatialDelivery:
             ExecuteSpatialDelivery(1.0f);
+            EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+            break;
+        case EAbilityExecutionType::Interaction:
+            ExecuteInteractionBehavior(1.0f);
             EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
             break;
         case EAbilityExecutionType::Chain:
@@ -195,14 +281,17 @@ void UDynamicGameplayAbility::HandleTickDrain(float TotalElapsedTime, float Delt
 
 void UDynamicGameplayAbility::HandleMaxChargeReached()
 {
-    if (CustomSpecChainTags.IsValidIndex(CurrentChainStageIndex + 1))
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+
+    if (GS && CustomSpecChainTags.IsValidIndex(CurrentChainStageIndex + 1))
     {
-        CurrentChainStageIndex++;
-        FGameplayTag NextAbilityTag = CustomSpecChainTags[CurrentChainStageIndex];
-        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        const FGameplayTag NextAbilityTag = CustomSpecChainTags[CurrentChainStageIndex + 1];
+        if (const FDynamicAbilityDef* NextDef = GS->AbilityMasterRegistry.Find(NextAbilityTag))
         {
-            if (const FDynamicAbilityDef* NextDef = GS->AbilityMasterRegistry.Find(NextAbilityTag))
+            // Enforce strict tier step: Tier N -> Tier N + 1
+            if (IsValidNextTierTransition(AbilityConfig, *NextDef))
             {
+                CurrentChainStageIndex++;
                 AbilityConfig = *NextDef;
                 OnAbilityConfigChanged.Broadcast(AbilityConfig);
 
@@ -222,11 +311,11 @@ void UDynamicGameplayAbility::HandleMaxChargeReached()
             }
         }
     }
-    else if (AbilityConfig.ChargeProfile.MaxChargeResolution == EMaxChargeResolution::MutateToOtherAbility && AbilityConfig.ChargeProfile.MutationAbilityTag.IsValid())
+    else if (GS && AbilityConfig.ChargeProfile.MaxChargeResolution == EMaxChargeResolution::MutateToOtherAbility && AbilityConfig.ChargeProfile.MutationAbilityTag.IsValid())
     {
-        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        if (const FDynamicAbilityDef* MutatedDef = GS->AbilityMasterRegistry.Find(AbilityConfig.ChargeProfile.MutationAbilityTag))
         {
-            if (const FDynamicAbilityDef* MutatedDef = GS->AbilityMasterRegistry.Find(AbilityConfig.ChargeProfile.MutationAbilityTag))
+            if (IsValidNextTierTransition(AbilityConfig, *MutatedDef))
             {
                 AbilityConfig = *MutatedDef;
                 OnAbilityConfigChanged.Broadcast(AbilityConfig);
@@ -257,8 +346,64 @@ void UDynamicGameplayAbility::FinalizeRelease(float FinalChargeAlpha)
     }
 
     PlayStagePresentation(AbilityConfig.StageVisuals.ReleaseStage);
-    ExecuteSpatialDelivery(FinalChargeAlpha);
+
+    if (AbilityConfig.ExecutionType == EAbilityExecutionType::Interaction || AbilityConfig.InteractionConfig.InteractionActionTag.IsValid())
+    {
+        ExecuteInteractionBehavior(FinalChargeAlpha);
+    }
+    else
+    {
+        ExecuteSpatialDelivery(FinalChargeAlpha);
+    }
+
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+}
+
+void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
+{
+    UDynamicInteractableComponent* TargetInteractable = FindBestNearbyInteractable(CurrentActorInfo);
+    if (!TargetInteractable) return;
+
+    ADynamicCharacter* AvatarChar = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo());
+
+    // 1. Align GASP kinematic effector (e.g. "hand_r") to the target point (e.g. "Interaction.Target.DoorHandle") on Client & Server
+    if (AvatarChar && AbilityConfig.InteractionConfig.KinematicTargetTag.IsValid())
+    {
+        FTransform HandleWorldTransform;
+        USceneComponent* HandleComp = nullptr;
+        if (TargetInteractable->ResolveKinematicTargetTransform(AbilityConfig.InteractionConfig.KinematicTargetTag, HandleWorldTransform, HandleComp))
+        {
+            AvatarChar->AlignLimbToInteractionTarget(AbilityConfig.InteractionConfig.CasterEffectorBone, HandleWorldTransform, HandleComp);
+        }
+    }
+
+    PlayStagePresentation(AbilityConfig.StageVisuals.ReleaseStage);
+
+    if (!HasAuthority(&CurrentActivationInfo)) return;
+
+    // 2. Server executes authoritative state transitions and physical impulses
+    if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
+    {
+        PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+        GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+
+        if (AbilityConfig.InteractionConfig.EffectsToApplyToTarget.Num() > 0 && TargetInteractable->GetOwner())
+        {
+            UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
+            UAbilitySystemComponent* TargetASC = TargetInteractable->GetOwner()->FindComponentByClass<UAbilitySystemComponent>();
+            if (SourceASC && TargetASC)
+            {
+                for (const FGameplayTag& EffTag : AbilityConfig.InteractionConfig.EffectsToApplyToTarget)
+                {
+                    FGameplayEffectSpecHandle Spec = UDynamicEffectFactory::CreateDynamicEffectSpec(SourceASC, EffTag, 1);
+                    if (Spec.IsValid())
+                    {
+                        SourceASC->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), TargetASC);
+                    }
+                }
+            }
+        }
+    }
 }
 
 void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
@@ -273,7 +418,6 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
     const FDynamicSpatialDeliveryDef& Delivery = AbilityConfig.SpatialDelivery;
     UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
 
-    // 1. FAST PATH: Instant / Sub-0.25s Shockwave Nova -> Server Multi-Sweep (Zero Actor Spawn!)
     if (Delivery.MotionType == ESpatialDeliveryMotion::AttachedToCaster &&
         Delivery.ApplicationType == EAuraEffectApplicationType::SingleHit &&
         Delivery.Duration <= 0.25f)
@@ -320,12 +464,11 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
         return;
     }
 
-    // 2. POOLED SPATIAL ACTOR PATH: Projectiles, Multi-Shot, Persistent Auras, and Expanding Ring Waves
     UDynamicGASManagerComponent* Registry = Avatar->FindComponentByClass<UDynamicGASManagerComponent>();
     float BaseSpeed = Delivery.SpeedOrExpansionRate;
-    if (Registry && Delivery.ArchetypeLinkTag.IsValid())
+    if (Registry && Delivery.ArchetypeLinkTag.IsValid() && Delivery.SpeedMetricTag.IsValid())
     {
-        const float ArchSpeed = Registry->ResolveMetric(Delivery.ArchetypeLinkTag, FGameplayTag::RequestGameplayTag("Metric.Movement.Speed", false), Delivery.RuntimeMetricModifiers);
+        const float ArchSpeed = Registry->ResolveMetric(Delivery.ArchetypeLinkTag, Delivery.SpeedMetricTag, Delivery.RuntimeMetricModifiers);
         if (ArchSpeed > 0.0f) BaseSpeed = ArchSpeed;
     }
     const float FinalSpeed = BaseSpeed * (1.0f + (ChargeAlpha * AbilityConfig.ChargeProfile.CostScalingMultiplier));
@@ -374,7 +517,9 @@ void UDynamicGameplayAbility::ExecuteChainBehavior(const FGameplayEventData* Tri
     int32 MaxBounces = AbilityConfig.ChainConfig.MaxBounces;
     float Falloff = AbilityConfig.ChainConfig.DamageFalloffPerBounce;
     float Radius = AbilityConfig.ChainConfig.BounceSearchRadius;
-    float BaseDamage = AbilityConfig.NumericParams.LocalLookupMap.FindRef(FGameplayTag::RequestGameplayTag("Ability.Param.BaseDamage", false));
+    float BaseDamage = AbilityConfig.ChainConfig.DamageParamTag.IsValid()
+        ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
+        : 0.0f;
 
     TArray<AActor*> IgnoredTargets;
     IgnoredTargets.Add(GetAvatarActorFromActorInfo());
@@ -401,7 +546,9 @@ void UDynamicGameplayAbility::ExecuteMovementBehavior()
     UDynamicForceComponent* ForceComp = CustomPawn->FindComponentByClass<UDynamicForceComponent>();
     if (!ForceComp) return;
 
-    float VelocityIntensity = AbilityConfig.MovementConfig.MovementMetrics.LocalLookupMap.FindRef(FGameplayTag::RequestGameplayTag("Movement.Param.Velocity", false));
+    float VelocityIntensity = AbilityConfig.MovementConfig.VelocityMetricTag.IsValid()
+        ? AbilityConfig.MovementConfig.MovementMetrics.LocalLookupMap.FindRef(AbilityConfig.MovementConfig.VelocityMetricTag)
+        : 1000.0f;
     if (FMath::IsNearlyZero(VelocityIntensity)) VelocityIntensity = 1000.0f;
 
     ForceComp->QueueInstantMovementImpulse(CustomPawn->GetActorForwardVector(), VelocityIntensity);

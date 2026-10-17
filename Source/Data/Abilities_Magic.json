@@ -1,0 +1,1315 @@
+﻿{
+  "_comment": "RPG Magic System Schema: Integrates 6 Elements (Fire, Water, Earth, Air, Light, Dark) across 6 Arcane Schools (Destruction, Restoration, Alteration, Conjuration, Illusion, Mysticism). Fully compliant with FDynamicAbilityDef, FDynamicDeliveryArchetype, sequential BaseSpellTier charging, GASP PhysicsControl profiles, and SourcePassBackRules[cite: 4].",
+  "DeliveryArchetypes": {
+    "Archetype.Delivery.Magic.Fire": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pyroclastic Orb" }
+        ]
+      },
+      "MeshAsset": "/Game/Meshes/Magic/SM_FireOrb.SM_FireOrb",
+      "PrimaryGameplayCue": "GameplayCue.Magic.Fire.ProjectileLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Movement.Speed", "Value": 2400.0 }
+        ]
+      }
+    },
+    "Archetype.Delivery.Magic.Water": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Glacial Shard" }
+        ]
+      },
+      "MeshAsset": "/Game/Meshes/Magic/SM_IceShard.SM_IceShard",
+      "PrimaryGameplayCue": "GameplayCue.Magic.Water.ProjectileLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Movement.Speed", "Value": 2800.0 }
+        ]
+      }
+    },
+    "Archetype.Delivery.Magic.Earth": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Seismic Boulder" }
+        ]
+      },
+      "MeshAsset": "/Game/Meshes/Magic/SM_EarthBoulder.SM_EarthBoulder",
+      "PrimaryGameplayCue": "GameplayCue.Magic.Earth.ProjectileLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Movement.Speed", "Value": 1500.0 }
+        ]
+      }
+    },
+    "Archetype.Delivery.Magic.Air": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Tempest Vortex" }
+        ]
+      },
+      "MeshAsset": "None",
+      "PrimaryGameplayCue": "GameplayCue.Magic.Air.VortexLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Movement.Speed", "Value": 3200.0 }
+        ]
+      }
+    },
+    "Archetype.Delivery.Magic.Light": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Sanctified Sanctuary" }
+        ]
+      },
+      "MeshAsset": "None",
+      "PrimaryGameplayCue": "GameplayCue.Magic.Light.AuraLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Spatial.Radius", "Value": 550.0 }
+        ]
+      }
+    },
+    "Archetype.Delivery.Magic.Dark": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Abyssal Singularity" }
+        ]
+      },
+      "MeshAsset": "/Game/Meshes/Magic/SM_VoidSphere.SM_VoidSphere",
+      "PrimaryGameplayCue": "GameplayCue.Magic.Dark.SingularityLoop",
+      "Metrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Movement.Speed", "Value": 950.0 }
+        ]
+      }
+    }
+  },
+  "AbilityMasterRegistry": {
+    "Ability.Magic.Destruction.Firebolt_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "Charging",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Firebolt" },
+          { "KeyTag": "Localization.Description", "Value": "Launches a focused bolt of elemental fire. Overcharging evolves the spell into adetonating Fireball." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FBLT" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Destruction [Fire]. Hold to charge into Tier 2 Fireball." },
+          { "KeyTag": "Localization.School", "Value": "Destruction" },
+          { "KeyTag": "Localization.Element", "Value": "Fire" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 40.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Low",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "Trigger.Condition.HasMana_Channel",
+        "bApplyChargeCostSmoothly": true,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 1.2,
+        "MaxChargeResolution": "MutateToOtherAbility",
+        "MutationAbilityTag": "Ability.Magic.Destruction.Fireball_2",
+        "CostScalingMultiplier": 0.4,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Fire",
+        "SpeedMetricTag": "Metric.Movement.Speed",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 16.0,
+        "MaxRadius": 16.0,
+        "Duration": 4.0,
+        "SpeedOrExpansionRate": 2400.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 0.85,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": -40.0,
+        "KineticImpulseOnHit": 750.0,
+        "EffectsToApply": [ "Effect.Magic.Fire.IgniteDOT" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Fire", "School.Destruction" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", "MontageSectionName": "Ignite", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Fire.HandSpark" },
+        "ChargingStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", "MontageSectionName": "ChargeLoop", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Fire.ChargeSwirl" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", "MontageSectionName": "Throw", "PlayRate": 1.15, "GaspPhysicsControlProfile": "FullBodyRecoil", "GaspKinematicBlendWeight": 0.75, "StageVfxCueTag": "GameplayCue.Magic.Fire.CastRelease" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Fire.BoltImpact" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 3.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.Element.Fire", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.4 }
+      ]
+    },
+    "Ability.Magic.Destruction.Fireball_2": {
+      "BaseSpellTier": 2,
+      "ExecutionType": "Charging",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Fireball" },
+          { "KeyTag": "Localization.Description", "Value": "Hurls an explosive sphere of flame that detonates on impact, knocking ragdolls back. Can be charged further into Meteor Swarm." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FBAL" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 2 Destruction [Fire]. Evolved from Firebolt; charges into Tier 3 Meteor Swarm." },
+          { "KeyTag": "Localization.School", "Value": "Destruction" },
+          { "KeyTag": "Localization.Element", "Value": "Fire" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 95.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "Trigger.Condition.HasMana_Channel",
+        "bApplyChargeCostSmoothly": true,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 1.75,
+        "MaxChargeResolution": "MutateToOtherAbility",
+        "MutationAbilityTag": "Ability.Magic.Destruction.MeteorSwarm_3",
+        "CostScalingMultiplier": 0.65,
+        "CooldownScalingMultiplier": 1.25
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Fire",
+        "SpeedMetricTag": "Metric.Movement.Speed",
+        "MotionType": "SourceGuided",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 36.0,
+        "MaxRadius": 350.0,
+        "Duration": 5.0,
+        "SpeedOrExpansionRate": 2100.0,
+        "HomingTurnRate": 140.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 0.85,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": -95.0,
+        "KineticImpulseOnHit": 1850.0,
+        "EffectsToApply": [ "Effect.Magic.Fire.IgniteDOT", "Effect.Magic.Fire.ArmorMelt" ],
+        "RuntimeMetricModifiers": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Metric.Movement.Speed", "Value": -200.0 }
+          ]
+        },
+        "PropagatedTriggerTags": [ "Element.Fire", "School.Destruction" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_TwoHand.AM_Cast_TwoHand", "MontageSectionName": "Gather", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Fire.Stage2Surge" },
+        "ChargingStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_TwoHand.AM_Cast_TwoHand", "MontageSectionName": "HoldHeavy", "PlayRate": 1.1, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Fire.FireballCharge" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_TwoHand.AM_Cast_TwoHand", "MontageSectionName": "Hurl", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyRecoil", "GaspKinematicBlendWeight": 0.7, "StageVfxCueTag": "GameplayCue.Magic.Fire.FireballLaunch" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Fire.FireballDetonate" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.Element.Fire", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 15.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.55 }
+      ]
+    },
+    "Ability.Magic.Destruction.MeteorSwarm_3": {
+      "BaseSpellTier": 3,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Meteor Swarm" },
+          { "KeyTag": "Localization.Description", "Value": "Unleashes a cataclysmic salvo of five blazing meteors that home in on targets and shatter posture." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "MTR" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 3 Destruction [Fire]. Fires 5 homing meteors with high ragdoll break impulse." },
+          { "KeyTag": "Localization.School", "Value": "Destruction" },
+          { "KeyTag": "Localization.Element", "Value": "Fire" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 140.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_High",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.75
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Fire",
+        "SpeedMetricTag": "Metric.Movement.Speed",
+        "MotionType": "Homing",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 45.0,
+        "MaxRadius": 450.0,
+        "Duration": 6.0,
+        "SpeedOrExpansionRate": 2600.0,
+        "HomingTurnRate": 220.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Spread",
+        "SpawnCount": 5,
+        "SpreadAngleDegrees": 40.0,
+        "PowerDecayPerAdditional": 0.82,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": -140.0,
+        "KineticImpulseOnHit": 2800.0,
+        "EffectsToApply": [ "Effect.Magic.Fire.IgniteDOT", "Effect.Magic.Fire.ArmorMelt" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Fire", "School.Destruction" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Fire.ApexPillar" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_SkyCall.AM_Cast_SkyCall", "MontageSectionName": "MeteorBarrage", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyHeavyRecoil", "GaspKinematicBlendWeight": 0.65, "StageVfxCueTag": "GameplayCue.Magic.Fire.MeteorLaunch" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Fire.CataclysmImpact" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 12.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.Element.Fire", "BaseGrantAmount": 15.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.5 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 25.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.75 }
+      ]
+    },
+    "Ability.Magic.Destruction.ChainLightning_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "Chain",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Chain Lightning" },
+          { "KeyTag": "Localization.Description", "Value": "Discharges a high-voltage arc of ionized air that leaps between up to 5 nearby enemies." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "CLGT" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Destruction [Air]. Bounces up to 5 targets within 650m with 20% falloff per jump." },
+          { "KeyTag": "Localization.School", "Value": "Destruction" },
+          { "KeyTag": "Localization.Element", "Value": "Air" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 85.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "SpeedMetricTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Air", "School.Destruction" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": {
+        "DamageParamTag": "Ability.Param.BaseDamage",
+        "MaxBounces": 5,
+        "DamageFalloffPerBounce": 0.8,
+        "BounceSearchRadius": 650.0,
+        "ForbiddenTargetTags": [ "State.Buff.Invulnerable", "State.Element.Grounded" ]
+      },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_LightningCast.AM_LightningCast", "MontageSectionName": "Start", "PlayRate": 1.2, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Air.StaticCharge" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_LightningCast.AM_LightningCast", "MontageSectionName": "Release", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Air.ChainArc" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Air.ShockJolt" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.Element.Air", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.35 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.4 }
+      ]
+    },
+    "Ability.Magic.Destruction.FrostNova_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Frost Nova" },
+          { "KeyTag": "Localization.Description", "Value": "Flash-freezes the moisture around the caster in an instantaneous ring, blasting enemies back and stiffening their ragdoll limb motors." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "FNVA" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Destruction [Water]. Instantaneous server sweep shockwave around caster." },
+          { "KeyTag": "Localization.School", "Value": "Destruction" },
+          { "KeyTag": "Localization.Element", "Value": "Water" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 60.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Water",
+        "SpeedMetricTag": "None",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "ExpandOut",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 40.0,
+        "MaxRadius": 700.0,
+        "Duration": 0.2,
+        "SpeedOrExpansionRate": 3500.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": -60.0,
+        "KineticImpulseOnHit": 1950.0,
+        "EffectsToApply": [ "Effect.Magic.Water.CryoFreeze", "Effect.Magic.Water.StaminaDrain" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Water", "School.Destruction" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_NovaCast.AM_NovaCast", "MontageSectionName": "Gather", "PlayRate": 1.25, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Water.FrostGather" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_NovaCast.AM_NovaCast", "MontageSectionName": "ShockwaveBurst", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.95, "StageVfxCueTag": "GameplayCue.Magic.Water.FrostNovaRing" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Water.IceShatter" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.Element.Water", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.45 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 12.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.45 }
+      ]
+    },
+    "Ability.Magic.Restoration.Sanctuary_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Sanctuary of Light" },
+          { "KeyTag": "Localization.Description", "Value": " Consecrates the ground around the caster with a pulsing golden aura that continuously restores Health and Stamina." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "SANC" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Restoration [Light]. Pulsing aura that heals +20 Health every 0.5s." },
+          { "KeyTag": "Localization.School", "Value": "Restoration" },
+          { "KeyTag": "Localization.Element", "Value": "Light" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.HealAmount", "Value": 20.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Light",
+        "SpeedMetricTag": "None",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "PulseAtFullSize",
+        "ApplicationType": "TickInterval",
+        "MinRadius": 250.0,
+        "MaxRadius": 550.0,
+        "Duration": 12.0,
+        "SpeedOrExpansionRate": 1.5,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.5,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": 20.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [ "Effect.Magic.Light.PurifyDebuffs", "Effect.Magic.Light.StaminaRegenBoost" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Light", "School.Restoration" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_PrayerCast.AM_PrayerCast", "MontageSectionName": "Invoke", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Light.ChoirChime" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_PrayerCast.AM_PrayerCast", "MontageSectionName": "Bless", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Light.SanctuaryRing" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Light.HealPulse" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Restoration", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.Element.Light", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 12.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Magic.Restoration.TidalMending_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Tidal Mending" },
+          { "KeyTag": "Localization.Description", "Value": "Surrounds the caster in a soothing veil of elemental water that continuously regenerates limb integrity." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "TMND" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Restoration [Water]. Constant rate healing (+25 Health/sec) while inside the aura." },
+          { "KeyTag": "Localization.School", "Value": "Restoration" },
+          { "KeyTag": "Localization.Element", "Value": "Water" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Low",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Water",
+        "SpeedMetricTag": "None",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "StayFullSize",
+        "ApplicationType": "ConstantRate",
+        "MinRadius": 300.0,
+        "MaxRadius": 300.0,
+        "Duration": 8.0,
+        "SpeedOrExpansionRate": 1.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": 25.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Water", "School.Restoration" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_WaterWeave.AM_WaterWeave", "MontageSectionName": "Flow", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Water.RippleStart" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Water.MendingVeil" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Restoration", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.Element.Water", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Magic.Alteration.Stoneflesh_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Stoneflesh Bastion" },
+          { "KeyTag": "Localization.Description", "Value": "Hardens the caster's skin and ragdoll joints with living granite, passively increasing Strength and physical impact resistance." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "STNF" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Alteration [Earth]. Grants +30 Strength while active, stiffening GASP limb motors against ragdoll knockdowns." },
+          { "KeyTag": "Localization.School", "Value": "Alteration" },
+          { "KeyTag": "Localization.Element", "Value": "Earth" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Earth",
+        "SpeedMetricTag": "None",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "StayFullSize",
+        "ApplicationType": "PassiveWhileIn",
+        "MinRadius": 120.0,
+        "MaxRadius": 120.0,
+        "Duration": 30.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Stat.Strength",
+        "DirectAttributeMagnitude": 30.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [ "Effect.Magic.Earth.GranitePoise" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Earth", "School.Alteration" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.85, "PhysicsBlendWeightMultiplier": 1.5 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_EarthStomp.AM_EarthStomp", "MontageSectionName": "Brace", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.95, "StageVfxCueTag": "GameplayCue.Magic.Earth.RockCrust" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.95, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.95, "StageVfxCueTag": "GameplayCue.Magic.Earth.StonefleshArmor" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Alteration", "BaseGrantAmount": 7.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.Element.Earth", "BaseGrantAmount": 7.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Magic.Alteration.ArcaneKnock_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "Interaction",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Arcane Knock" },
+          { "KeyTag": "Localization.Description", "Value": "Channels a resonant pulse of transmutative earth magic into a locked door or chest, unsealing its tumblers and swinging it open." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "KNCK" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Alteration [Earth]. Unlocks and opens locked doors within 4.5 meters." },
+          { "KeyTag": "Localization.School", "Value": "Alteration" },
+          { "KeyTag": "Localization.Element", "Value": "Earth" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "SpeedMetricTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "Localization": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Localization.Name", "Value": "Cast Knock" }
+          ]
+        },
+        "InteractionActionTag": "Interaction.Action.ArcaneUnlock",
+        "KinematicTargetTag": "Interaction.Target.DoorHandle",
+        "ForceMetricTag": "Interaction.Param.ForceMagnitude",
+        "CasterEffectorBone": "hand_l",
+        "MaxInteractionDistance": 450.0,
+        "TargetSweepRadius": 65.0,
+        "RequiredTargetTags": [ "State.Interactable.Locked", "State.Interactable.Closed" ],
+        "BlockedTargetTags": [ "State.Interactable.Open", "State.Interactable.ArcaneSealed" ],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [ "State.Interactable.Unlocked", "State.Interactable.Open" ],
+        "TagsToRemoveFromTarget": [ "State.Interactable.Locked", "State.Interactable.Closed" ],
+        "PhysicsMode": "AngularHingeTorque",
+        "InteractionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Interaction.Param.ForceMagnitude", "Value": 650.0 }
+          ]
+        },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_GesturePoint.AM_GesturePoint", "MontageSectionName": "PointLeft", "PlayRate": 1.1, "GaspPhysicsControlProfile": "UpperBodyReach", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Alteration.KnockChime" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Alteration.LockShatter" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.School.Alteration", "BaseGrantAmount": 12.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 15.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Magic.Conjuration.AbyssalBlackHole_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Abyssal Singularity" },
+          { "KeyTag": "Localization.Description", "Value": "Conjures a contracting rift of dark gravity at a target point, crushing nearby enemies inward and draining their endurance." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "VOID" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Conjuration [Dark]. Stationary contracting sphere that deals periodic dark damage and physics implosion." },
+          { "KeyTag": "Localization.School", "Value": "Conjuration" },
+          { "KeyTag": "Localization.Element", "Value": "Dark" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 30.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_High",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Dark",
+        "SpeedMetricTag": "Metric.Movement.Speed",
+        "MotionType": "StationaryGround",
+        "ShapeBehavior": "ContractIn",
+        "ApplicationType": "TickInterval",
+        "MinRadius": 120.0,
+        "MaxRadius": 650.0,
+        "Duration": 6.0,
+        "SpeedOrExpansionRate": 110.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.5,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": -25.0,
+        "KineticImpulseOnHit": 1400.0,
+        "EffectsToApply": [ "Effect.Magic.Dark.VoidEntropy", "Effect.Magic.Dark.GravitySlow" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Dark", "School.Conjuration" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_VoidSummon.AM_VoidSummon", "MontageSectionName": "TearRift", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Dark.RiftTear" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_VoidSummon.AM_VoidSummon", "MontageSectionName": "Collapse", "PlayRate": 1.0, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Dark.SingularitySpawn" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Dark.VoidPulse" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Conjuration", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.Element.Dark", "BaseGrantAmount": 6.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.35 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.45 }
+      ]
+    },
+    "Ability.Magic.Illusion.ZephyrStep_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "Movement",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Zephyr Step" },
+          { "KeyTag": "Localization.Description", "Value": "Dissolves the caster into a shimmering mirage of wind and refracted light, surging forward at blinding velocity." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ZPHR" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Illusion [Air]. High-velocity GASP movement dash." },
+          { "KeyTag": "Localization.School", "Value": "Illusion" },
+          { "KeyTag": "Localization.Element", "Value": "Air" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Low",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "SpeedMetricTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "Movement.State.PhantomDash",
+        "VelocityMetricTag": "Movement.Param.Velocity",
+        "MovementMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Movement.Param.Velocity", "Value": 2600.0 },
+            { "KeyTag": "Movement.Param.Duration", "Value": 0.25 }
+          ]
+        },
+        "GaspMotorSettings": {
+          "RequiredAttributeThresholds": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Agility", "Value": 12.0 }
+            ]
+          },
+          "NewtonReflectiveForceFactor": 0.1,
+          "PhysicsBlendWeightMultiplier": 0.85
+        }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_PhantomStep.AM_PhantomStep", "MontageSectionName": "Dash", "PlayRate": 1.35, "GaspPhysicsControlProfile": "FullBodyAgileRoll", "GaspKinematicBlendWeight": 0.8, "StageVfxCueTag": "GameplayCue.Magic.Illusion.MirageBurst" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Illusion.WindTrail" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Illusion", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.Element.Air", "BaseGrantAmount": 4.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Magic.Mysticism.TelekineticShove_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "Charging",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Telekinetic Repulsion" },
+          { "KeyTag": "Localization.Description", "Value": "Projects an unseen wave of psychic air pressure to hurl moveable world objects or doors away from the caster." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "TKSH" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Mysticism [Air]. Chargeable telekinetic push that scales physical impulse with charge duration." },
+          { "KeyTag": "Localization.School", "Value": "Mysticism" },
+          { "KeyTag": "Localization.Element", "Value": "Air" }
+        ]
+      },
+      "NumericParams": { "ReplicatedEntries": [] },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Low",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "Trigger.Condition.HasMana_Channel",
+        "bApplyChargeCostSmoothly": true,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 1.25,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 0.5,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "None",
+        "SpeedMetricTag": "None",
+        "MotionType": "StraightVelocity",
+        "ShapeBehavior": "PointImpact",
+        "ApplicationType": "SingleHit",
+        "MinRadius": 0.0,
+        "MaxRadius": 0.0,
+        "Duration": 0.0,
+        "SpeedOrExpansionRate": 0.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.0,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "None",
+        "DirectAttributeMagnitude": 0.0,
+        "KineticImpulseOnHit": 0.0,
+        "EffectsToApply": [],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": []
+      },
+      "InteractionConfig": {
+        "Localization": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Localization.Name", "Value": "Telekinetic Push" }
+          ]
+        },
+        "InteractionActionTag": "Interaction.Action.TelekineticPush",
+        "KinematicTargetTag": "Interaction.Target.CenterOfMass",
+        "ForceMetricTag": "Interaction.Param.ForceMagnitude",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 850.0,
+        "TargetSweepRadius": 95.0,
+        "RequiredTargetTags": [ "State.Interactable.Moveable" ],
+        "BlockedTargetTags": [ "State.Interactable.Anchored" ],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "PushAwayFromCaster",
+        "InteractionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Interaction.Param.ForceMagnitude", "Value": 65000.0 }
+          ]
+        },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Telekinesis.AM_Telekinesis", "MontageSectionName": "Focus", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyReach", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Mysticism.MindHum" },
+        "ChargingStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Telekinesis.AM_Telekinesis", "MontageSectionName": "HoldStrain", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyReach", "GaspKinematicBlendWeight": 0.9, "StageVfxCueTag": "GameplayCue.Magic.Mysticism.GravityDistort" },
+        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Telekinesis.AM_Telekinesis", "MontageSectionName": "Repulse", "PlayRate": 1.15, "GaspPhysicsControlProfile": "FullBodyBrace", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Mysticism.ShockwavePulse" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.School.Mysticism", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.Element.Air", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 }
+      ]
+    },
+    "Ability.Magic.Mysticism.SoulSiphon_1": {
+      "BaseSpellTier": 1,
+      "ExecutionType": "SpatialDelivery",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Soul Siphon" },
+          { "KeyTag": "Localization.Description", "Value": "Projects an expanding and contracting ring of umbral mysticism that drains life force from enemies and passes Vitality directly back to the caster." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "SPHN" },
+          { "KeyTag": "Localization.Tooltip", "Value": "Tier 1 Mysticism [Dark]. Oscillating aura that drains enemy Health and heals the caster via SourcePassBackRules." },
+          { "KeyTag": "Localization.School", "Value": "Mysticism" },
+          { "KeyTag": "Localization.Element", "Value": "Dark" }
+        ]
+      },
+      "NumericParams": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Ability.Param.BaseDamage", "Value": 20.0 }
+        ]
+      },
+      "LifeCycleRequirements": {
+        "AttemptCostConditionTag": "Trigger.Condition.HasMana_Medium",
+        "AttemptCooldownConditionTag": "None",
+        "ChargingCostConditionTag": "None",
+        "bApplyChargeCostSmoothly": false,
+        "ReleaseCostConditionTag": "None",
+        "ReleaseCooldownConditionTag": "None"
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 0.0,
+        "MaxChargeResolution": "AutoRelease",
+        "MutationAbilityTag": "None",
+        "CostScalingMultiplier": 1.0,
+        "CooldownScalingMultiplier": 1.0
+      },
+      "SpatialDelivery": {
+        "ArchetypeLinkTag": "Archetype.Delivery.Magic.Dark",
+        "SpeedMetricTag": "None",
+        "MotionType": "AttachedToCaster",
+        "ShapeBehavior": "ExpandAndContract",
+        "ApplicationType": "TickInterval",
+        "MinRadius": 150.0,
+        "MaxRadius": 500.0,
+        "Duration": 8.0,
+        "SpeedOrExpansionRate": 2.0,
+        "HomingTurnRate": 0.0,
+        "TickInterval": 0.5,
+        "MultiShotType": "Single",
+        "SpawnCount": 1,
+        "SpreadAngleDegrees": 0.0,
+        "PowerDecayPerAdditional": 1.0,
+        "DirectTargetAttributeTag": "Attribute.Resource.Health",
+        "DirectAttributeMagnitude": -20.0,
+        "KineticImpulseOnHit": 250.0,
+        "EffectsToApply": [ "Effect.Magic.Dark.SoulLeech" ],
+        "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
+        "PropagatedTriggerTags": [ "Element.Dark", "School.Mysticism" ]
+      },
+      "InteractionConfig": {
+        "Localization": { "ReplicatedEntries": [] },
+        "InteractionActionTag": "None",
+        "KinematicTargetTag": "None",
+        "ForceMetricTag": "None",
+        "CasterEffectorBone": "hand_r",
+        "MaxInteractionDistance": 0.0,
+        "TargetSweepRadius": 0.0,
+        "RequiredTargetTags": [],
+        "BlockedTargetTags": [],
+        "TargetValidationConditionTree": "None",
+        "TagsToAddToTarget": [],
+        "TagsToRemoveFromTarget": [],
+        "PhysicsMode": "None",
+        "InteractionMetrics": { "ReplicatedEntries": [] },
+        "EffectsToApplyToTarget": []
+      },
+      "ChainConfig": { "DamageParamTag": "None", "MaxBounces": 0, "DamageFalloffPerBounce": 1.0, "BounceSearchRadius": 0.0, "ForbiddenTargetTags": [] },
+      "MovementConfig": {
+        "PhysicsType": "LaunchVelocity",
+        "MotionTagIdentifier": "None",
+        "VelocityMetricTag": "None",
+        "MovementMetrics": { "ReplicatedEntries": [] },
+        "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
+      },
+      "StageVisuals": {
+        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_SoulSiphon.AM_SoulSiphon", "MontageSectionName": "ChannelStart", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Dark.SiphonStart" },
+        "ChargingStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "None" },
+        "ReleaseStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Dark.SiphonTetherLoop" },
+        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Dark.LifeReturn" }
+      },
+      "SourcePassBackRules": [
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Health", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.75 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.School.Mysticism", "BaseGrantAmount": 4.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.25 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Mastery.Element.Dark", "BaseGrantAmount": 4.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.25 }
+      ]
+    }
+  }
+}

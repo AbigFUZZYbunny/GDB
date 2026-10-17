@@ -118,19 +118,6 @@ void ADynamicGameState::OnRep_DeliveryArchetypesArr()
     }
 }
 
-void ADynamicGameState::OnRep_AbilityMasterRegistryArr()
-{
-    AbilityMasterRegistry.Empty();
-    for (auto& Element : AbilityMasterRegistryArr)
-    {
-        Element.ValueDef.NumericParams.SyncMapFromChangesArray();
-        Element.ValueDef.SpatialDelivery.RuntimeMetricModifiers.SyncMapFromChangesArray();
-        Element.ValueDef.MovementConfig.MovementMetrics.SyncMapFromChangesArray();
-        Element.ValueDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds.SyncMapFromChangesArray();
-        AbilityMasterRegistry.Add(Element.KeyTag, Element.ValueDef);
-    }
-}
-
 void ADynamicGameState::OnRep_SharedConditionTreesArr()
 {
     SharedConditionTrees.Empty();
@@ -153,4 +140,42 @@ void ADynamicGameState::OnRep_MasterEffectRegistryArr()
 {
     MasterEffectRegistry.Empty();
     for (const FTagEffectPair& Element : MasterEffectRegistryArr) MasterEffectRegistry.Add(Element.KeyTag, Element.ValueDef);
+}
+
+void ADynamicGameState::OnRep_AbilityMasterRegistryArr()
+{
+    AbilityMasterRegistry.Empty();
+    for (auto& Element : AbilityMasterRegistryArr)
+    {
+        Element.ValueDef.NumericParams.SyncMapFromChangesArray();
+        Element.ValueDef.SpatialDelivery.RuntimeMetricModifiers.SyncMapFromChangesArray();
+        Element.ValueDef.InteractionConfig.InteractionMetrics.SyncMapFromChangesArray();
+        Element.ValueDef.MovementConfig.MovementMetrics.SyncMapFromChangesArray();
+        Element.ValueDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds.SyncMapFromChangesArray();
+        AbilityMasterRegistry.Add(Element.KeyTag, Element.ValueDef);
+    }
+}
+void ADynamicGameState::RebuildLimbMapsFromTransport()
+{
+    LimbLookupMap.Empty(ReplicatedLimbs.Num());
+    BoneToLimbMap.Empty();
+    BoneToJointMap.Empty();
+
+    for (FPhysicsLimbConfig& Limb : ReplicatedLimbs)
+    {
+        Limb.Localization.SyncMapFromChangesArray();
+        Limb.DefaultLimbAttributes.SyncMapFromChangesArray();
+        Limb.AngularMotorAttributeScalars.SyncMapFromChangesArray();
+        Limb.LinearMotorAttributeScalars.SyncMapFromChangesArray();
+
+        for (const FPhysicsJointNodeConfig& Joint : Limb.JointChain)
+        {
+            if (!Joint.BoneName.IsNone())
+            {
+                BoneToLimbMap.Add(Joint.BoneName, Limb.LimbId);
+                BoneToJointMap.Add(Joint.BoneName, Joint);
+            }
+        }
+        LimbLookupMap.Add(Limb.LimbId, Limb);
+    }
 }

@@ -1,6 +1,7 @@
 ﻿// DynamicGameState.cpp
 #include "DynamicGameState.h"
 #include "DynamicSpatialActor.h"
+#include "DynamicPhysicsActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 
@@ -12,6 +13,7 @@ ADynamicGameState::ADynamicGameState()
 void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
     DOREPLIFETIME(ADynamicGameState, AttributeMasterRegistryArr);
     DOREPLIFETIME(ADynamicGameState, DeliveryArchetypesArr);
     DOREPLIFETIME(ADynamicGameState, AbilityMasterRegistryArr);
@@ -19,6 +21,7 @@ void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
     DOREPLIFETIME(ADynamicGameState, MasterMilestoneRegistryArr);
     DOREPLIFETIME(ADynamicGameState, MasterThresholdRegistryArr);
     DOREPLIFETIME(ADynamicGameState, MasterEffectRegistryArr);
+    DOREPLIFETIME(ADynamicGameState, MasterPhysicsActorRegistryArr);
     DOREPLIFETIME(ADynamicGameState, ReplicatedLimbs);
     DOREPLIFETIME(ADynamicGameState, AbilityScoreConfig);
 }
@@ -26,45 +29,60 @@ void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 void ADynamicGameState::RegisterNewDynamicAbility(FGameplayTag AbilityTag, FDynamicAbilityDef AbilityDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions)
 {
     if (!HasAuthority() || !AbilityTag.IsValid()) return;
-
     AbilityMasterRegistry.Add(AbilityTag, AbilityDef);
-    
-    FTagAbilityDefPair NewAbPair; 
-    NewAbPair.KeyTag = AbilityTag; 
+
+    FTagAbilityDefPair NewAbPair;
+    NewAbPair.KeyTag = AbilityTag;
     NewAbPair.ValueDef = AbilityDef;
     AbilityMasterRegistryArr.Add(NewAbPair);
 
     for (const auto& CondPair : AssociatedConditions)
     {
         SharedConditionTrees.Add(CondPair.Key, CondPair.Value);
-        FNameConditionPair NewCondPair; 
-        NewCondPair.KeyName = CondPair.Key; 
+        FNameConditionPair NewCondPair;
+        NewCondPair.KeyName = CondPair.Key;
         NewCondPair.ValueNode = CondPair.Value;
         SharedConditionTreesArr.Add(NewCondPair);
     }
-    
     RebuildAllAbilityScores();
 }
 
 void ADynamicGameState::RegisterNewDynamicEffect(FGameplayTag EffectTag, FDynamicEffectDef EffectDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions)
 {
     if (!HasAuthority() || !EffectTag.IsValid()) return;
-
     MasterEffectRegistry.Add(EffectTag, EffectDef);
-    
-    FTagEffectPair NewEffectPair; 
-    NewEffectPair.KeyTag = EffectTag; 
+
+    FTagEffectPair NewEffectPair;
+    NewEffectPair.KeyTag = EffectTag;
     NewEffectPair.ValueDef = EffectDef;
     MasterEffectRegistryArr.Add(NewEffectPair);
 
     for (const auto& CondPair : AssociatedConditions)
     {
         SharedConditionTrees.Add(CondPair.Key, CondPair.Value);
-        FNameConditionPair NewCondPair; 
-        NewCondPair.KeyName = CondPair.Key; 
+        FNameConditionPair NewCondPair;
+        NewCondPair.KeyName = CondPair.Key;
         NewCondPair.ValueNode = CondPair.Value;
         SharedConditionTreesArr.Add(NewCondPair);
     }
+}
+
+void ADynamicGameState::RegisterNewDynamicPhysicsActorDef(FGameplayTag ArchetypeTag, FDynamicPhysicsActorDef ActorDef)
+{
+    if (!HasAuthority() || !ArchetypeTag.IsValid()) return;
+    MasterPhysicsActorRegistry.Add(ArchetypeTag, ActorDef);
+
+    if (ActorDef.CraftingRecipes.Num() > 0)
+    {
+        FDynamicRecipeList List;
+        List.Recipes = ActorDef.CraftingRecipes;
+        RecipeMasterRegistry.Add(ArchetypeTag, List);
+    }
+
+    FTagPhysicsActorDefPair NewPair;
+    NewPair.KeyTag = ArchetypeTag;
+    NewPair.ValueDef = ActorDef;
+    MasterPhysicsActorRegistryArr.Add(NewPair);
 }
 
 void ADynamicGameState::SetAbilityScoreConfig(const FAbilityScoreConfigData& InScoreConfig)
@@ -120,7 +138,6 @@ float ADynamicGameState::ExtractAbilityPropertyForScoring(const FDynamicAbilityD
         if (const float* FoundMov = AbilityDef.MovementConfig.MovementMetrics.LocalLookupMap.Find(Rule.MetricTag)) return *FoundMov;
         if (const float* FoundInt = AbilityDef.InteractionConfig.InteractionMetrics.LocalLookupMap.Find(Rule.MetricTag)) return *FoundInt;
     }
-
     if (Rule.PropertyName == TEXT("BaseCooldown"))       return AbilityDef.LifeCycleRequirements.BaseCooldownDuration;
     if (Rule.PropertyName == TEXT("BaseCost"))           return AbilityDef.LifeCycleRequirements.BaseResourceCost;
     if (Rule.PropertyName == TEXT("MaxChargeTime"))      return AbilityDef.ChargeProfile.MaxChargeTime;
@@ -133,7 +150,6 @@ float ADynamicGameState::ExtractAbilityPropertyForScoring(const FDynamicAbilityD
     if (Rule.PropertyName == TEXT("TickInterval"))       return AbilityDef.SpatialDelivery.TickInterval;
     if (Rule.PropertyName == TEXT("MaxBounces"))         return static_cast<float>(AbilityDef.ChainConfig.MaxBounces);
     if (Rule.PropertyName == TEXT("BounceSearchRadius")) return AbilityDef.ChainConfig.BounceSearchRadius;
-
     return 0.0f;
 }
 
@@ -141,8 +157,7 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
 {
     FComputedAbilityScoreInfo Result;
     Result.AbilityTag = AbilityTag;
-
-    float RawScore = 10.0f; 
+    float RawScore = 10.0f;
 
     for (const FAbilityPropertyScoreRule& Rule : AbilityScoreConfig.PropertyRules)
     {
@@ -155,14 +170,13 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
                 RawScore += Rule.WeightScalar * FMath::Pow(Normalized, Rule.Exponent);
             }
         }
-        else 
+        else
         {
             const float SafeVal = FMath::Max(Rule.MinClampedValue, RawVal);
             const float InverseRatio = FMath::Max(0.001f, Rule.ReferenceBaseline) / SafeVal;
             RawScore += Rule.WeightScalar * FMath::Pow(InverseRatio, Rule.Exponent);
         }
     }
-
     Result.RawAbilityScore = FMath::Max(1.0f, RawScore);
 
     FAbilityScoreDifficultyProfile ActiveDiff;
@@ -174,23 +188,18 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
             break;
         }
     }
-
     Result.DifficultyAdjustedScore = Result.RawAbilityScore * ActiveDiff.GlobalScoreMultiplier;
-
     const float ScoreRange = FMath::Max(1.0f, ActiveDiff.MaxScoreForLevel10 - ActiveDiff.MinScoreForLevel1);
     const float LevelAlpha = FMath::Clamp((Result.DifficultyAdjustedScore - ActiveDiff.MinScoreForLevel1) / ScoreRange, 0.0f, 1.0f);
     Result.ComputedSpellLevel = FMath::Clamp(1 + FMath::RoundToInt(LevelAlpha * 9.0f), 1, 10);
-
     Result.LearnPointCost = FMath::Max(1.0f, static_cast<float>(FMath::RoundToInt(Result.DifficultyAdjustedScore * ActiveDiff.LearnPointCostPerScoreUnit)));
     Result.MinimumMasteryRequired = FMath::Max(0.0f, Result.DifficultyAdjustedScore * ActiveDiff.MinMasteryRequiredPerScoreUnit);
-
     return Result;
 }
 
 ADynamicSpatialActor* ADynamicGameState::AcquireSpatialActor(const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn)
 {
     if (!HasAuthority()) return nullptr;
-
     while (InactiveSpatialActorPool.Num() > 0)
     {
         ADynamicSpatialActor* PooledActor = InactiveSpatialActorPool.Pop(EAllowShrinking::No);
@@ -202,7 +211,6 @@ ADynamicSpatialActor* ADynamicGameState::AcquireSpatialActor(const FTransform& S
             return PooledActor;
         }
     }
-
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = OwnerActor;
     SpawnParams.Instigator = InstigatorPawn;
@@ -214,6 +222,42 @@ void ADynamicGameState::ReleaseSpatialActorToPool(ADynamicSpatialActor* ActorToR
 {
     if (!HasAuthority() || !IsValid(ActorToReturn)) return;
     InactiveSpatialActorPool.AddUnique(ActorToReturn);
+}
+
+ADynamicPhysicsActor* ADynamicGameState::AcquirePhysicsActor(FGameplayTag ArchetypeTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn)
+{
+    if (!HasAuthority() || !ArchetypeTag.IsValid()) return nullptr;
+
+    while (InactivePhysicsActorPool.Num() > 0)
+    {
+        ADynamicPhysicsActor* PooledActor = InactivePhysicsActorPool.Pop(EAllowShrinking::No);
+        if (IsValid(PooledActor))
+        {
+            PooledActor->SetOwner(OwnerActor);
+            PooledActor->SetInstigator(InstigatorPawn);
+            PooledActor->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
+            PooledActor->InitializeFromArchetype(ArchetypeTag);
+            return PooledActor;
+        }
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = OwnerActor;
+    SpawnParams.Instigator = InstigatorPawn;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    ADynamicPhysicsActor* NewActor = GetWorld()->SpawnActor<ADynamicPhysicsActor>(ADynamicPhysicsActor::StaticClass(), SpawnTransform, SpawnParams);
+    if (NewActor)
+    {
+        NewActor->InitializeFromArchetype(ArchetypeTag);
+    }
+    return NewActor;
+}
+
+void ADynamicGameState::ReleasePhysicsActorToPool(ADynamicPhysicsActor* ActorToReturn)
+{
+    if (!HasAuthority() || !IsValid(ActorToReturn)) return;
+    InactivePhysicsActorPool.AddUnique(ActorToReturn);
 }
 
 void ADynamicGameState::SetPhysicsConfig(const FPhysicsDamageConfigData& ConfigData)
@@ -279,6 +323,35 @@ void ADynamicGameState::OnRep_MasterEffectRegistryArr()
     for (const FTagEffectPair& Element : MasterEffectRegistryArr) MasterEffectRegistry.Add(Element.KeyTag, Element.ValueDef);
 }
 
+void ADynamicGameState::OnRep_MasterPhysicsActorRegistryArr()
+{
+    MasterPhysicsActorRegistry.Empty(MasterPhysicsActorRegistryArr.Num());
+    RecipeMasterRegistry.Empty();
+
+    for (FTagPhysicsActorDefPair& Element : MasterPhysicsActorRegistryArr)
+    {
+        Element.ValueDef.Localization.SyncMapFromChangesArray();
+        Element.ValueDef.DefaultGlobalAttributes.SyncMapFromChangesArray();
+
+        for (FPhysicsLimbConfig& Limb : Element.ValueDef.CustomLimbs)
+        {
+            Limb.Localization.SyncMapFromChangesArray();
+            Limb.DefaultLimbAttributes.SyncMapFromChangesArray();
+            Limb.AngularMotorAttributeScalars.SyncMapFromChangesArray();
+            Limb.LinearMotorAttributeScalars.SyncMapFromChangesArray();
+        }
+
+        MasterPhysicsActorRegistry.Add(Element.KeyTag, Element.ValueDef);
+
+        if (Element.ValueDef.CraftingRecipes.Num() > 0)
+        {
+            FDynamicRecipeList List;
+            List.Recipes = Element.ValueDef.CraftingRecipes;
+            RecipeMasterRegistry.Add(Element.KeyTag, List);
+        }
+    }
+}
+
 void ADynamicGameState::OnRep_AbilityMasterRegistryArr()
 {
     AbilityMasterRegistry.Empty();
@@ -304,14 +377,12 @@ void ADynamicGameState::RebuildLimbMapsFromTransport()
     LimbLookupMap.Empty(ReplicatedLimbs.Num());
     BoneToLimbMap.Empty();
     BoneToJointMap.Empty();
-
     for (FPhysicsLimbConfig& Limb : ReplicatedLimbs)
     {
         Limb.Localization.SyncMapFromChangesArray();
         Limb.DefaultLimbAttributes.SyncMapFromChangesArray();
         Limb.AngularMotorAttributeScalars.SyncMapFromChangesArray();
         Limb.LinearMotorAttributeScalars.SyncMapFromChangesArray();
-
         for (const FPhysicsJointNodeConfig& Joint : Limb.JointChain)
         {
             if (!Joint.BoneName.IsNone())

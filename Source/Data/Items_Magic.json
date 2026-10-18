@@ -1,0 +1,42 @@
+﻿{
+  "_comment": "Magic System Physics Actors: Staves, spellbook tomes, and magical focus crystals.",
+  "MasterPhysicsActorRegistry": {
+    "Actor.Magic.Weapon.Staff.Fire": {
+      "SkeletalMeshAsset": "/Game/Magic/SK_FireStaff.SK_FireStaff",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": true,
+      "MassOverride": 4.0,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pyromancer's Staff" },
+          { "KeyTag": "Localization.Description", "Value": "A carved wooden staff embedded with an active fire crystal core." }
+        ]
+      },
+      "DefaultGlobalAttributes": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Resource.Health", "Value": 120.0 },
+          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 120.0 },
+          { "KeyTag": "Attribute.Object.Weight", "Value": 4.0 },
+          { "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff", "Value": 1.0 }
+        ]
+      },
+      "CustomLimbs": [],
+      "InitialInteractableStateTags": [
+        "State.Interactable.Moveable"
+      ],
+      "KinematicTargetPoints": [],
+      "GrantedAbilities": [
+        "Ability.Magic.Destruction.Firebolt_1"
+      ],
+      "ItemConfig": {
+        "GridSizeX": 1,
+        "GridSizeY": 4,
+        "bCanRotate": true,
+        "MaxStackSize": 1
+      },
+      "Containers": []
+    }
+  }
+}

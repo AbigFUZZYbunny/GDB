@@ -1,5 +1,5 @@
 ﻿{
-  "_comment": "Complete Combat System Attributes Schema: Incorporates revised weapon masteries with .Weapon.X and .OneHanded/.TwoHanded subtags, armor masteries with .Armor.X subtags, combat traits, combat titles, and resources (Fury, Posture, Adrenaline, Stability, Bloodlust) with complete Max, GainMod, and LossMod attributes.",
+  "_comment": "Complete Combat System Attributes Schema: Updated Unarmed Combat masteries with Punching, Kicking, and Grappling subtags, complete with Max, GainMod, and LossMod subtags.",
   "AttributeMasterRegistry": {
     "GDBCombat.Attribute.Mastery.Weapon.Sword": {
       "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword",
@@ -171,25 +171,35 @@
     "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
     "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
 
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded": {
-      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded",
-      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Single Strike Unarmed Mastery" }] },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Punching Mastery" }] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.OneHanded.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Punching.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
 
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded": {
-      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded",
-      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Dual Strike / Grappling Unarmed Mastery" }] },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Kicking Mastery" }] },
       "DefaultValue": 1.0,
       "bDoesReplicate": true
     },
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
-    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.TwoHanded.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Kicking.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Grappling Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.UnarmedCombat.Grappling.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
 
     "GDBCombat.Attribute.Mastery.Weapon.Ranged": {
       "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Ranged",
@@ -491,6 +501,485 @@
       "DefaultValue": 0.0,
       "bDoesReplicate": true
     },
-    "GDBCombat.Attribute.Trait.Berserker.Max": { "AttributeTag": "GDBCombat.Attribute.Trait.Berserker.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true }
+    "GDBCombat.Attribute.Trait.Berserker.Max": { "AttributeTag": "GDBCombat.Attribute.Trait.Berserker.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Katana Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Katana.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Katana Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Katana.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Claymore Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Claymore.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Longsword Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Longsword.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Longsword Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Longsword.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Hook Sword Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Hook.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Sabre Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Sabre.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Scimitar Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Scimitar.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Shortsword / Gladius Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Shortsword.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Zweihander Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Zweihander.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Rapier Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Rapier.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Flamberge Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Flamberge.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Nodachi Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.TwoHanded.Nodachi.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Wakizashi Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Sword.OneHanded.Wakizashi.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Bearded Axe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Bearded.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Bearded Axe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Bearded.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Dane Axe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Dane.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Tabar Axe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Tabar.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Hatchet Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Hatchet.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Battleaxe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.OneHanded.Battleaxe.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Battleaxe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Battleaxe.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Waraxe Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Axe.TwoHanded.Waraxe.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Cudgel Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Cudgel.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Club Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Club.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Club Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Club.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Mace Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Mace.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Flail Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Flail.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Flail Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Flail.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Hammer Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Hammer.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "One-Handed Battlehammer Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.OneHanded.Battlehammer.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Two-Handed Battlehammer Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Battlehammer.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Maul Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Maul.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Warhammer Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Warhammer.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Greatmace Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Blunt.TwoHanded.Greatmace.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Buckler Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Buckler.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Kite Shield Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.OneHanded.Kite.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Tower Shield Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Shield.TwoHanded.Tower.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Dagger Mastery (Base)" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Stiletto Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Stiletto.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Dirk Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Dirk.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Kukri Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Dagger.OneHanded.Kukri.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Spear Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Spear.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Halberd Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Halberd.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Glaive Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Polearm.Glaive.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Staff Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Staff.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Wand Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Wand.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Spellbook Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Spellbook.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic": {
+      "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Relic Mastery" }] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic.Max": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic.Max", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic.GainMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic.GainMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic.LossMod": { "AttributeTag": "GDBCombat.Attribute.Mastery.Weapon.Magic.Relic.LossMod", "Localization": { "ReplicatedEntries": [] }, "DefaultValue": 1.0, "bDoesReplicate": true }
   }
 }

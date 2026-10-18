@@ -1,0 +1,220 @@
+﻿{
+  "_comment": "Crafting System Mastery Attributes",
+  "AttributeMasterRegistry": {
+    "GDB_Crafting.Attribute.Mastery.Logging": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Logging",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Logging Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Logging.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Logging.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Logging.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Logging.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Logging.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Logging.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Woodworking": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Woodworking",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Woodworking Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Woodworking.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Woodworking.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Woodworking.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Woodworking.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Woodworking.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Woodworking.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Carpentry": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Carpentry Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Carpentry.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Carpentry.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Carpentry.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Mining": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Mining",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Mining Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Mining.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Mining.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Mining.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Mining.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Mining.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Mining.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Smelting": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smelting",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Smelting Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Smelting.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smelting.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smelting.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smelting.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smelting.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smelting.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Smithing": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Smithing Mastery (Base)" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Blacksmithing Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Blacksmithing.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Goldsmithing Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Goldsmithing.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Weaponsmithing Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Weaponsmithing.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Armorsmithing Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Smithing.Armorsmithing.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Tanning": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tanning",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Tanning Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Tanning.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tanning.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Tanning.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tanning.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Tanning.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tanning.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Leathercrafting": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Leathercrafting",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Leathercrafting Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Leathercrafting.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Leathercrafting.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Leathercrafting.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Leathercrafting.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Leathercrafting.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Leathercrafting.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Hunting": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Hunting Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Hunting.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Hunting.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Hunting.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Skinning": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Skinning",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Skinning Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Skinning.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Skinning.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Skinning.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Skinning.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Skinning.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Skinning.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Butchering": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Butchering",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Butchering Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Butchering.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Butchering.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Butchering.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Butchering.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Butchering.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Butchering.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Cooking": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Cooking",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Cooking Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Cooking.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Cooking.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Cooking.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Cooking.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Cooking.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Cooking.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Farming": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Farming",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Farming Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Farming.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Farming.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Farming.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Farming.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Farming.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Farming.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Herbalism": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Herbalism",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Herbalism Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Herbalism.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Herbalism.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Herbalism.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Herbalism.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Herbalism.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Herbalism.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Alchemy": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Alchemy",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Alchemy Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Alchemy.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Alchemy.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Alchemy.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Alchemy.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Alchemy.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Alchemy.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Clothier": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Clothier",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Clothier Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Clothier.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Clothier.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Clothier.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Clothier.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Clothier.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Clothier.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Tailor": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tailor",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Tailor Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Tailor.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tailor.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Tailor.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tailor.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Tailor.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Tailor.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Weaver": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Weaver",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Weaver Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Weaver.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Weaver.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Weaver.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Weaver.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Weaver.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Weaver.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Scribe": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Scribe",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Scribe Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Scribe.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Scribe.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Scribe.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Scribe.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Scribe.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Scribe.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+
+    "GDB_Crafting.Attribute.Mastery.Teaching": {
+      "AttributeTag": "GDB_Crafting.Attribute.Mastery.Teaching",
+      "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Name", "Value": "Teaching Mastery" }] },
+      "DefaultValue": 1.0, "bDoesReplicate": true
+    },
+    "GDB_Crafting.Attribute.Mastery.Teaching.Max": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Teaching.Max", "DefaultValue": 100.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Teaching.GainMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Teaching.GainMod", "DefaultValue": 1.0, "bDoesReplicate": true },
+    "GDB_Crafting.Attribute.Mastery.Teaching.LossMod": { "AttributeTag": "GDB_Crafting.Attribute.Mastery.Teaching.LossMod", "DefaultValue": 1.0, "bDoesReplicate": true }
+  }
+}

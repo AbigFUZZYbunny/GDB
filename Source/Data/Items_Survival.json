@@ -1,0 +1,92 @@
+﻿{
+  "_comment": "Survival System Physics Actors: Multi-container backpacks with specialized pouch slots, rations, and water containers.",
+  "MasterPhysicsActorRegistry": {
+    "Actor.Survival.Backpack.Ranger": {
+      "SkeletalMeshAsset": "/Game/Survival/SK_RangerBackpack.SK_RangerBackpack",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": true,
+      "MassOverride": 2.0,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Ranger Backpack" },
+          { "KeyTag": "Localization.Description", "Value": "An advanced field pack featuring a main storage compartment and a specialized potion strap." }
+        ]
+      },
+      "DefaultGlobalAttributes": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Resource.Health", "Value": 80.0 },
+          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 80.0 },
+          { "KeyTag": "Attribute.Object.Weight", "Value": 2.0 }
+        ]
+      },
+      "CustomLimbs": [],
+      "InitialInteractableStateTags": [
+        "State.Interactable.Moveable"
+      ],
+      "KinematicTargetPoints": [],
+      "GrantedAbilities": [],
+      "ItemConfig": {
+        "GridSizeX": 3,
+        "GridSizeY": 4,
+        "bCanRotate": false,
+        "MaxStackSize": 1
+      },
+      "Containers": [
+        {
+          "ContainerIdentifierTag": "Container.Backpack.Main",
+          "GridWidth": 6,
+          "GridHeight": 6,
+          "BlockedGridCells": [],
+          "MaxWeightCapacity": 60.0,
+          "AllowedItemTags": [],
+          "ForbiddenItemTags": [ "Actor.Survival.Backpack.Ranger" ],
+          "DefaultStoredItems": []
+        },
+        {
+          "ContainerIdentifierTag": "Container.Backpack.PotionStraps",
+          "GridWidth": 2,
+          "GridHeight": 2,
+          "BlockedGridCells": [],
+          "MaxWeightCapacity": 10.0,
+          "AllowedItemTags": [ "Item.Survival.Consumable.Potion" ],
+          "ForbiddenItemTags": [],
+          "DefaultStoredItems": []
+        }
+      ]
+    },
+    "Actor.Survival.Consumable.Potion.Health": {
+      "SkeletalMeshAsset": "/Game/Survival/SK_HealthPotion.SK_HealthPotion",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": false,
+      "MassOverride": 0.5,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Minor Health Potion" },
+          { "KeyTag": "Localization.Description", "Value": "Restores vital health when consumed." }
+        ]
+      },
+      "DefaultGlobalAttributes": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Object.Weight", "Value": 0.5 }
+        ]
+      },
+      "CustomLimbs": [],
+      "InitialInteractableStateTags": [
+        "State.Interactable.Moveable"
+      ],
+      "KinematicTargetPoints": [],
+      "GrantedAbilities": [],
+      "ItemConfig": {
+        "GridSizeX": 1,
+        "GridSizeY": 1,
+        "bCanRotate": true,
+        "MaxStackSize": 5
+      },
+      "Containers": []
+    }
+  }
+}

@@ -12,6 +12,8 @@ class UDynamicAttributeSet;
 class ADynamicGameState;
 class UDynamicForceComponent;
 class UDynamicInteractableComponent;
+class UDynamicContainerComponent;
+class ADynamicPhysicsActor;
 
 // --- ENUMS ---
 UENUM(BlueprintType)
@@ -342,6 +344,177 @@ struct FFastPhysicsHitRepArray : public FFastArraySerializer
 
 template<> struct TStructOpsTypeTraits<FFastPhysicsHitRepArray> : public TStructOpsTypeTraitsBase2<FFastPhysicsHitRepArray> { enum { WithNetDeltaSerializer = true }; };
 
+// --- DYNAMIC ITEM DEFINITION (Tarkov Grid & Stacking) ---
+USTRUCT(BlueprintType)
+struct FDynamicItemDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Item")
+    int32 GridSizeX = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Item")
+    int32 GridSizeY = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Item")
+    bool bCanRotate = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Item")
+    int32 MaxStackSize = 1;
+};
+
+// --- DYNAMIC CONTAINER SLOT ITEM (Grid Coordinates) ---
+USTRUCT(BlueprintType)
+struct FDynamicContainerSlotItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    int32 GridX = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    int32 GridY = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    bool bIsRotated = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    FGameplayTag StoredActorArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    int32 StackCount = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    TArray<FDynamicAttributeItem> SavedAttributeState;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    FGameplayTagContainer SavedInteractableStates;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    FString NestedContainerJsonData;
+
+    void PreReplicatedRemove(const struct FFastContainerSlotArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastContainerSlotArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastContainerSlotArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastContainerSlotArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicContainerSlotItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicContainerComponent* OwningContainer = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicContainerSlotItem, FFastContainerSlotArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastContainerSlotArray> : public TStructOpsTypeTraitsBase2<FFastContainerSlotArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// --- CONTAINER DEFINITION ---
+USTRUCT(BlueprintType)
+struct FDynamicContainerDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    FGameplayTag ContainerIdentifierTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    int32 GridWidth = 5;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    int32 GridHeight = 5;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    TArray<FIntPoint> BlockedGridCells;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    float MaxWeightCapacity = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    FGameplayTagContainer AllowedItemTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    FGameplayTagContainer ForbiddenItemTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    TArray<FDynamicContainerSlotItem> DefaultStoredItems;
+};
+
+// --- CRAFTING RECIPE SYSTEM ---
+USTRUCT(BlueprintType)
+struct FRecipeIngredient
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    FGameplayTag ArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    int32 RequiredQuantity = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    bool bConsume = true;
+};
+
+USTRUCT(BlueprintType)
+struct FRecipeEnvironmentRequirement
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    FGameplayTagContainer RequiredStateTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    float MaxDistance = 300.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicRecipeDef
+{
+    GENERATED_BODY()
+
+    // Unique identifier for this specific recipe (e.g., Recipe.Weapon.Longsword.Forge)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    FGameplayTag RecipeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    TArray<FRecipeIngredient> Ingredients;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    TArray<FRecipeEnvironmentRequirement> NearbyRequirements;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    FName RequiredConditionTree = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    float EffortRequired = 3.0f;
+    
+    // Additional byproduct outputs (the primary created item is inherently the ArchetypeTag hosting this recipe)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    TArray<FRecipeIngredient> AdditionalProducts;
+};
+
+// Wrapper for the GameState Map value
+USTRUCT(BlueprintType)
+struct FDynamicRecipeList
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    TArray<FDynamicRecipeDef> Recipes;
+};
 
 // --- GASP STAGE ANIMATION & VFX PRESENTATION ---
 USTRUCT(BlueprintType)
@@ -1232,6 +1405,72 @@ struct FPhysicsDamageConfigData
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<FPhysicsLimbConfig> Limbs;
 };
+
+// --- NON-CHARACTER PHYSICS ACTOR DEFINITION ---
+USTRUCT(BlueprintType)
+struct FDynamicPhysicsActorDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    TSoftObjectPtr<UStaticMesh> StaticMeshAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    FName CollisionProfileName = TEXT("PhysicsActor");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    bool bSimulatePhysicsOnSpawn = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    bool bUsePhysicsControl = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    float MassOverride = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    FDynamicTagFloatMapWrapper DefaultGlobalAttributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    TArray<FPhysicsLimbConfig> CustomLimbs;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    FGameplayTagContainer InitialInteractableStateTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    TArray<FInteractionTargetPoint> KinematicTargetPoints;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    TArray<FGameplayTag> GrantedAbilities;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Item")
+    FDynamicItemDef ItemConfig;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    TArray<FDynamicContainerDef> Containers;
+
+    // The recipes used to craft this specific actor archetype
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    TArray<FDynamicRecipeDef> CraftingRecipes;
+};
+
+USTRUCT(BlueprintType)
+struct FTagPhysicsActorDefPair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FDynamicPhysicsActorDef ValueDef;
+};
+
 
 // --- ROUTING MAP PAIRS ---
 USTRUCT(BlueprintType) struct FTagAbilityDefPair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicAbilityDef ValueDef; };

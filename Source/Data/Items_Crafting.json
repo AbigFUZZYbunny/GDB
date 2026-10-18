@@ -1,0 +1,106 @@
+﻿{
+  "_comment": "Crafting & Processing Recipes: Defines multi-item input requirements, workstation proximity, state checks (e.g. filled water bucket), and effort.",
+  "CraftingRecipes": {
+    "Recipe.Crafting.HealthPotion": {
+      "Ingredients": [
+        { "ArchetypeTag": "Actor.Survival.Material.RedHerb", "RequiredQuantity": 2, "bConsume": true },
+        { "ArchetypeTag": "Actor.Survival.Material.VialEmpty", "RequiredQuantity": 1, "bConsume": true }
+      ],
+      "NearbyRequirements": [
+        {
+          "RequiredStateTags": [ "State.Interactable.Workstation", "State.Workstation.AlchemyTable" ],
+          "MaxDistance": 250.0
+        },
+        {
+          "RequiredStateTags": [ "State.Interactable.Bucket", "State.Fluid.Water" ],
+          "MaxDistance": 200.0
+        }
+      ],
+      "RequiredConditionTree": "Trigger.Condition.CanCraftAlchemy",
+      "EffortRequired": 2.5,
+      "Products": [
+        { "ArchetypeTag": "Actor.Survival.Consumable.Potion.Health", "RequiredQuantity": 1, "bConsume": false }
+      ]
+    },
+    "Actor.Workstation.Table.Alchemy": {
+      "SkeletalMeshAsset": "/Game/Props/Workstations/SK_AlchemyTable.SK_AlchemyTable",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": false,
+      "bUsePhysicsControl": true,
+      "MassOverride": 150.0,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Alchemist's Workbench" },
+          { "KeyTag": "Localization.Description", "Value": "A heavy stone and timber workstation equipped with glassware and burners for brewing potions." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ALCH" }
+        ]
+      },
+      "DefaultGlobalAttributes": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Resource.Health", "Value": 1000.0 },
+          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 1000.0 },
+          { "KeyTag": "Attribute.Object.Weight", "Value": 150.0 }
+        ]
+      },
+      "CustomLimbs": [
+        {
+          "LimbId": 1,
+          "ParentLimbId": 0,
+          "LimbTypeTag": "Limb.Object.WorkstationBase",
+          "DamageMultiplier": 0.2,
+          "ImpulseMultiplier": 0.1,
+          "IntegrityAttributeTag": "Attribute.Resource.Health",
+          "MaxIntegrityAttributeTag": "Attribute.Resource.Health.Max",
+          "JointChain": [
+            { "BoneName": "table_root", "JointChainIndex": 0, "MotorDriveWeight": 1.0, "LocalBoneDamageMultiplier": 0.2 }
+          ],
+          "DefaultLimbAttributes": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Resource.Health", "Value": 1000.0 },
+              { "KeyTag": "Attribute.Resource.Health.Max", "Value": 1000.0 }
+            ]
+          },
+          "AngularMotorAttributeScalars": { "ReplicatedEntries": [] },
+          "LinearMotorAttributeScalars": { "ReplicatedEntries": [] }
+        }
+      ],
+      "InitialInteractableStateTags": [
+        "State.Interactable.Workstation",
+        "State.Workstation.AlchemyTable",
+        "State.Interactable.Anchored"
+      ],
+      "KinematicTargetPoints": [
+        {
+          "TargetPointTag": "Interaction.Target.CenterOfMass",
+          "ComponentName": "SkeletalMeshComponent",
+          "BoneOrSocketName": "socket_brew_surface",
+          "LocalOffset": {
+            "Rotation": { "X": 0.0, "Y": 0.0, "Z": 0.0, "W": 1.0 },
+            "Translation": { "X": 0.0, "Y": 0.0, "Z": 0.0 },
+            "Scale3D": { "X": 1.0, "Y": 1.0, "Z": 1.0 }
+          }
+        }
+      ],
+      "GrantedAbilities": [],
+      "ItemConfig": {
+        "GridSizeX": 4,
+        "GridSizeY": 4,
+        "bCanRotate": false,
+        "MaxStackSize": 1
+      },
+      "Containers": [
+        {
+          "ContainerIdentifierTag": "Container.Workstation.Surface",
+          "GridWidth": 4,
+          "GridHeight": 4,
+          "BlockedGridCells": [],
+          "MaxWeightCapacity": 50.0,
+          "AllowedItemTags": [],
+          "ForbiddenItemTags": [],
+          "DefaultStoredItems": []
+        }
+      ]
+    }
+  }
+}

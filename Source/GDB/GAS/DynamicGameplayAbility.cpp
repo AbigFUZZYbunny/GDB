@@ -15,6 +15,8 @@
 #include "DynamicEffectFactory.h"
 #include "DynamicGameplayEffectContext.h"
 #include "TimerManager.h"
+#include "DynamicContainerComponent.h"
+#include "DynamicPhysicsActor.h"
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
 {
@@ -494,6 +496,7 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
     if (!TargetInteractable) return;
 
     ADynamicCharacter* AvatarChar = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo());
+    AActor* TargetOwnerActor = TargetInteractable->GetOwner();
 
     if (AvatarChar && AbilityConfig.InteractionConfig.KinematicTargetTag.IsValid())
     {
@@ -509,15 +512,48 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
 
     if (!HasAuthority(&CurrentActivationInfo)) return;
 
-    if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
+    const FGameplayTag ActionTag = AbilityConfig.InteractionConfig.InteractionActionTag;
+
+    // 1. STORE ACTION: Stores a world ADynamicPhysicsActor into a container (e.g. putting an item into a chest or backpack)
+    if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Store"))))
+    {
+        if (ADynamicPhysicsActor* TargetPhysicsActor = Cast<ADynamicPhysicsActor>(TargetOwnerActor))
+        {
+            if (UDynamicContainerComponent* CasterContainer = AvatarChar->FindComponentByClass<UDynamicContainerComponent>())
+            {
+                if (CasterContainer->ServerStorePhysicalActor(TargetPhysicsActor, AvatarChar))
+                {
+                    PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                    GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+                }
+            }
+        }
+    }
+    // 2. LOOT / EXTRACT ACTION: Extracts an item from a world container into the character's hands or inventory
+    else if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Loot"))))
+    {
+        if (UDynamicContainerComponent* TargetContainer = TargetOwnerActor->FindComponentByClass<UDynamicContainerComponent>())
+        {
+            // Example: Extract item located at grid coordinate [0,0] into the character's hand socket
+            int32 ExtractX = 0;
+            int32 ExtractY = 0;
+            if (TargetContainer->ServerExtractActorToHands(ExtractX, ExtractY, AvatarChar, AbilityConfig.InteractionConfig.CasterEffectorBone))
+            {
+                PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+            }
+        }
+    }
+    // 3. STANDARD WORLD INTERACTION (Open, Close, Unlock, Lock, Push, Pull, Throw)
+    else if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
     {
         PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
         GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
 
-        if (AbilityConfig.InteractionConfig.EffectsToApplyToTarget.Num() > 0 && TargetInteractable->GetOwner())
+        if (AbilityConfig.InteractionConfig.EffectsToApplyToTarget.Num() > 0 && TargetOwnerActor)
         {
             UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
-            UAbilitySystemComponent* TargetASC = TargetInteractable->GetOwner()->FindComponentByClass<UAbilitySystemComponent>();
+            UAbilitySystemComponent* TargetASC = TargetOwnerActor->FindComponentByClass<UAbilitySystemComponent>();
             if (SourceASC && TargetASC)
             {
                 for (const FGameplayTag& EffTag : AbilityConfig.InteractionConfig.EffectsToApplyToTarget)

@@ -136,6 +136,41 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->AbilityMasterRegistryArr.Add(SyncPair);
         }
     }
+    
+    if (RootObject->HasField(TEXT("MasterPhysicsActorRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("MasterPhysicsActorRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> ActorObj = Pair.Value->AsObject();
+            FDynamicPhysicsActorDef ActorDef;
+            FJsonObjectConverter::JsonObjectToUStruct(ActorObj.ToSharedRef(), &ActorDef, 0, 0);
+
+            DeserializeLocalizationMap(ActorObj, TEXT("Localization"), ActorDef.Localization);
+            DeserializeMapWrapper(ActorObj, TEXT("DefaultGlobalAttributes"), ActorDef.DefaultGlobalAttributes);
+
+            if (ActorObj->HasField(TEXT("CustomLimbs")))
+            {
+                const TArray<TSharedPtr<FJsonValue>>& LimbsArr = ActorObj->GetArrayField(TEXT("CustomLimbs"));
+                for (int32 i = 0; i < LimbsArr.Num() && ActorDef.CustomLimbs.IsValidIndex(i); ++i)
+                {
+                    TSharedPtr<FJsonObject> LimbObj = LimbsArr[i]->AsObject();
+                    DeserializeLocalizationMap(LimbObj, TEXT("Localization"), ActorDef.CustomLimbs[i].Localization);
+                    DeserializeMapWrapper(LimbObj, TEXT("DefaultLimbAttributes"), ActorDef.CustomLimbs[i].DefaultLimbAttributes);
+                    DeserializeMapWrapper(LimbObj, TEXT("AngularMotorAttributeScalars"), ActorDef.CustomLimbs[i].AngularMotorAttributeScalars);
+                    DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), ActorDef.CustomLimbs[i].LinearMotorAttributeScalars);
+                }
+            }
+
+            TargetGameState->MasterPhysicsActorRegistry.Add(KeyTag, ActorDef);
+            FTagPhysicsActorDefPair SyncPair;
+            SyncPair.KeyTag = KeyTag;
+            SyncPair.ValueDef = ActorDef;
+            TargetGameState->MasterPhysicsActorRegistryArr.Add(SyncPair);
+        }
+    }
 
     if (RootObject->HasField(TEXT("SharedConditionTrees")))
     {
@@ -295,6 +330,36 @@ bool UDynamicDataSerializer::SerializeMasterRegistry(const ADynamicGameState* In
             AbMap->SetObjectField(Pair.Key.ToString(), AbObj);
         }
         Root->SetObjectField(TEXT("AbilityMasterRegistry"), AbMap);
+    }
+    
+    if (InGameState->MasterPhysicsActorRegistry.Num() > 0)
+    {
+        TSharedPtr<FJsonObject> PhysActorMap = MakeShareable(new FJsonObject());
+        for (const auto& Pair : InGameState->MasterPhysicsActorRegistry)
+        {
+            TSharedPtr<FJsonObject> ActorObj = FJsonObjectConverter::UStructToJsonObject(Pair.Value);
+            if (!ActorObj.IsValid()) continue;
+
+            ActorObj->SetObjectField(TEXT("Localization"), SerializeLocalizationMap(Pair.Value.Localization));
+            ActorObj->SetObjectField(TEXT("DefaultGlobalAttributes"), SerializeMapWrapper(Pair.Value.DefaultGlobalAttributes));
+
+            TArray<TSharedPtr<FJsonValue>> CustomLimbsJson;
+            for (const FPhysicsLimbConfig& Limb : Pair.Value.CustomLimbs)
+            {
+                TSharedPtr<FJsonObject> LimbObj = FJsonObjectConverter::UStructToJsonObject(Limb);
+                if (LimbObj.IsValid())
+                {
+                    LimbObj->SetObjectField(TEXT("Localization"), SerializeLocalizationMap(Limb.Localization));
+                    LimbObj->SetObjectField(TEXT("DefaultLimbAttributes"), SerializeMapWrapper(Limb.DefaultLimbAttributes));
+                    LimbObj->SetObjectField(TEXT("AngularMotorAttributeScalars"), SerializeMapWrapper(Limb.AngularMotorAttributeScalars));
+                    LimbObj->SetObjectField(TEXT("LinearMotorAttributeScalars"), SerializeMapWrapper(Limb.LinearMotorAttributeScalars));
+                    CustomLimbsJson.Add(MakeShareable(new FJsonValueObject(LimbObj)));
+                }
+            }
+            ActorObj->SetArrayField(TEXT("CustomLimbs"), CustomLimbsJson);
+            PhysActorMap->SetObjectField(Pair.Key.ToString(), ActorObj);
+        }
+        Root->SetObjectField(TEXT("MasterPhysicsActorRegistry"), PhysActorMap);
     }
 
     if (InGameState->SharedConditionTrees.Num() > 0)
@@ -506,4 +571,47 @@ TSharedPtr<FJsonObject> UDynamicDataSerializer::SerializeLocalizationMap(const F
     
     WrapperObj->SetArrayField(TEXT("ReplicatedEntries"), ArrayJson);
     return WrapperObj;
+}
+
+bool UDynamicDataSerializer::SerializeContainerSlots(const FFastContainerSlotArray& InSlots, FString& OutJsonString)
+{
+    TSharedRef<FJsonObject> RootObj = MakeShareable(new FJsonObject());
+    TArray<TSharedPtr<FJsonValue>> SlotsArr;
+
+    for (const FDynamicContainerSlotItem& Item : InSlots.Items)
+    {
+        TSharedPtr<FJsonObject> SlotObj = FJsonObjectConverter::UStructToJsonObject(Item);
+        if (SlotObj.IsValid())
+        {
+            SlotsArr.Add(MakeShareable(new FJsonValueObject(SlotObj)));
+        }
+    }
+
+    RootObj->SetArrayField(TEXT("ContainerSlots"), SlotsArr);
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonString);
+    return FJsonSerializer::Serialize(RootObj, Writer);
+}
+
+bool UDynamicDataSerializer::DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots)
+{
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InJsonString);
+    TSharedPtr<FJsonObject> RootObj;
+    if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid()) return false;
+
+    if (RootObj->HasField(TEXT("ContainerSlots")))
+    {
+        OutSlots.Items.Empty();
+        const TArray<TSharedPtr<FJsonValue>>& SlotsArr = RootObj->GetArrayField(TEXT("ContainerSlots"));
+        for (const TSharedPtr<FJsonValue>& Val : SlotsArr)
+        {
+            FDynamicContainerSlotItem Item;
+            if (FJsonObjectConverter::JsonObjectToUStruct(Val->AsObject().ToSharedRef(), &Item, 0, 0))
+            {
+                OutSlots.Items.Add(Item);
+            }
+        }
+        OutSlots.MarkArrayDirty();
+        return true;
+    }
+    return false;
 }

@@ -26,6 +26,12 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
     static bool DeserializeFastAttributes(const FString& InJsonString, FFastAttributeArray& OutFastAttributes);
+    
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
+    static bool SerializeContainerSlots(const FFastContainerSlotArray& InSlots, FString& OutJsonString);
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
+    static bool DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots);
 
 private:
     static int32 FlattenAndParseJsonNode(const TSharedPtr<FJsonObject>& JsonObj, FDynamicConditionTreeContainer& OutContainer);

@@ -1,0 +1,156 @@
+﻿{
+  "_comment": "Dynamic Non-Character Physics Actors & Container Definitions Schema",
+  "MasterPhysicsActorRegistry": {
+    "Actor.Container.Chest.Ironbound": {
+      "SkeletalMeshAsset": "/Game/Props/Containers/SK_IronboundChest.SK_IronboundChest",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": true,
+      "MassOverride": 45.0,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Ironbound Chest" },
+          { "KeyTag": "Localization.Description", "Value": "A heavy oak chest reinforced with iron bands and a hinged lid." }
+        ]
+      },
+      "DefaultGlobalAttributes": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Resource.Health", "Value": 250.0 },
+          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 250.0 },
+          { "KeyTag": "Attribute.Object.Weight", "Value": 45.0 }
+        ]
+      },
+      "CustomLimbs": [
+        {
+          "LimbId": 1,
+          "ParentLimbId": 0,
+          "LimbTypeTag": "Limb.Object.ChestBase",
+          "DamageMultiplier": 0.5,
+          "ImpulseMultiplier": 0.4,
+          "IntegrityAttributeTag": "Attribute.Resource.Health",
+          "MaxIntegrityAttributeTag": "Attribute.Resource.Health.Max",
+          "JointChain": [
+            { "BoneName": "chest_root", "JointChainIndex": 0, "MotorDriveWeight": 1.0, "LocalBoneDamageMultiplier": 0.5 }
+          ],
+          "DefaultLimbAttributes": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Resource.Health", "Value": 250.0 },
+              { "KeyTag": "Attribute.Resource.Health.Max", "Value": 250.0 }
+            ]
+          },
+          "AngularMotorAttributeScalars": { "ReplicatedEntries": [] },
+          "LinearMotorAttributeScalars": { "ReplicatedEntries": [] }
+        },
+        {
+          "LimbId": 2,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Object.ChestLid",
+          "DamageMultiplier": 1.25,
+          "ImpulseMultiplier": 1.5,
+          "IntegrityAttributeTag": "Attribute.Resource.Health",
+          "MaxIntegrityAttributeTag": "Attribute.Resource.Health.Max",
+          "JointChain": [
+            { "BoneName": "chest_lid_hinge", "JointChainIndex": 0, "MotorDriveWeight": 0.85, "LocalBoneDamageMultiplier": 1.25 }
+          ],
+          "DefaultLimbAttributes": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Resource.Health", "Value": 120.0 },
+              { "KeyTag": "Attribute.Resource.Health.Max", "Value": 120.0 }
+            ]
+          },
+          "AngularMotorAttributeScalars": { "ReplicatedEntries": [] },
+          "LinearMotorAttributeScalars": { "ReplicatedEntries": [] }
+        }
+      ],
+      "InitialInteractableStateTags": [
+        "State.Interactable.Closed",
+        "State.Interactable.Locked",
+        "State.Interactable.Moveable"
+      ],
+      "KinematicTargetPoints": [
+        {
+          "TargetPointTag": "Interaction.Target.DoorHandle",
+          "ComponentName": "SkeletalMeshComponent",
+          "BoneOrSocketName": "socket_lid_latch",
+          "LocalOffset": {
+            "Rotation": { "X": 0.0, "Y": 0.0, "Z": 0.0, "W": 1.0 },
+            "Translation": { "X": 0.0, "Y": 0.0, "Z": 0.0 },
+            "Scale3D": { "X": 1.0, "Y": 1.0, "Z": 1.0 }
+          }
+        }
+      ],
+      "GrantedAbilities": [],
+      "ContainerConfig": {
+        "bIsContainer": true,
+        "MaxSlots": 20,
+        "MaxWeightCapacity": 150.0,
+        "MaxStackPerSlot": 50,
+        "AllowedItemTags": [],
+        "ForbiddenItemTags": [ "Actor.Container.Chest.Ironbound" ],
+        "StorageValidationConditionTree": "None",
+        "DropSpawnBoneOrSocket": "socket_lid_latch",
+        "DefaultStoredItems": [
+          {
+            "SlotIndex": 0,
+            "StoredActorArchetypeTag": "Actor.Container.Bag.Leather",
+            "StackCount": 1,
+            "SavedAttributeState": [],
+            "SavedInteractableStates": [],
+            "NestedContainerJsonData": ""
+          }
+        ]
+      }
+    },
+    "Actor.Container.Bag.Leather": {
+      "SkeletalMeshAsset": "/Game/Props/Containers/SK_LeatherBag.SK_LeatherBag",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": true,
+      "MassOverride": 2.5,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Leather Adventurer's Bag" },
+          { "KeyTag": "Localization.Description", "Value": "A soft-body multi-bone leather satchel capable of storing smaller items." }
+        ]
+      },
+      "DefaultGlobalAttributes": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Resource.Health", "Value": 40.0 },
+          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 40.0 },
+          { "KeyTag": "Attribute.Object.Weight", "Value": 2.5 }
+        ]
+      },
+      "CustomLimbs": [],
+      "InitialInteractableStateTags": [
+        "State.Interactable.Moveable",
+        "State.Interactable.Closed"
+      ],
+      "KinematicTargetPoints": [
+        {
+          "TargetPointTag": "Interaction.Target.CenterOfMass",
+          "ComponentName": "SkeletalMeshComponent",
+          "BoneOrSocketName": "bag_strap_grip",
+          "LocalOffset": {
+            "Rotation": { "X": 0.0, "Y": 0.0, "Z": 0.0, "W": 1.0 },
+            "Translation": { "X": 0.0, "Y": 0.0, "Z": 0.0 },
+            "Scale3D": { "X": 1.0, "Y": 1.0, "Z": 1.0 }
+          }
+        }
+      ],
+      "GrantedAbilities": [],
+      "ContainerConfig": {
+        "bIsContainer": true,
+        "MaxSlots": 8,
+        "MaxWeightCapacity": 25.0,
+        "MaxStackPerSlot": 20,
+        "AllowedItemTags": [],
+        "ForbiddenItemTags": [ "Actor.Container.Chest.Ironbound", "Actor.Container.Bag.Leather" ],
+        "StorageValidationConditionTree": "None",
+        "DropSpawnBoneOrSocket": "bag_strap_grip",
+        "DefaultStoredItems": []
+      }
+    }
+  }
+}

@@ -50,12 +50,17 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     bool ServerAddActorByTag(FGameplayTag ArchetypeTag, int32 Quantity, const TArray<FDynamicAttributeItem>& CustomAttributes);
 
+    // FIXED: Properly declared inside the class header
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
+    bool ServerRemoveStoredActorByTag(FGameplayTag ArchetypeTag, int32 Quantity = 1);
+
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     ADynamicPhysicsActor* ServerExtractActorToWorld(int32 GridX, int32 GridY, int32 QuantityToExtract, const FTransform& SpawnTransform, AActor* InstigatorActor = nullptr);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     ADynamicPhysicsActor* ServerExtractActorToHands(int32 GridX, int32 GridY, ADynamicCharacter* Looter, FName HandBone = TEXT("hand_r"));
 
+    // FIXED: Properly declared inside the class header
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
     int32 GetTotalCountOfArchetype(FGameplayTag ArchetypeTag) const;
 
@@ -69,7 +74,6 @@ private:
     void RebuildLocalSlotCache();
     float ResolveArchetypeUnitWeight(FGameplayTag ArchetypeTag, const TArray<FDynamicAttributeItem>& AttributeOverrides) const;
 
-    // FlatKey (GridY * GridWidth + GridX) -> Index in ReplicatedSlots.Items
     TMap<int32, int32> FlatKeyToArrayIndexMap; 
     float CachedTotalWeight = 0.0f;
 };

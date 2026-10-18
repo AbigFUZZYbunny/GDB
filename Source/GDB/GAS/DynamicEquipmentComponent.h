@@ -40,7 +40,7 @@ public:
     void InitializeEquipmentSlots(const TArray<FDynamicEquipmentSlotProfile>& InSlots);
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Equipment")
-    bool CanEquipItem(FGameplayTag ItemArchetypeTag) const;
+    bool CanEquipItem(ADynamicPhysicsActor* ActorToEquip) const;
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Equipment")
     bool ServerEquipItem(ADynamicPhysicsActor* ActorToEquip);

@@ -106,7 +106,7 @@ bool UDynamicInteractableComponent::ResolveKinematicTargetTransform(FGameplayTag
 {
     OutTargetComponent = nullptr;
     AActor* OwnerActor = GetOwner();
-    if (!OwnerActor) return false;
+    if (!IsValid(OwnerActor)) return false;
 
     OutWorldTransform = OwnerActor->GetActorTransform();
     OutTargetComponent = OwnerActor->GetRootComponent();
@@ -118,8 +118,11 @@ bool UDynamicInteractableComponent::ResolveKinematicTargetTransform(FGameplayTag
         if (Point.TargetPointTag == TargetPointTag)
         {
             AActor* BaseActor = Point.LinkedTargetActor.IsValid() ? Point.LinkedTargetActor.Get() : OwnerActor;
-            USceneComponent* ResolvedComp = BaseActor->GetRootComponent();
+            
+            // CRITICAL OPTIMIZATION: Prevents GC crashing mid-sweep if actor is pending kill.
+            if (!IsValid(BaseActor) || BaseActor->IsActorBeingDestroyed()) return false;
 
+            USceneComponent* ResolvedComp = BaseActor->GetRootComponent();
             if (!Point.ComponentName.IsNone())
             {
                 TInlineComponentArray<USceneComponent*> SceneComps(BaseActor);
@@ -132,20 +135,17 @@ bool UDynamicInteractableComponent::ResolveKinematicTargetTransform(FGameplayTag
                     }
                 }
             }
-
             if (ResolvedComp)
             {
                 OutTargetComponent = ResolvedComp;
                 const FTransform BaseTransform = (!Point.BoneOrSocketName.IsNone() && ResolvedComp->DoesSocketExist(Point.BoneOrSocketName))
                     ? ResolvedComp->GetSocketTransform(Point.BoneOrSocketName, RTS_World)
                     : ResolvedComp->GetComponentTransform();
-
                 OutWorldTransform = Point.LocalOffset * BaseTransform;
                 return true;
             }
         }
     }
-
     return false;
 }
 

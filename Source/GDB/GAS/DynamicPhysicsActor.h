@@ -104,7 +104,7 @@ protected:
 private:
     void ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def);
 
-    TMap<uint8, FPhysicsLimbConfig> LocalLimbLookupMap;
+    TMap<uint8, const FPhysicsLimbConfig*> LocalLimbLookupMap;
     TMap<FName, uint8> LocalBoneToLimbMap;
     TMap<uint8, double> ServerLastLimbHitTimestamp;
     bool bAttributesInitializedOnServer = false;

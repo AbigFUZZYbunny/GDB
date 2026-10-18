@@ -124,7 +124,21 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
         {
             if (Pair.KeyTag.IsValid()) MutableAttr->SetDynamicAttributeValue(Pair.KeyTag, Pair.Value, 0);
         }
-        if (LocalLimbLookupMap.Num() > 0) MutableAttr->InitializeLimbAttributesFromConfig(LocalLimbLookupMap);
+        
+        // FIXED: Iterate over the optimized pointer map directly to initialize limb attributes
+        for (const auto& Pair : LocalLimbLookupMap)
+        {
+            if (Pair.Value)
+            {
+                for (const FTagFloatPair& AttrPair : Pair.Value->DefaultLimbAttributes.ReplicatedEntries)
+                {
+                    if (AttrPair.KeyTag.IsValid())
+                    {
+                        MutableAttr->SetDynamicAttributeValue(AttrPair.KeyTag, AttrPair.Value, Pair.Key);
+                    }
+                }
+            }
+        }
         bAttributesInitializedOnServer = true;
     }
 
@@ -163,9 +177,11 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
     LocalLimbLookupMap.Empty(Def.CustomLimbs.Num());
     LocalBoneToLimbMap.Empty();
 
+    // The Archetype lives in GameState permanently. 
+    // It's safe to store a memory reference to it to save massive overhead per spawned instance.
     for (const FPhysicsLimbConfig& Limb : Def.CustomLimbs)
     {
-        LocalLimbLookupMap.Add(Limb.LimbId, Limb);
+        LocalLimbLookupMap.Add(Limb.LimbId, &Limb);
         for (const FPhysicsJointNodeConfig& Joint : Limb.JointChain)
         {
             if (!Joint.BoneName.IsNone()) LocalBoneToLimbMap.Add(Joint.BoneName, Limb.LimbId);
@@ -257,7 +273,7 @@ void ADynamicPhysicsActor::OnRep_IsActiveInWorld()
 
 const FPhysicsLimbConfig* ADynamicPhysicsActor::ResolveActorLimbConfig(uint8 LimbId) const
 {
-    if (const FPhysicsLimbConfig* LocalLimb = LocalLimbLookupMap.Find(LimbId)) return LocalLimb;
+    if (const FPhysicsLimbConfig* const* LocalLimbPtr = LocalLimbLookupMap.Find(LimbId)) return *LocalLimbPtr;
     if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr) return GS->GetLimbData(LimbId);
     return nullptr;
 }

@@ -26,20 +26,40 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
     static bool DeserializeFastAttributes(const FString& InJsonString, FFastAttributeArray& OutFastAttributes);
-    
+
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
     static bool SerializeContainerSlots(const FFastContainerSlotArray& InSlots, FString& OutJsonString);
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
     static bool DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots);
 
+    // --- Optimized Compile-Time Enum Reflection Helpers ---
+    template<typename TEnum>
+    static FString EnumToString(TEnum Value)
+    {
+        if (const UEnum* EnumPtr = StaticEnum<TEnum>())
+        {
+            return EnumPtr->GetNameStringByValue(static_cast<int64>(Value));
+        }
+        return TEXT("Invalid");
+    }
+
+    template<typename TEnum>
+    static TEnum StringToEnum(const FString& ValueStr)
+    {
+        if (const UEnum* EnumPtr = StaticEnum<TEnum>())
+        {
+            return static_cast<TEnum>(EnumPtr->GetValueByNameString(ValueStr));
+        }
+        return static_cast<TEnum>(0);
+    }
+
 private:
     static int32 FlattenAndParseJsonNode(const TSharedPtr<FJsonObject>& JsonObj, FDynamicConditionTreeContainer& OutContainer);
     static TSharedPtr<FJsonObject> ReconstructJsonFromFlatNode(int32 NodeIndex, const FDynamicConditionTreeContainer& TreeContainer);
-
     static void DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper);
-    static TSharedPtr<FJsonObject> SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper);
-    
+    static TSharedPtr<FJsonObject> SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper);          
+
     static void DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile);
     static TSharedPtr<FJsonObject> SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile);
 };

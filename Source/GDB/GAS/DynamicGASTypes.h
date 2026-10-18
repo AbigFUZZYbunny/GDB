@@ -1418,6 +1418,34 @@ struct FPhysicsDamageConfigData
     TArray<FPhysicsLimbConfig> Limbs;
 };
 
+// --- EQUIPMENT FITTING & VISUALS ---
+USTRUCT(BlueprintType)
+struct FDynamicEquipmentRequirementDef
+{
+    GENERATED_BODY()
+
+    // Required equipment slots (e.g., Slot.Chest.Outer, Slot.Arm.Left.Outer)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TArray<FGameplayTag> RequiredEquipmentSlots;
+
+    // Physical sizing limits. Checked against the character's primary height/girth morphs.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    float FittedSizeMin = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    float FittedSizeMax = 1.0f;
+
+    // If true, the item's SkeletalMesh will bind to the Character's Leader Pose Component, inheriting all animations and morph targets automatically (crucial for clothing layers).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    bool bUseLeaderPoseComponent = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TSoftObjectPtr<UAnimMontage> EquipAnimMontage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TSoftObjectPtr<UAnimMontage> UnequipAnimMontage;
+};
+
 // --- NON-CHARACTER PHYSICS ACTOR DEFINITION ---
 USTRUCT(BlueprintType)
 struct FDynamicPhysicsActorDef
@@ -1469,6 +1497,9 @@ struct FDynamicPhysicsActorDef
     // The recipes used to craft this specific actor archetype
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
     TArray<FDynamicRecipeDef> CraftingRecipes;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FDynamicEquipmentRequirementDef EquipmentRequirement;
 };
 
 USTRUCT(BlueprintType)
@@ -1568,34 +1599,6 @@ struct FDynamicColorGradient
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Customization")
     FLinearColor SecondaryColor = FLinearColor::White; // Used for gradient transitions (e.g., White to Blue)
-};
-
-// --- EQUIPMENT FITTING & VISUALS ---
-USTRUCT(BlueprintType)
-struct FDynamicEquipmentRequirementDef
-{
-    GENERATED_BODY()
-
-    // Required equipment slots (e.g., Slot.Chest.Outer, Slot.Arm.Left.Outer)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
-    TArray<FGameplayTag> RequiredEquipmentSlots;
-
-    // Physical sizing limits. Checked against the character's primary height/girth morphs.
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
-    float FittedSizeMin = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
-    float FittedSizeMax = 1.0f;
-
-    // If true, the item's SkeletalMesh will bind to the Character's Leader Pose Component, inheriting all animations and morph targets automatically (crucial for clothing layers).
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
-    bool bUseLeaderPoseComponent = true;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
-    TSoftObjectPtr<UAnimMontage> EquipAnimMontage;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
-    TSoftObjectPtr<UAnimMontage> UnequipAnimMontage;
 };
 
 // --- CHARACTER TEMPLATE GENERATION TYPES ---

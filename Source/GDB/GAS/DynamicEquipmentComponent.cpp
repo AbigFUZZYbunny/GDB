@@ -3,6 +3,7 @@
 #include "DynamicPhysicsActor.h"
 #include "DynamicGameState.h"
 #include "DynamicCharacter.h"
+#include "DynamicCustomizationComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicEquipmentComponent::UDynamicEquipmentComponent()
@@ -27,26 +28,15 @@ void UDynamicEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProp
 
 void FDynamicEquipmentSlotItem::PreReplicatedRemove(const FFastEquipmentSlotArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningEquipmentComp) 
-    {
-        InArrayOwner.OwningEquipmentComp->HandleSingleSlotReplicated(*this, true);
-    }
+    if (InArrayOwner.OwningEquipmentComp) InArrayOwner.OwningEquipmentComp->HandleSingleSlotReplicated(*this, true);
 }
-
 void FDynamicEquipmentSlotItem::PostReplicatedAdd(const FFastEquipmentSlotArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningEquipmentComp) 
-    {
-        InArrayOwner.OwningEquipmentComp->HandleSingleSlotReplicated(*this, false);
-    }
+    if (InArrayOwner.OwningEquipmentComp) InArrayOwner.OwningEquipmentComp->HandleSingleSlotReplicated(*this, false);
 }
-
 void FDynamicEquipmentSlotItem::PostReplicatedChange(const FFastEquipmentSlotArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningEquipmentComp) 
-    {
-        InArrayOwner.OwningEquipmentComp->HandleSingleSlotReplicated(*this, false);
-    }
+    if (InArrayOwner.OwningEquipmentComp) InArrayOwner.OwningEquipmentComp->HandleSingleSlotReplicated(*this, false);
 }
 
 void UDynamicEquipmentComponent::HandleSingleSlotReplicated(const FDynamicEquipmentSlotItem& Item, bool bIsUnequipped)
@@ -104,17 +94,15 @@ bool UDynamicEquipmentComponent::CanEquipItem(ADynamicPhysicsActor* ActorToEquip
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
     if (!CharOwner) return false;
 
-    // Evaluate Size Fitting Limits
     if (UDynamicCustomizationComponent* Customization = CharOwner->GetCustomizationComponent())
     {
         float CharSize = Customization->GetMorphSliderValue(FGameplayTag::RequestGameplayTag("Slider.Body.Height"));
         if (CharSize < Def->EquipmentRequirement.FittedSizeMin || CharSize > Def->EquipmentRequirement.FittedSizeMax)
         {
-            return false; // Actor's body size exceeds the physical dimensions the armor was crafted for.
+            return false;
         }
     }
 
-    // Evaluate Slot Availability
     for (const FGameplayTag& ReqSlot : Def->EquipmentRequirement.RequiredEquipmentSlots)
     {
         if (GetEquippedItemInSlot(ReqSlot).IsValid()) return false;
@@ -127,39 +115,39 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !CanEquipItem(ActorToEquip)) return false;
 
-    ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
-    const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ActorToEquip->GetActorArchetypeTag());
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    const FDynamicPhysicsActorDef* Def = GS ? GS->MasterPhysicsActorRegistry.Find(ActorToEquip->GetActorArchetypeTag()) : nullptr;
+    if (!Def) return false;
 
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    if (!CharOwner) return false;
 
-    // 1. Disable Physics & Collision for the world item
     if (UPrimitiveComponent* Prim = ActorToEquip->GetActivePhysicsPrimitive())
     {
         Prim->SetSimulatePhysics(false);
         Prim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     }
 
-    // 2. Attach visually and bind Morphs/Animations via Leader Pose Component
     if (USkeletalMeshComponent* EquipMesh = ActorToEquip->GetMeshComponent())
     {
         EquipMesh->AttachToComponent(CharOwner->GetMeshComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-        
         if (Def->EquipmentRequirement.bUseLeaderPoseComponent)
         {
             EquipMesh->SetLeaderPoseComponent(CharOwner->GetMeshComponent(), true, true);
         }
     }
 
-    // 3. Play Equip Animation
     if (!Def->EquipmentRequirement.EquipAnimMontage.IsNull())
     {
         if (UAnimMontage* Montage = Def->EquipmentRequirement.EquipAnimMontage.LoadSynchronous())
         {
-            CharOwner->GetMeshComponent()->GetAnimInstance()->Montage_Play(Montage);
+            if (CharOwner->GetMeshComponent() && CharOwner->GetMeshComponent()->GetAnimInstance())
+            {
+                CharOwner->GetMeshComponent()->GetAnimInstance()->Montage_Play(Montage);
+            }
         }
     }
 
-    // 4. Update Fast Array Slots
     for (const FGameplayTag& ReqSlot : Def->EquipmentRequirement.RequiredEquipmentSlots)
     {
         for (FDynamicEquipmentSlotItem& SlotItem : ReplicatedEquipmentSlots.Items)
@@ -167,7 +155,6 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
             if (SlotItem.SlotTag == ReqSlot)
             {
                 SlotItem.EquippedItemArchetypeTag = ActorToEquip->GetActorArchetypeTag();
-                // Store a weak pointer or networked ID to the equipped actor instance to track visual state
                 ReplicatedEquipmentSlots.MarkItemDirty(SlotItem);
                 break;
             }

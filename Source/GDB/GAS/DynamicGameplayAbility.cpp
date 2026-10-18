@@ -5,7 +5,6 @@
 #include "AT_WaitChargeTime.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
-#include "Kismet/KismetSystemLibrary.h"
 #include "DynamicCharacter.h"
 #include "DynamicForceComponent.h"
 #include "DynamicGameState.h"
@@ -17,6 +16,7 @@
 #include "TimerManager.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicPhysicsActor.h"
+#include "Engine/OverlapResult.h"
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
 {
@@ -685,19 +685,25 @@ void UDynamicGameplayAbility::ExecuteChainBehavior(const FGameplayEventData* Tri
                 ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
                 : 0.0f;
 
-            TArray<AActor*> IgnoredTargets;
-            IgnoredTargets.Add(GetAvatarActorFromActorInfo());
+            FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChainAbility), false);
+            QueryParams.AddIgnoredActor(GetAvatarActorFromActorInfo());
 
             for (int32 CurrentBounce = 0; CurrentBounce < MaxBounces && CurrentTarget; ++CurrentBounce)
             {
                 float ModdedDamage = BaseDamage * FMath::Pow(Falloff, CurrentBounce);
-                IgnoredTargets.Add(CurrentTarget);
+                QueryParams.AddIgnoredActor(CurrentTarget);
 
-                TArray<AActor*> Hits;
-                TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
-                ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
-                UKismetSystemLibrary::SphereOverlapActors(GetWorld(), CurrentTarget->GetActorLocation(), Radius, ObjectTypes, nullptr, IgnoredTargets, Hits);
-                CurrentTarget = (Hits.Num() > 0) ? Hits[0] : nullptr;
+                TArray<FOverlapResult> Overlaps;
+                bool bFound = GetWorld()->OverlapMultiByChannel(
+                    Overlaps, 
+                    CurrentTarget->GetActorLocation(), 
+                    FQuat::Identity, 
+                    ECC_Pawn, 
+                    FCollisionShape::MakeSphere(Radius), 
+                    QueryParams
+                );
+
+                CurrentTarget = bFound && Overlaps.Num() > 0 ? Overlaps[0].GetActor() : nullptr;
             }
         }
     }

@@ -55,6 +55,9 @@ public:
 
     UPROPERTY(ReplicatedUsing = OnRep_MasterPhysicsActorRegistryArr)
     TArray<FTagPhysicsActorDefPair> MasterPhysicsActorRegistryArr;
+    
+    UPROPERTY(ReplicatedUsing = OnRep_CharacterTemplatesArr)
+    TArray<FTagCharacterTemplatePair> CharacterTemplatesArr;
 
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedLimbs)
     TArray<FPhysicsLimbConfig> ReplicatedLimbs;
@@ -71,6 +74,7 @@ public:
     TMap<FGameplayTag, FDynamicThresholdContainer> MasterThresholdRegistry;
     TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     TMap<FGameplayTag, FDynamicPhysicsActorDef> MasterPhysicsActorRegistry;
+    TMap<FGameplayTag, FCharacterTemplateDef> CharacterTemplatesRegistry;
 
     // Pre-computed O(1) Recipe Lookup Map (Target Archetype -> List of Recipes to craft it)
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
@@ -95,6 +99,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|AbilityScore")
     bool GetComputedAbilityScore(FGameplayTag AbilityTag, FComputedAbilityScoreInfo& OutScoreInfo) const;
+    
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Templates")
+    bool GetCharacterTemplate(FGameplayTag TemplateTag, FCharacterTemplateDef& OutTemplate) const;
 
     void RebuildAllAbilityScores();
 
@@ -124,6 +131,7 @@ protected:
     UFUNCTION() void OnRep_MasterPhysicsActorRegistryArr();
     UFUNCTION() void OnRep_ReplicatedLimbs();
     UFUNCTION() void OnRep_AbilityScoreConfig();
+    UFUNCTION() void OnRep_CharacterTemplatesArr();
 
 private:
     void RebuildLimbMapsFromTransport();

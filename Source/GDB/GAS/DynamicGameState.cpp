@@ -24,6 +24,7 @@ void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
     DOREPLIFETIME(ADynamicGameState, MasterPhysicsActorRegistryArr);
     DOREPLIFETIME(ADynamicGameState, ReplicatedLimbs);
     DOREPLIFETIME(ADynamicGameState, AbilityScoreConfig);
+    DOREPLIFETIME(ADynamicGameState, CharacterTemplatesArr);
 }
 
 void ADynamicGameState::RegisterNewDynamicAbility(FGameplayTag AbilityTag, FDynamicAbilityDef AbilityDef, TMap<FName, FDynamicConditionTreeContainer> AssociatedConditions)
@@ -393,4 +394,24 @@ void ADynamicGameState::RebuildLimbMapsFromTransport()
         }
         LimbLookupMap.Add(Limb.LimbId, Limb);
     }
+}
+
+void ADynamicGameState::OnRep_CharacterTemplatesArr()
+{
+    CharacterTemplatesRegistry.Empty(CharacterTemplatesArr.Num());
+    for (FTagCharacterTemplatePair& Pair : CharacterTemplatesArr)
+    {
+        Pair.ValueDef.Localization.SyncMapFromChangesArray();
+        CharacterTemplatesRegistry.Add(Pair.KeyTag, Pair.ValueDef);
+    }
+}
+
+bool ADynamicGameState::GetCharacterTemplate(FGameplayTag TemplateTag, FCharacterTemplateDef& OutTemplate) const
+{
+    if (const FCharacterTemplateDef* Found = CharacterTemplatesRegistry.Find(TemplateTag))
+    {
+        OutTemplate = *Found;
+        return true;
+    }
+    return false;
 }

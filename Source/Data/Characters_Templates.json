@@ -1,0 +1,76 @@
+﻿{
+  "_comment": "Master Character Templates Schema with Gender-Based Modifiers: Allows specific stat biases for male vs female variants of races.",
+  "CharacterTemplates": {
+    "Character.Humanoid.Elf": {
+      "TemplateTag": "Character.Humanoid.Elf",
+      "ParentTemplateTag": "Character.Humanoid",
+      "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Elf.SK_Elf",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Elf" },
+          { "KeyTag": "Localization.Description", "Value": "Agile and perceptive with gender-differentiated body proportion limits." }
+        ]
+      },
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 85.0, "MaxValue": 95.0 },
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 18.0 }
+      ],
+      "WeightedAttributes": [],
+      "RacialSliderClamps": [
+        {
+          "SliderTag": "Slider.Body.Height",
+          "ClampedMin": 0.2,
+          "ClampedMax": 0.9
+        }
+      ],
+      "GenderVariants": [
+        {
+          "Gender": "Male",
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Male Elf" } ]
+          },
+          "StatModifiers": [
+            { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Multiplicative", "Magnitude": 0.10 }
+          ],
+          "GenderSliderClamps": [
+            {
+              "SliderTag": "Slider.Body.Height",
+              "ClampedMin": 0.4,
+              "ClampedMax": 0.9
+            },
+            {
+              "SliderTag": "Slider.Body.Muscularity",
+              "ClampedMin": 0.0,
+              "ClampedMax": 0.6
+            }
+          ]
+        },
+        {
+          "Gender": "Female",
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Female Elf" } ]
+          },
+          "StatModifiers": [
+            { "TargetAttributeTag": "Attribute.Mastery.Element.Fire", "ModifierOp": "Additive", "Magnitude": 15.0 }
+          ],
+          "GenderSliderClamps": [
+            {
+              "SliderTag": "Slider.Body.Height",
+              "ClampedMin": 0.2,
+              "ClampedMax": 0.8
+            },
+            {
+              "SliderTag": "Slider.Body.Muscularity",
+              "ClampedMin": 0.0,
+              "ClampedMax": 0.45
+            }
+          ]
+        }
+      ],
+      "StartupAbilities": [ "Ability.Magic.Destruction.Firebolt_1" ],
+      "StartupEquipmentArchetypes": []
+    }
+  }
+}

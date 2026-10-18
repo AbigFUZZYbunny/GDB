@@ -109,6 +109,15 @@ enum class EInteractionPhysicsMode : uint8
     AngularHingeTorque
 };
 
+UENUM(BlueprintType)
+enum class ECharacterGender : uint8
+{
+    Neutral,
+    Male,
+    Female,
+    Other
+};
+
 // Defines how a numeric property contributes to the external Ability Score calculation
 UENUM(BlueprintType)
 enum class EAbilityScoreScalingMode : uint8
@@ -1554,6 +1563,204 @@ struct FDynamicEquipmentRequirementDef
     // All slots that this item requires to be equipped simultaneously (e.g. Torso-Outer, Stomach-Outer, Arm.L-Outer, Arm.R-Outer)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
     TArray<FGameplayTag> RequiredEquipmentSlots;
+};
+
+// --- CHARACTER TEMPLATE GENERATION TYPES ---
+
+USTRUCT(BlueprintType)
+struct FCharacterAttributeRangeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag AttributeTag;
+
+    // Minimum possible starting value (maps to Base Value)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    float MinValue = 1.0f;
+
+    // Maximum possible starting value (maps to Max Value attribute)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    float MaxValue = 100.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterWeightedAttributeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag AttributeTag;
+
+    // Probability weight or float value chance [0.0 to 1.0] for this attribute/trait to be applied
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    float SelectionChance = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    float AssignedValue = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterTemplateDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag TemplateTag; // e.g. Character.Humanoid.Elf
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag ParentTemplateTag; // For inheritance hierarchies (e.g. Character.Humanoid)
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FDynamicLocalizationProfile Localization;
+
+    // Skeletal Mesh asset reference
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
+
+    // Animation Blueprint class or instance controller
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TSoftClassPtr<UAnimInstance> AnimationControllerClass;
+
+    // Links to skeleton and bone topology definition tag (e.g. Skeleton.Humanoid.Standard)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag SkeletonTypeTag;
+
+    // Randomized attribute ranges (min/max bounds evaluated on spawn)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterAttributeRangeDef> AttributeRanges;
+
+    // Probability-based attributes/traits (e.g., specific skills or innate traits with a float chance)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterWeightedAttributeDef> WeightedAttributes;
+
+    // Startup abilities granted to this character template
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FGameplayTag> StartupAbilities;
+
+    // Startup equipment items or starting inventory container items
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FGameplayTag> StartupEquipmentArchetypes;
+};
+
+USTRUCT(BlueprintType)
+struct FTagCharacterTemplatePair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FCharacterTemplateDef ValueDef;
+};
+
+USTRUCT(BlueprintType)
+struct FGenderAttributeModifier
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    FGameplayTag TargetAttributeTag; // e.g. Attribute.Stat.Agility
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    EEffectModifierOp ModifierOp = EEffectModifierOp::Multiplicative; // Additive, Multiplicative, Override
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    float Magnitude = 0.0f; // e.g. 0.10 for +10% agility
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterGenderProfile
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    ECharacterGender Gender = ECharacterGender::Neutral;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    FDynamicLocalizationProfile Localization;
+
+    // Modifiers applied to attributes when this gender is selected
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    TArray<FGenderAttributeModifier> StatModifiers;
+
+    // Gender-specific Bodyslide slider clamp overrides (e.g. restricting height or muscle mass bounds per gender)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    TArray<FRacialSliderClampOverride> GenderSliderClamps;
+};
+
+// --- BODYSWAP / BONE SCALING & SLIDER DEFINITIONS ---
+
+USTRUCT(BlueprintType)
+struct FBoneScaleConstraint
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Bones")
+    FName BoneName = NAME_None; // e.g. spine_01, upperarm_l, head
+
+    // Axis or uniform scaling multiplier bounds for this bone
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Bones")
+    float MinScaleMultiplier = 0.75f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Bones")
+    float MaxScaleMultiplier = 1.25f;
+
+    // Bone length adjustment bounds (along translation axis)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Bones")
+    bool bAllowLengthAdjustment = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Bones")
+    float MinLengthOffset = -10.0f; // cm
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Bones")
+    float MaxLengthOffset = 10.0f; // cm
+};
+
+USTRUCT(BlueprintType)
+struct FBodyslideSliderDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    FGameplayTag SliderTag; // e.g. Slider.Body.Height, Slider.Face.JawWidth
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    float DefaultValue = 0.5f; // [0.0 to 1.0] normalized slider position
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    float MinLimit = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    float MaxLimit = 1.0f;
+
+    // Associated bones driven by this slider
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    TArray<FBoneScaleConstraint> TargetBones;
+
+    // Associated Mesh Morph Targets driven by this slider (e.g. "Body_Muscular", "Ear_Elf_Long")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
+    TArray<FName> TargetMorphTargets;
+};
+
+// --- RACIAL SLIDER CLAMP OVERRIDE ---
+USTRUCT(BlueprintType)
+struct FRacialSliderClampOverride
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
+    FGameplayTag SliderTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
+    float ClampedMin = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
+    float ClampedMax = 1.0f;
 };
 
 // --- ROUTING MAP PAIRS ---

@@ -1,0 +1,126 @@
+﻿{
+  "_comment": "Master Skeleton & Bone Characteristics Registry: Defines skeletal topologies, bone-to-limb mappings, and racial physical modifiers (e.g., Orc arm strength, Elf leg speed).",
+  "SkeletonRegistry": {
+    "Skeleton.Humanoid.Standard": {
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Standard Humanoid Skeleton" }
+        ]
+      },
+      "DefaultLimbModifiers": {
+        "AngularMotorMultiplier": 1.0,
+        "LinearMotorMultiplier": 1.0
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.Height",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Height" } ]
+          },
+          "TargetBones": [
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 15.0 },
+            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 }
+          ],
+          "TargetMorphTargets": [ "Body_Height_Scale" ]
+        }
+      ],
+      "Limbs": [
+        {
+          "LimbId": 3,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Type.ArmLeft",
+          "AngularMotorAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.05 }
+            ]
+          }
+        },
+        {
+          "LimbId": 4,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Type.ArmRight",
+          "AngularMotorAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.05 }
+            ]
+          }
+        },
+        {
+          "LimbId": 6,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Type.LegLeft",
+          "LinearMotorAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Agility", "Value": 0.08 }
+            ]
+          }
+        },
+        {
+          "LimbId": 7,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Type.LegRight",
+          "LinearMotorAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Agility", "Value": 0.08 }
+            ]
+          }
+        }
+      ]
+    },
+    "Skeleton.Humanoid.Orc": {
+      "SkeletonTypeTag": "Skeleton.Humanoid.Orc",
+      "ParentSkeletonTag": "Skeleton.Humanoid.Standard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Heavy Orc Skeleton" }
+        ]
+      },
+      "DefaultLimbModifiers": {
+        "AngularMotorMultiplier": 1.25,
+        "LinearMotorMultiplier": 1.15
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.Height",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Height" } ]
+          },
+          "TargetBones": [
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 15.0 },
+            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 }
+          ],
+          "TargetMorphTargets": [ "Body_Height_Scale" ]
+        }
+      ],
+      "Limbs": [
+        {
+          "LimbId": 3,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Type.ArmLeft",
+          "AngularMotorAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.15 }
+            ]
+          }
+        },
+        {
+          "LimbId": 4,
+          "ParentLimbId": 1,
+          "LimbTypeTag": "Limb.Type.ArmRight",
+          "AngularMotorAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.15 }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

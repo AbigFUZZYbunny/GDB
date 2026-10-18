@@ -1,104 +1,101 @@
 ﻿{
-  "_comment": "Crafting & Processing Recipes: Defines multi-item input requirements, workstation proximity, state checks (e.g. filled water bucket), and effort.",
-  "CraftingRecipes": {
-    "Recipe.Crafting.HealthPotion": {
-      "Ingredients": [
-        { "ArchetypeTag": "Actor.Survival.Material.RedHerb", "RequiredQuantity": 2, "bConsume": true },
-        { "ArchetypeTag": "Actor.Survival.Material.VialEmpty", "RequiredQuantity": 1, "bConsume": true }
-      ],
-      "NearbyRequirements": [
-        {
-          "RequiredStateTags": [ "State.Interactable.Workstation", "State.Workstation.AlchemyTable" ],
-          "MaxDistance": 250.0
-        },
-        {
-          "RequiredStateTags": [ "State.Interactable.Bucket", "State.Fluid.Water" ],
-          "MaxDistance": 200.0
-        }
-      ],
-      "RequiredConditionTree": "Trigger.Condition.CanCraftAlchemy",
-      "EffortRequired": 2.5,
-      "Products": [
-        { "ArchetypeTag": "Actor.Survival.Consumable.Potion.Health", "RequiredQuantity": 1, "bConsume": false }
-      ]
-    },
-    "Actor.Workstation.Table.Alchemy": {
-      "SkeletalMeshAsset": "/Game/Props/Workstations/SK_AlchemyTable.SK_AlchemyTable",
-      "StaticMeshAsset": "None",
-      "CollisionProfileName": "PhysicsActor",
-      "bSimulatePhysicsOnSpawn": false,
-      "bUsePhysicsControl": true,
-      "MassOverride": 150.0,
+  "_comment": "Crafting System Recipes Schema: Embedded inside physics actor definitions, detailing ingredient requirements, workstation distance checks, condition trees, effort, and size-scaled materials.",
+  "MasterPhysicsActorRegistry": {
+    "Actor.Combat.Armor.Chestplate.Iron": {
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Alchemist's Workbench" },
-          { "KeyTag": "Localization.Description", "Value": "A heavy stone and timber workstation equipped with glassware and burners for brewing potions." },
-          { "KeyTag": "Localization.Abbreviated", "Value": "ALCH" }
+          { "KeyTag": "Localization.Name", "Value": "Iron Chestplate" },
+          { "KeyTag": "Localization.Description", "Value": "A heavy forged iron plate protecting the chest and stomach layers." }
         ]
       },
-      "DefaultGlobalAttributes": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Resource.Health", "Value": 1000.0 },
-          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 1000.0 },
-          { "KeyTag": "Attribute.Object.Weight", "Value": 150.0 }
-        ]
-      },
-      "CustomLimbs": [
-        {
-          "LimbId": 1,
-          "ParentLimbId": 0,
-          "LimbTypeTag": "Limb.Object.WorkstationBase",
-          "DamageMultiplier": 0.2,
-          "ImpulseMultiplier": 0.1,
-          "IntegrityAttributeTag": "Attribute.Resource.Health",
-          "MaxIntegrityAttributeTag": "Attribute.Resource.Health.Max",
-          "JointChain": [
-            { "BoneName": "table_root", "JointChainIndex": 0, "MotorDriveWeight": 1.0, "LocalBoneDamageMultiplier": 0.2 }
-          ],
-          "DefaultLimbAttributes": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Resource.Health", "Value": 1000.0 },
-              { "KeyTag": "Attribute.Resource.Health.Max", "Value": 1000.0 }
-            ]
-          },
-          "AngularMotorAttributeScalars": { "ReplicatedEntries": [] },
-          "LinearMotorAttributeScalars": { "ReplicatedEntries": [] }
-        }
-      ],
-      "InitialInteractableStateTags": [
-        "State.Interactable.Workstation",
-        "State.Workstation.AlchemyTable",
-        "State.Interactable.Anchored"
-      ],
-      "KinematicTargetPoints": [
-        {
-          "TargetPointTag": "Interaction.Target.CenterOfMass",
-          "ComponentName": "SkeletalMeshComponent",
-          "BoneOrSocketName": "socket_brew_surface",
-          "LocalOffset": {
-            "Rotation": { "X": 0.0, "Y": 0.0, "Z": 0.0, "W": 1.0 },
-            "Translation": { "X": 0.0, "Y": 0.0, "Z": 0.0 },
-            "Scale3D": { "X": 1.0, "Y": 1.0, "Z": 1.0 }
-          }
-        }
-      ],
+      "SkeletalMeshAsset": "/Game/Armor/SK_IronChestplate.SK_IronChestplate",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": true,
+      "MassOverride": 18.0,
+      "DefaultGlobalAttributes": { "ReplicatedEntries": [] },
+      "CustomLimbs": [],
+      "InitialInteractableStateTags": [ "State.Interactable.Moveable" ],
+      "KinematicTargetPoints": [],
       "GrantedAbilities": [],
-      "ItemConfig": {
-        "GridSizeX": 4,
-        "GridSizeY": 4,
-        "bCanRotate": false,
-        "MaxStackSize": 1
+      "ItemConfig": { "GridSizeX": 2, "GridSizeY": 2, "bCanRotate": false, "MaxStackSize": 1 },
+      "EquipmentRequirement": {
+        "RequiredEquipmentSlots": [ "Slot.Chest.Outer", "Slot.Stomach.Outer" ],
+        "FittedSizeMin": 0.35,
+        "FittedSizeMax": 0.65,
+        "bUseLeaderPoseComponent": true
       },
-      "Containers": [
+      "Containers": [],
+      "CraftingRecipes": [
         {
-          "ContainerIdentifierTag": "Container.Workstation.Surface",
-          "GridWidth": 4,
-          "GridHeight": 4,
-          "BlockedGridCells": [],
-          "MaxWeightCapacity": 50.0,
-          "AllowedItemTags": [],
-          "ForbiddenItemTags": [],
-          "DefaultStoredItems": []
+          "RecipeTag": "Recipe.Crafting.AdjustArmorSize",
+          "Ingredients": [
+            { "ArchetypeTag": "Actor.Combat.Armor.Chestplate.Iron", "RequiredQuantity": 1, "bConsume": true },
+            { "ArchetypeTag": "Actor.Survival.Material.IronIngot", "RequiredQuantity": 2, "bConsume": true }
+          ],
+          "NearbyRequirements": [
+            {
+              "RequiredStateTags": [ "State.Interactable.Workstation", "State.Workstation.Anvil" ],
+              "MaxDistance": 200.0
+            }
+          ],
+          "RequiredConditionTree": "Trigger.Condition.CanCraftArmorsmithing",
+          "EffortRequired": 5.0,
+          "AdditionalProducts": [
+            { "ArchetypeTag": "Actor.Combat.Armor.Chestplate.Iron", "RequiredQuantity": 1, "bConsume": false }
+          ]
+        }
+      ]
+    },
+    "Actor.Survival.Consumable.Potion.Health": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Minor Health Potion" },
+          { "KeyTag": "Localization.Description", "Value": "Restores vital health when consumed." }
+        ]
+      },
+      "SkeletalMeshAsset": "/Game/Survival/SK_HealthPotion.SK_HealthPotion",
+      "StaticMeshAsset": "None",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsOnSpawn": true,
+      "bUsePhysicsControl": false,
+      "MassOverride": 0.5,
+      "DefaultGlobalAttributes": { "ReplicatedEntries": [] },
+      "CustomLimbs": [],
+      "InitialInteractableStateTags": [ "State.Interactable.Moveable" ],
+      "KinematicTargetPoints": [],
+      "GrantedAbilities": [],
+      "ItemConfig": { "GridSizeX": 1, "GridSizeY": 1, "bCanRotate": true, "MaxStackSize": 5 },
+      "EquipmentRequirement": {
+        "RequiredEquipmentSlots": [],
+        "FittedSizeMin": 0.0,
+        "FittedSizeMax": 1.0,
+        "bUseLeaderPoseComponent": false
+      },
+      "Containers": [],
+      "CraftingRecipes": [
+        {
+          "RecipeTag": "Recipe.Crafting.HealthPotion",
+          "Ingredients": [
+            { "ArchetypeTag": "Actor.Survival.Material.RedHerb", "RequiredQuantity": 2, "bConsume": true },
+            { "ArchetypeTag": "Actor.Survival.Material.VialEmpty", "RequiredQuantity": 1, "bConsume": true }
+          ],
+          "NearbyRequirements": [
+            {
+              "RequiredStateTags": [ "State.Interactable.Workstation", "State.Workstation.AlchemyTable" ],
+              "MaxDistance": 250.0
+            },
+            {
+              "RequiredStateTags": [ "State.Interactable.Bucket", "State.Fluid.Water" ],
+              "MaxDistance": 200.0
+            }
+          ],
+          "RequiredConditionTree": "Trigger.Condition.CanCraftAlchemy",
+          "EffortRequired": 2.5,
+          "AdditionalProducts": [
+            { "ArchetypeTag": "Actor.Survival.Consumable.Potion.Health", "RequiredQuantity": 1, "bConsume": false }
+          ]
         }
       ]
     }

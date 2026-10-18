@@ -1,19 +1,20 @@
 ﻿{
-  "_comment": "Combat System Physics Actors: Includes one-handed swords, shields with specialized slots, heavy armor, and ammo stacks.",
+  "_comment": "Combat System Physics Actors: Complete definitions for weapons, shields, and fitted armor pieces with multi-slot requirements and kinematic interaction points.",
   "MasterPhysicsActorRegistry": {
     "Actor.Combat.Weapon.Sword.Longsword": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Steel Longsword" },
+          { "KeyTag": "Localization.Description", "Value": "A balanced steel blade for one-handed or two-handed combat." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "LSWD" }
+        ]
+      },
       "SkeletalMeshAsset": "/Game/Weapons/SK_Longsword.SK_Longsword",
       "StaticMeshAsset": "None",
       "CollisionProfileName": "PhysicsActor",
       "bSimulatePhysicsOnSpawn": true,
       "bUsePhysicsControl": true,
       "MassOverride": 3.2,
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Steel Longsword" },
-          { "KeyTag": "Localization.Description", "Value": "A balanced steel blade for one-handed or two-handed combat." }
-        ]
-      },
       "DefaultGlobalAttributes": {
         "ReplicatedEntries": [
           { "KeyTag": "Attribute.Resource.Health", "Value": 100.0 },
@@ -23,12 +24,11 @@
         ]
       },
       "CustomLimbs": [],
-      "InitialInteractableStateTags": [
-        "State.Interactable.Moveable"
-      ],
+      "InitialInteractableStateTags": [ "State.Interactable.Moveable" ],
       "KinematicTargetPoints": [
         {
           "TargetPointTag": "Interaction.Target.CenterOfMass",
+          "LinkedTargetActor": null,
           "ComponentName": "SkeletalMeshComponent",
           "BoneOrSocketName": "socket_crossguard",
           "LocalOffset": {
@@ -45,109 +45,53 @@
         "bCanRotate": true,
         "MaxStackSize": 1
       },
-      "Containers": []
-    },
-    "Actor.Combat.Shield.Kite": {
-      "SkeletalMeshAsset": "/Game/Weapons/SK_KiteShield.SK_KiteShield",
-      "StaticMeshAsset": "None",
-      "CollisionProfileName": "PhysicsActor",
-      "bSimulatePhysicsOnSpawn": true,
-      "bUsePhysicsControl": true,
-      "MassOverride": 8.5,
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Steel Kite Shield" },
-          { "KeyTag": "Localization.Description", "Value": "Provides substantial frontal protection against physical and projectile attacks." }
-        ]
-      },
-      "DefaultGlobalAttributes": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Resource.Health", "Value": 300.0 },
-          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 300.0 },
-          { "KeyTag": "Attribute.Object.Weight", "Value": 8.5 }
-        ]
-      },
-      "CustomLimbs": [],
-      "InitialInteractableStateTags": [
-        "State.Interactable.Moveable"
-      ],
-      "KinematicTargetPoints": [],
-      "GrantedAbilities": [],
-      "ItemConfig": {
-        "GridSizeX": 2,
-        "GridSizeY": 3,
-        "bCanRotate": false,
-        "MaxStackSize": 1
-      },
-      "Containers": []
-    },
-    "Actor.Equipment.Armor.Cloth.Sweater": {
-      "SkeletalMeshAsset": "/Game/Armor/SK_WoolenSweater.SK_WoolenSweater",
-      "StaticMeshAsset": "None",
-      "CollisionProfileName": "PhysicsActor",
-      "bSimulatePhysicsOnSpawn": true,
-      "bUsePhysicsControl": true,
-      "MassOverride": 1.2,
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Woolen Sweater" },
-          { "KeyTag": "Localization.Description", "Value": "A warm knitted sweater that covers the torso, stomach, and arms." }
-        ]
-      },
-      "DefaultGlobalAttributes": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Resource.Health", "Value": 50.0 },
-          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 50.0 },
-          { "KeyTag": "Attribute.Object.Weight", "Value": 1.2 }
-        ]
-      },
-      "CustomLimbs": [],
-      "InitialInteractableStateTags": [
-        "State.Interactable.Moveable"
-      ],
-      "KinematicTargetPoints": [],
-      "GrantedAbilities": [],
-      "ItemConfig": {
-        "GridSizeX": 2,
-        "GridSizeY": 2,
-        "bCanRotate": true,
-        "MaxStackSize": 1
-      },
       "EquipmentRequirement": {
-        "RequiredEquipmentSlots": [
-          "Slot.Torso.Outer",
-          "Slot.Stomach.Outer",
-          "Slot.Arm.Left.Outer",
-          "Slot.Arm.Right.Outer"
+        "RequiredEquipmentSlots": [ "Slot.Hand.Right.Main" ],
+        "FittedSizeMin": 0.0,
+        "FittedSizeMax": 1.0,
+        "bUseLeaderPoseComponent": false,
+        "EquipAnimMontage": "/Game/Animations/AM_DrawSword.AM_DrawSword",
+        "UnequipAnimMontage": "/Game/Animations/AM_SheatheSword.AM_SheatheSword"
+      },
+      "Containers": [],
+      "CraftingRecipes": []
+    },
+    "Actor.Combat.Armor.Chestplate.Iron": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Iron Chestplate" },
+          { "KeyTag": "Localization.Description", "Value": "A heavy forged iron plate protecting the chest and stomach layers." },
+          { "KeyTag": "Localization.Abbreviated", "Value": "ICPL" }
         ]
       },
-      "Containers": []
-    },
-    "Actor.Equipment.Armor.Helmet.Iron": {
-      "SkeletalMeshAsset": "/Game/Armor/SK_IronHelmet.SK_IronHelmet",
+      "SkeletalMeshAsset": "/Game/Armor/SK_IronChestplate.SK_IronChestplate",
       "StaticMeshAsset": "None",
       "CollisionProfileName": "PhysicsActor",
       "bSimulatePhysicsOnSpawn": true,
       "bUsePhysicsControl": true,
-      "MassOverride": 4.5,
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Iron Sallet Helmet" },
-          { "KeyTag": "Localization.Description", "Value": "Protects the head from strikes and projectiles." }
-        ]
-      },
+      "MassOverride": 18.0,
       "DefaultGlobalAttributes": {
         "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Resource.Health", "Value": 150.0 },
-          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 150.0 },
-          { "KeyTag": "Attribute.Object.Weight", "Value": 4.5 }
+          { "KeyTag": "Attribute.Resource.Health", "Value": 250.0 },
+          { "KeyTag": "Attribute.Resource.Health.Max", "Value": 250.0 },
+          { "KeyTag": "Attribute.Object.Weight", "Value": 18.0 }
         ]
       },
       "CustomLimbs": [],
-      "InitialInteractableStateTags": [
-        "State.Interactable.Moveable"
+      "InitialInteractableStateTags": [ "State.Interactable.Moveable" ],
+      "KinematicTargetPoints": [
+        {
+          "TargetPointTag": "Interaction.Target.Grab",
+          "LinkedTargetActor": null,
+          "ComponentName": "SkeletalMeshComponent",
+          "BoneOrSocketName": "socket_grip_shoulder",
+          "LocalOffset": {
+            "Rotation": { "X": 0.0, "Y": 0.0, "Z": 0.0, "W": 1.0 },
+            "Translation": { "X": 0.0, "Y": 0.0, "Z": 0.0 },
+            "Scale3D": { "X": 1.0, "Y": 1.0, "Z": 1.0 }
+          }
+        }
       ],
-      "KinematicTargetPoints": [],
       "GrantedAbilities": [],
       "ItemConfig": {
         "GridSizeX": 2,
@@ -157,10 +101,17 @@
       },
       "EquipmentRequirement": {
         "RequiredEquipmentSlots": [
-          "Slot.Head.Covering"
-        ]
+          "Slot.Chest.Outer",
+          "Slot.Stomach.Outer"
+        ],
+        "FittedSizeMin": 0.35,
+        "FittedSizeMax": 0.65,
+        "bUseLeaderPoseComponent": true,
+        "EquipAnimMontage": "/Game/Animations/AM_EquipHeavyArmor.AM_EquipHeavyArmor",
+        "UnequipAnimMontage": "/Game/Animations/AM_UnequipHeavyArmor.AM_UnequipHeavyArmor"
       },
-      "Containers": []
+      "Containers": [],
+      "CraftingRecipes": []
     }
   }
 }

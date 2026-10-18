@@ -1,63 +1,53 @@
 ﻿{
-  "_comment": "Character Equipment Slot Profiles & Bone Topology Mapping: Defines available body slots, layers, limbs, and attach sockets.",
+  "_comment": "Expanded Character Equipment Slots & Layer Topology. Layers transfer morphs outwardly.",
   "CharacterEquipmentConfig": {
     "EquipmentSlots": [
-      {
-        "SlotTag": "Slot.Torso.Underwear",
-        "LimbId": 1,
-        "BodyRegion": "Torso",
-        "LayerTag": "Layer.Underwear",
-        "TargetBoneName": "spine_02",
-        "AllowedItemTags": [ "Item.Armor.Cloth.Shirt" ]
-      },
-      {
-        "SlotTag": "Slot.Torso.Clothing",
-        "LimbId": 1,
-        "BodyRegion": "Torso",
-        "LayerTag": "Layer.Clothing",
-        "TargetBoneName": "spine_03",
-        "AllowedItemTags": [ "Item.Armor.Cloth.Tunic", "Item.Armor.Cloth.Sweater" ]
-      },
-      {
-        "SlotTag": "Slot.Torso.Outer",
-        "LimbId": 1,
-        "BodyRegion": "Torso",
-        "LayerTag": "Layer.Outerwear",
-        "TargetBoneName": "chest",
-        "AllowedItemTags": [ "Item.Armor.Plate.Chestplate", "Item.Armor.Leather.Vest", "Item.Armor.Cloth.Sweater" ]
-      },
-      {
-        "SlotTag": "Slot.Stomach.Outer",
-        "LimbId": 2,
-        "BodyRegion": "Stomach",
-        "LayerTag": "Layer.Outerwear",
-        "TargetBoneName": "spine_01",
-        "AllowedItemTags": [ "Item.Armor.Plate.Cuirass", "Item.Armor.Cloth.Sweater" ]
-      },
-      {
-        "SlotTag": "Slot.Arm.Left.Outer",
-        "LimbId": 3,
-        "BodyRegion": "ArmLeft",
-        "LayerTag": "Layer.Outerwear",
-        "TargetBoneName": "upperarm_l",
-        "AllowedItemTags": [ "Item.Armor.Plate.PauldronL", "Item.Armor.Cloth.Sweater" ]
-      },
-      {
-        "SlotTag": "Slot.Arm.Right.Outer",
-        "LimbId": 4,
-        "BodyRegion": "ArmRight",
-        "LayerTag": "Layer.Outerwear",
-        "TargetBoneName": "upperarm_r",
-        "AllowedItemTags": [ "Item.Armor.Plate.PauldronR", "Item.Armor.Cloth.Sweater" ]
-      },
-      {
-        "SlotTag": "Slot.Head.Covering",
-        "LimbId": 5,
-        "BodyRegion": "Head",
-        "LayerTag": "Layer.Covering",
-        "TargetBoneName": "head",
-        "AllowedItemTags": [ "Item.Armor.Helmet", "Item.Armor.Hood" ]
-      }
+      { "SlotTag": "Slot.Head.Under", "LimbId": 5, "LayerTag": "Layer.Under", "TargetBoneName": "head", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.Head.Main", "LimbId": 5, "LayerTag": "Layer.Main", "TargetBoneName": "head", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.Head.Outer", "LimbId": 5, "LayerTag": "Layer.Outer", "TargetBoneName": "head", "AllowedItemTags": [ "Item.Armor.Helmet" ] },
+
+      { "SlotTag": "Slot.Neck.Main", "LimbId": 1, "LayerTag": "Layer.Main", "TargetBoneName": "neck_01", "AllowedItemTags": [ "Item.Accessory.Amulet" ] },
+
+      { "SlotTag": "Slot.Shoulder.Outer", "LimbId": 1, "LayerTag": "Layer.Outer", "TargetBoneName": "spine_03", "AllowedItemTags": [ "Item.Armor.Pauldron" ] },
+      { "SlotTag": "Slot.Shoulder.Over", "LimbId": 1, "LayerTag": "Layer.Over", "TargetBoneName": "spine_03", "AllowedItemTags": [ "Item.Armor.Cloak" ] },
+
+      { "SlotTag": "Slot.UpperArm.Left.Main", "LimbId": 3, "LayerTag": "Layer.Main", "TargetBoneName": "upperarm_l", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.UpperArm.Right.Main", "LimbId": 4, "LayerTag": "Layer.Main", "TargetBoneName": "upperarm_r", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.LowerArm.Left.Outer", "LimbId": 3, "LayerTag": "Layer.Outer", "TargetBoneName": "lowerarm_l", "AllowedItemTags": [ "Item.Armor.Vambrace" ] },
+      { "SlotTag": "Slot.LowerArm.Right.Outer", "LimbId": 4, "LayerTag": "Layer.Outer", "TargetBoneName": "lowerarm_r", "AllowedItemTags": [ "Item.Armor.Vambrace" ] },
+
+      { "SlotTag": "Slot.Hand.Left.Main", "LimbId": 3, "LayerTag": "Layer.Main", "TargetBoneName": "hand_l", "AllowedItemTags": [ "Item.Armor.Glove" ] },
+      { "SlotTag": "Slot.Hand.Right.Main", "LimbId": 4, "LayerTag": "Layer.Main", "TargetBoneName": "hand_r", "AllowedItemTags": [ "Item.Armor.Glove" ] },
+      { "SlotTag": "Slot.Hand.Left.Outer", "LimbId": 3, "LayerTag": "Layer.Outer", "TargetBoneName": "hand_l", "AllowedItemTags": [ "Item.Armor.Gauntlet" ] },
+      { "SlotTag": "Slot.Hand.Right.Outer", "LimbId": 4, "LayerTag": "Layer.Outer", "TargetBoneName": "hand_r", "AllowedItemTags": [ "Item.Armor.Gauntlet" ] },
+      { "SlotTag": "Slot.Hand.Left.Held", "LimbId": 3, "LayerTag": "Layer.Outer", "TargetBoneName": "hand_l", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.Hand.Right.Held", "LimbId": 4, "LayerTag": "Layer.Outer", "TargetBoneName": "hand_r", "AllowedItemTags": [] },
+
+      { "SlotTag": "Slot.Chest.Under", "LimbId": 1, "LayerTag": "Layer.Under", "TargetBoneName": "spine_03", "AllowedItemTags": [ "Item.Clothing.Undershirt" ] },
+      { "SlotTag": "Slot.Chest.Main", "LimbId": 1, "LayerTag": "Layer.Main", "TargetBoneName": "spine_03", "AllowedItemTags": [ "Item.Clothing.Shirt" ] },
+      { "SlotTag": "Slot.Chest.Outer", "LimbId": 1, "LayerTag": "Layer.Outer", "TargetBoneName": "spine_03", "AllowedItemTags": [ "Item.Armor.Chestplate" ] },
+      { "SlotTag": "Slot.Chest.Over", "LimbId": 1, "LayerTag": "Layer.Over", "TargetBoneName": "spine_03", "AllowedItemTags": [ "Item.Armor.Tabard" ] },
+
+      { "SlotTag": "Slot.Stomach.Under", "LimbId": 2, "LayerTag": "Layer.Under", "TargetBoneName": "spine_01", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.Stomach.Main", "LimbId": 2, "LayerTag": "Layer.Main", "TargetBoneName": "spine_01", "AllowedItemTags": [] },
+      { "SlotTag": "Slot.Stomach.Outer", "LimbId": 2, "LayerTag": "Layer.Outer", "TargetBoneName": "spine_01", "AllowedItemTags": [ "Item.Armor.Cuirass" ] },
+
+      { "SlotTag": "Slot.Pelvis.Under", "LimbId": 2, "LayerTag": "Layer.Under", "TargetBoneName": "pelvis", "AllowedItemTags": [ "Item.Clothing.Underwear" ] },
+      { "SlotTag": "Slot.Pelvis.Main", "LimbId": 2, "LayerTag": "Layer.Main", "TargetBoneName": "pelvis", "AllowedItemTags": [ "Item.Clothing.Pants" ] },
+      { "SlotTag": "Slot.Waist.Outer", "LimbId": 2, "LayerTag": "Layer.Outer", "TargetBoneName": "pelvis", "AllowedItemTags": [ "Item.Armor.Belt" ] },
+
+      { "SlotTag": "Slot.UpperLeg.Left.Main", "LimbId": 6, "LayerTag": "Layer.Main", "TargetBoneName": "thigh_l", "AllowedItemTags": [ "Item.Clothing.Pants" ] },
+      { "SlotTag": "Slot.UpperLeg.Right.Main", "LimbId": 7, "LayerTag": "Layer.Main", "TargetBoneName": "thigh_r", "AllowedItemTags": [ "Item.Clothing.Pants" ] },
+      { "SlotTag": "Slot.UpperLeg.Left.Outer", "LimbId": 6, "LayerTag": "Layer.Outer", "TargetBoneName": "thigh_l", "AllowedItemTags": [ "Item.Armor.Fauld" ] },
+      { "SlotTag": "Slot.UpperLeg.Right.Outer", "LimbId": 7, "LayerTag": "Layer.Outer", "TargetBoneName": "thigh_r", "AllowedItemTags": [ "Item.Armor.Fauld" ] },
+
+      { "SlotTag": "Slot.LowerLeg.Left.Outer", "LimbId": 6, "LayerTag": "Layer.Outer", "TargetBoneName": "calf_l", "AllowedItemTags": [ "Item.Armor.Greave" ] },
+      { "SlotTag": "Slot.LowerLeg.Right.Outer", "LimbId": 7, "LayerTag": "Layer.Outer", "TargetBoneName": "calf_r", "AllowedItemTags": [ "Item.Armor.Greave" ] },
+
+      { "SlotTag": "Slot.Foot.Left.Main", "LimbId": 6, "LayerTag": "Layer.Main", "TargetBoneName": "foot_l", "AllowedItemTags": [ "Item.Clothing.Sock" ] },
+      { "SlotTag": "Slot.Foot.Right.Main", "LimbId": 7, "LayerTag": "Layer.Main", "TargetBoneName": "foot_r", "AllowedItemTags": [ "Item.Clothing.Sock" ] },
+      { "SlotTag": "Slot.Foot.Left.Outer", "LimbId": 6, "LayerTag": "Layer.Outer", "TargetBoneName": "foot_l", "AllowedItemTags": [ "Item.Armor.Boot" ] },
+      { "SlotTag": "Slot.Foot.Right.Outer", "LimbId": 7, "LayerTag": "Layer.Outer", "TargetBoneName": "foot_r", "AllowedItemTags": [ "Item.Armor.Boot" ] }
     ]
   }
 }

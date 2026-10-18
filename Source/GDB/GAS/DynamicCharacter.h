@@ -15,6 +15,7 @@ class UAbilitySystemComponent;
 class UDynamicAttributeSet;
 class UDynamicGASManagerComponent;
 class UDynamicForceComponent;
+class UDynamicCustomizationComponent;
 
 UCLASS()
 class GDB_API ADynamicCharacter : public APawn, public IAbilitySystemInterface
@@ -49,6 +50,12 @@ public:
     // Drives GASP PhysicsControl / IK effector bone (e.g. "hand_r") to the resolved interaction target transform (e.g. DoorHandle)
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "DynamicGAS|Interaction")
     void AlignLimbToInteractionTarget(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent);
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Customization", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UDynamicCustomizationComponent> CustomizationComponent;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Customization")
+    UDynamicCustomizationComponent* GetCustomizationComponent() const { return CustomizationComponent; }
 
 protected:
     virtual void BeginPlay() override;

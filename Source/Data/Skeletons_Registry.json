@@ -1,8 +1,9 @@
 ﻿{
-  "_comment": "Master Skeleton & Bone Characteristics Registry: Defines skeletal topologies, bone-to-limb mappings, and racial physical modifiers (e.g., Orc arm strength, Elf leg speed).",
+  "_comment": "Master Skeleton Registry with Complete Skyrim Bodyslide Sliders: Defines master bone scaling limits, translations, and morph targets.",
   "SkeletonRegistry": {
     "Skeleton.Humanoid.Standard": {
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "ParentSkeletonTag": "None",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Standard Humanoid Skeleton" }
@@ -23,104 +24,83 @@
           },
           "TargetBones": [
             { "BoneName": "spine_01", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 15.0 },
-            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 }
+            { "BoneName": "spine_02", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 },
+            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -12.0, "MaxLengthOffset": 12.0 },
+            { "BoneName": "thigh_r", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -12.0, "MaxLengthOffset": 12.0 },
+            { "BoneName": "calf_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 },
+            { "BoneName": "calf_r", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 }
           ],
           "TargetMorphTargets": [ "Body_Height_Scale" ]
-        }
-      ],
-      "Limbs": [
-        {
-          "LimbId": 3,
-          "ParentLimbId": 1,
-          "LimbTypeTag": "Limb.Type.ArmLeft",
-          "AngularMotorAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.05 }
-            ]
-          }
         },
         {
-          "LimbId": 4,
-          "ParentLimbId": 1,
-          "LimbTypeTag": "Limb.Type.ArmRight",
-          "AngularMotorAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.05 }
-            ]
-          }
-        },
-        {
-          "LimbId": 6,
-          "ParentLimbId": 1,
-          "LimbTypeTag": "Limb.Type.LegLeft",
-          "LinearMotorAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Stat.Agility", "Value": 0.08 }
-            ]
-          }
-        },
-        {
-          "LimbId": 7,
-          "ParentLimbId": 1,
-          "LimbTypeTag": "Limb.Type.LegRight",
-          "LinearMotorAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Stat.Agility", "Value": 0.08 }
-            ]
-          }
-        }
-      ]
-    },
-    "Skeleton.Humanoid.Orc": {
-      "SkeletonTypeTag": "Skeleton.Humanoid.Orc",
-      "ParentSkeletonTag": "Skeleton.Humanoid.Standard",
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Heavy Orc Skeleton" }
-        ]
-      },
-      "DefaultLimbModifiers": {
-        "AngularMotorMultiplier": 1.25,
-        "LinearMotorMultiplier": 1.15
-      },
-      "BodyslideSliders": [
-        {
-          "SliderTag": "Slider.Body.Height",
+          "SliderTag": "Slider.Body.Weight",
           "DefaultValue": 0.5,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
           "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Height" } ]
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Weight (Bodyslide)" } ]
           },
           "TargetBones": [
-            { "BoneName": "spine_01", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 15.0 },
-            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 }
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false },
+            { "BoneName": "spine_02", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false },
+            { "BoneName": "pelvis", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": false }
           ],
-          "TargetMorphTargets": [ "Body_Height_Scale" ]
-        }
-      ],
-      "Limbs": [
-        {
-          "LimbId": 3,
-          "ParentLimbId": 1,
-          "LimbTypeTag": "Limb.Type.ArmLeft",
-          "AngularMotorAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.15 }
-            ]
-          }
+          "TargetMorphTargets": [ "Body_Weight_Fat", "Body_Width_Scale" ]
         },
         {
-          "LimbId": 4,
-          "ParentLimbId": 1,
-          "LimbTypeTag": "Limb.Type.ArmRight",
-          "AngularMotorAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Stat.Strength", "Value": 0.15 }
-            ]
-          }
+          "SliderTag": "Slider.Body.Muscularity",
+          "DefaultValue": 0.0,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Muscularity" } ]
+          },
+          "TargetBones": [
+            { "BoneName": "upperarm_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.35, "bAllowLengthAdjustment": false },
+            { "BoneName": "upperarm_r", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.35, "bAllowLengthAdjustment": false },
+            { "BoneName": "chest", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false }
+          ],
+          "TargetMorphTargets": [ "Body_Muscle_Mass", "Chest_Expansion" ]
+        },
+        {
+          "SliderTag": "Slider.Body.BreastSize",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Breast Size" } ]
+          },
+          "TargetBones": [],
+          "TargetMorphTargets": [ "Breasts_Scale", "Breasts_Cleavage", "Breasts_Gravity" ]
+        },
+        {
+          "SliderTag": "Slider.Body.WaistWidth",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Waist Width" } ]
+          },
+          "TargetBones": [
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.75, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": false }
+          ],
+          "TargetMorphTargets": [ "Waist_Narrow_Wide", "Tummy_Flat_Round" ]
+        },
+        {
+          "SliderTag": "Slider.Face.JawWidth",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": {
+            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Jaw Width" } ]
+          },
+          "TargetBones": [
+            { "BoneName": "jaw", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": false }
+          ],
+          "TargetMorphTargets": [ "Jaw_Width", "Chin_Forward_Recede" ]
         }
-      ]
+      ],
+      "Limbs": []
     }
   }
 }

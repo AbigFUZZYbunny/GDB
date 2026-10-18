@@ -1,6 +1,48 @@
 ﻿{
-  "_comment": "Master Character Templates Schema with Gender-Based Modifiers: Allows specific stat biases for male vs female variants of races.",
+  "_comment": "Master Character Templates Schema: Complete configuration including hierarchies, attribute ranges, skin/hair gradients, cultural hairstyles, gender variants, and Bodyslide clamps.",
   "CharacterTemplates": {
+    "Character.Humanoid": {
+      "TemplateTag": "Character.Humanoid",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Mannequin.SK_Mannequin",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Base Humanoid" },
+          { "KeyTag": "Localization.Description", "Value": "Standard bipedal humanoid template." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.6, "B": 0.5, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.2, "G": 0.1, "B": 0.0, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.2, "B": 0.1, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 80.0, "MaxValue": 120.0 },
+        { "AttributeTag": "Attribute.Resource.Stamina", "MinValue": 90.0, "MaxValue": 110.0 },
+        { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 8.0, "MaxValue": 15.0 },
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 8.0, "MaxValue": 15.0 },
+        { "AttributeTag": "Attribute.Stat.Constitution", "MinValue": 8.0, "MaxValue": 15.0 }
+      ],
+      "WeightedAttributes": [
+        { "AttributeTag": "GDBCombat.Attribute.Trait.Strong", "SelectionChance": 0.25, "AssignedValue": 1.0 }
+      ],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.5 },
+        { "KeyTag": "Slider.Body.Weight", "Value": 0.5 },
+        { "KeyTag": "Slider.Body.Muscularity", "Value": 0.5 }
+      ],
+      "StartupAbilities": [
+        "Ability.Interaction.Open",
+        "Ability.Interaction.Close",
+        "Ability.Interaction.Grab"
+      ],
+      "StartupEquipmentArchetypes": []
+    },
     "Character.Humanoid.Elf": {
       "TemplateTag": "Character.Humanoid.Elf",
       "ParentTemplateTag": "Character.Humanoid",
@@ -10,66 +52,150 @@
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Elf" },
-          { "KeyTag": "Localization.Description", "Value": "Agile and perceptive with gender-differentiated body proportion limits." }
+          { "KeyTag": "Localization.Description", "Value": "Slender and agile with distinct gender-based Bodyslide proportion limits and color gradients." }
         ]
       },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.8, "G": 0.9, "B": 0.8, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.7, "B": 0.6, "A": 1.0 } },
+        { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.7, "B": 0.6, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 1.0, "G": 1.0, "B": 1.0, "A": 1.0 }, "SecondaryColor": { "R": 0.0, "G": 0.5, "B": 1.0, "A": 1.0 } },
+        { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.1, "B": 0.4, "A": 1.0 } }
+      ],
       "AttributeRanges": [
         { "AttributeTag": "Attribute.Resource.Health", "MinValue": 85.0, "MaxValue": 95.0 },
         { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 18.0 }
       ],
       "WeightedAttributes": [],
       "RacialSliderClamps": [
-        {
-          "SliderTag": "Slider.Body.Height",
-          "ClampedMin": 0.2,
-          "ClampedMax": 0.9
-        }
+        { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.3, "ClampedMax": 0.9 },
+        { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.0, "ClampedMax": 0.6 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.65 },
+        { "KeyTag": "Slider.Body.Weight", "Value": 0.3 },
+        { "KeyTag": "Slider.Body.Muscularity", "Value": 0.2 }
       ],
       "GenderVariants": [
         {
           "Gender": "Male",
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Male Elf" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Male Elf" } ] },
+          "CulturalHairArchetypes": [ "Actor.Cosmetic.Hair.Elf.LongBraid", "Actor.Cosmetic.Hair.Elf.SweptBack" ],
           "StatModifiers": [
             { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Multiplicative", "Magnitude": 0.10 }
           ],
           "GenderSliderClamps": [
-            {
-              "SliderTag": "Slider.Body.Height",
-              "ClampedMin": 0.4,
-              "ClampedMax": 0.9
-            },
-            {
-              "SliderTag": "Slider.Body.Muscularity",
-              "ClampedMin": 0.0,
-              "ClampedMax": 0.6
-            }
+            { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.5, "ClampedMax": 0.9 },
+            { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.1, "ClampedMax": 0.65 }
           ]
         },
         {
           "Gender": "Female",
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Female Elf" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Female Elf" } ] },
+          "CulturalHairArchetypes": [ "Actor.Cosmetic.Hair.Elf.OrnateUpdo", "Actor.Cosmetic.Hair.Elf.Flowing" ],
           "StatModifiers": [
             { "TargetAttributeTag": "Attribute.Mastery.Element.Fire", "ModifierOp": "Additive", "Magnitude": 15.0 }
           ],
           "GenderSliderClamps": [
-            {
-              "SliderTag": "Slider.Body.Height",
-              "ClampedMin": 0.2,
-              "ClampedMax": 0.8
-            },
-            {
-              "SliderTag": "Slider.Body.Muscularity",
-              "ClampedMin": 0.0,
-              "ClampedMax": 0.45
-            }
+            { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.3, "ClampedMax": 0.8 },
+            { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.0, "ClampedMax": 0.45 },
+            { "SliderTag": "Slider.Body.BreastSize", "ClampedMin": 0.1, "ClampedMax": 1.0 }
           ]
         }
       ],
       "StartupAbilities": [ "Ability.Magic.Destruction.Firebolt_1" ],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Humanoid.Orc": {
+      "TemplateTag": "Character.Humanoid.Orc",
+      "ParentTemplateTag": "Character.Humanoid",
+      "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Orc.SK_Orc",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Orc" },
+          { "KeyTag": "Localization.Description", "Value": "Bulky and muscular with high default weight and muscle limits." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.2, "G": 0.4, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.5, "B": 0.3, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.2, "B": 0.2, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 130.0, "MaxValue": 160.0 },
+        { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 15.0, "MaxValue": 20.0 }
+      ],
+      "WeightedAttributes": [],
+      "RacialSliderClamps": [
+        { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.6, "ClampedMax": 1.0 },
+        { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.5, "ClampedMax": 1.0 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.8 },
+        { "KeyTag": "Slider.Body.Weight", "Value": 0.7 },
+        { "KeyTag": "Slider.Body.Muscularity", "Value": 0.8 }
+      ],
+      "GenderVariants": [
+        {
+          "Gender": "Male",
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Male Orc" } ] },
+          "CulturalHairArchetypes": [ "Actor.Cosmetic.Hair.Orc.Dreadlocks", "Actor.Cosmetic.Hair.Orc.Topknot" ],
+          "StatModifiers": [
+            { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": 0.15 }
+          ],
+          "GenderSliderClamps": [
+            { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.75, "ClampedMax": 1.0 },
+            { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.7, "ClampedMax": 1.0 }
+          ]
+        },
+        {
+          "Gender": "Female",
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Female Orc" } ] },
+          "CulturalHairArchetypes": [ "Actor.Cosmetic.Hair.Orc.Braids", "Actor.Cosmetic.Hair.Orc.Shaved" ],
+          "StatModifiers": [
+            { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": 0.10 }
+          ],
+          "GenderSliderClamps": [
+            { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.6, "ClampedMax": 0.9 },
+            { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.5, "ClampedMax": 0.9 }
+          ]
+        }
+      ],
+      "StartupAbilities": [],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Humanoid.Dwarf": {
+      "TemplateTag": "Character.Humanoid.Dwarf",
+      "ParentTemplateTag": "Character.Humanoid",
+      "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Dwarf.SK_Dwarf",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Dwarf" },
+          { "KeyTag": "Localization.Description", "Value": "Stout stature with strict height limitations ensuring shorter proportions." }
+        ]
+      },
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 140.0 },
+        { "AttributeTag": "Attribute.Stat.Constitution", "MinValue": 14.0, "MaxValue": 18.0 }
+      ],
+      "WeightedAttributes": [],
+      "RacialSliderClamps": [
+        { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.0, "ClampedMax": 0.4 },
+        { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.4, "ClampedMax": 1.0 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.2 },
+        { "KeyTag": "Slider.Body.Weight", "Value": 0.6 },
+        { "KeyTag": "Slider.Body.Muscularity", "Value": 0.7 }
+      ],
+      "GenderVariants": [],
+      "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     }
   }

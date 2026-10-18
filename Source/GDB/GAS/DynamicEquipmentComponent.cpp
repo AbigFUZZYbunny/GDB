@@ -2,6 +2,7 @@
 #include "DynamicEquipmentComponent.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicGameState.h"
+#include "DynamicCharacter.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicEquipmentComponent::UDynamicEquipmentComponent()
@@ -90,20 +91,90 @@ void UDynamicEquipmentComponent::InitializeEquipmentSlots(const TArray<FDynamicE
     RebuildLocalCache();
 }
 
-bool UDynamicEquipmentComponent::CanEquipItem(FGameplayTag ItemArchetypeTag) const
+bool UDynamicEquipmentComponent::CanEquipItem(ADynamicPhysicsActor* ActorToEquip) const
 {
+    if (!ActorToEquip) return false;
+
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
-    const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ItemArchetypeTag);
+    const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ActorToEquip->GetActorArchetypeTag());
     if (!Def) return false;
+
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    if (!CharOwner) return false;
+
+    // Evaluate Size Fitting Limits
+    if (UDynamicCustomizationComponent* Customization = CharOwner->GetCustomizationComponent())
+    {
+        float CharSize = Customization->GetMorphSliderValue(FGameplayTag::RequestGameplayTag("Slider.Body.Height"));
+        if (CharSize < Def->EquipmentRequirement.FittedSizeMin || CharSize > Def->EquipmentRequirement.FittedSizeMax)
+        {
+            return false; // Actor's body size exceeds the physical dimensions the armor was crafted for.
+        }
+    }
+
+    // Evaluate Slot Availability
+    for (const FGameplayTag& ReqSlot : Def->EquipmentRequirement.RequiredEquipmentSlots)
+    {
+        if (GetEquippedItemInSlot(ReqSlot).IsValid()) return false;
+    }
 
     return true;
 }
 
 bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEquip)
 {
-    if (!GetOwner() || !GetOwner()->HasAuthority() || !IsValid(ActorToEquip)) return false;
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !CanEquipItem(ActorToEquip)) return false;
+
+    ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
+    const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ActorToEquip->GetActorArchetypeTag());
+
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+
+    // 1. Disable Physics & Collision for the world item
+    if (UPrimitiveComponent* Prim = ActorToEquip->GetActivePhysicsPrimitive())
+    {
+        Prim->SetSimulatePhysics(false);
+        Prim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    }
+
+    // 2. Attach visually and bind Morphs/Animations via Leader Pose Component
+    if (USkeletalMeshComponent* EquipMesh = ActorToEquip->GetMeshComponent())
+    {
+        EquipMesh->AttachToComponent(CharOwner->GetMeshComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        
+        if (Def->EquipmentRequirement.bUseLeaderPoseComponent)
+        {
+            EquipMesh->SetLeaderPoseComponent(CharOwner->GetMeshComponent(), true, true);
+        }
+    }
+
+    // 3. Play Equip Animation
+    if (!Def->EquipmentRequirement.EquipAnimMontage.IsNull())
+    {
+        if (UAnimMontage* Montage = Def->EquipmentRequirement.EquipAnimMontage.LoadSynchronous())
+        {
+            CharOwner->GetMeshComponent()->GetAnimInstance()->Montage_Play(Montage);
+        }
+    }
+
+    // 4. Update Fast Array Slots
+    for (const FGameplayTag& ReqSlot : Def->EquipmentRequirement.RequiredEquipmentSlots)
+    {
+        for (FDynamicEquipmentSlotItem& SlotItem : ReplicatedEquipmentSlots.Items)
+        {
+            if (SlotItem.SlotTag == ReqSlot)
+            {
+                SlotItem.EquippedItemArchetypeTag = ActorToEquip->GetActorArchetypeTag();
+                // Store a weak pointer or networked ID to the equipped actor instance to track visual state
+                ReplicatedEquipmentSlots.MarkItemDirty(SlotItem);
+                break;
+            }
+        }
+    }
+
+    RebuildLocalCache();
     return true;
 }
 

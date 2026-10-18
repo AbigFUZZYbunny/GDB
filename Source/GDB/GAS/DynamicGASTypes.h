@@ -475,6 +475,9 @@ struct FRecipeIngredient
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
     bool bConsume = true;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
+    bool bScaleWithTargetSize = false; // Multiplies the RequiredQuantity by the target item's fitted size delta during adjustments.
 };
 
 USTRUCT(BlueprintType)
@@ -1554,15 +1557,45 @@ struct FDynamicEquipmentSlotProfile
     FGameplayTagContainer AllowedItemTags; // Whitelist restriction
 };
 
-// Add to FDynamicItemDef inside DynamicGASTypes.h to support multi-slot items (like sweaters)
+// --- CUSTOMIZATION: COLORS & HAIR ---
+USTRUCT(BlueprintType)
+struct FDynamicColorGradient
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Customization")
+    FLinearColor PrimaryColor = FLinearColor::White;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Customization")
+    FLinearColor SecondaryColor = FLinearColor::White; // Used for gradient transitions (e.g., White to Blue)
+};
+
+// --- EQUIPMENT FITTING & VISUALS ---
 USTRUCT(BlueprintType)
 struct FDynamicEquipmentRequirementDef
 {
     GENERATED_BODY()
 
-    // All slots that this item requires to be equipped simultaneously (e.g. Torso-Outer, Stomach-Outer, Arm.L-Outer, Arm.R-Outer)
+    // Required equipment slots (e.g., Slot.Chest.Outer, Slot.Arm.Left.Outer)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
     TArray<FGameplayTag> RequiredEquipmentSlots;
+
+    // Physical sizing limits. Checked against the character's primary height/girth morphs.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    float FittedSizeMin = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    float FittedSizeMax = 1.0f;
+
+    // If true, the item's SkeletalMesh will bind to the Character's Leader Pose Component, inheriting all animations and morph targets automatically (crucial for clothing layers).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    bool bUseLeaderPoseComponent = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TSoftObjectPtr<UAnimMontage> EquipAnimMontage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TSoftObjectPtr<UAnimMontage> UnequipAnimMontage;
 };
 
 // --- CHARACTER TEMPLATE GENERATION TYPES ---
@@ -1600,59 +1633,20 @@ struct FCharacterWeightedAttributeDef
     float AssignedValue = 1.0f;
 };
 
+// --- RACIAL SLIDER CLAMP OVERRIDE ---
 USTRUCT(BlueprintType)
-struct FCharacterTemplateDef
+struct FRacialSliderClampOverride
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag TemplateTag; // e.g. Character.Humanoid.Elf
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
+    FGameplayTag SliderTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag ParentTemplateTag; // For inheritance hierarchies (e.g. Character.Humanoid)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
+    float ClampedMin = 0.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FDynamicLocalizationProfile Localization;
-
-    // Skeletal Mesh asset reference
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
-
-    // Animation Blueprint class or instance controller
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TSoftClassPtr<UAnimInstance> AnimationControllerClass;
-
-    // Links to skeleton and bone topology definition tag (e.g. Skeleton.Humanoid.Standard)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag SkeletonTypeTag;
-
-    // Randomized attribute ranges (min/max bounds evaluated on spawn)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FCharacterAttributeRangeDef> AttributeRanges;
-
-    // Probability-based attributes/traits (e.g., specific skills or innate traits with a float chance)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FCharacterWeightedAttributeDef> WeightedAttributes;
-
-    // Startup abilities granted to this character template
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FGameplayTag> StartupAbilities;
-
-    // Startup equipment items or starting inventory container items
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FGameplayTag> StartupEquipmentArchetypes;
-};
-
-USTRUCT(BlueprintType)
-struct FTagCharacterTemplatePair
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    FGameplayTag KeyTag;
-
-    UPROPERTY()
-    FCharacterTemplateDef ValueDef;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
+    float ClampedMax = 1.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -1688,6 +1682,73 @@ struct FCharacterGenderProfile
     // Gender-specific Bodyslide slider clamp overrides (e.g. restricting height or muscle mass bounds per gender)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
     TArray<FRacialSliderClampOverride> GenderSliderClamps;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
+    TArray<FGameplayTag> CulturalHairArchetypes;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterTemplateDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag TemplateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag ParentTemplateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TSoftClassPtr<UAnimInstance> AnimationControllerClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag SkeletonTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterAttributeRangeDef> AttributeRanges;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterWeightedAttributeDef> WeightedAttributes;
+
+    // Gender variants incorporating stat and slider clamp modifiers
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterGenderProfile> GenderVariants;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FRacialSliderClampOverride> RacialSliderClamps;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FTagFloatPair> DefaultBodyslideSliders;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FGameplayTag> StartupAbilities;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FGameplayTag> StartupEquipmentArchetypes;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FDynamicColorGradient> AllowedSkinTones;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FDynamicColorGradient> AllowedHairColors;
+};
+
+USTRUCT(BlueprintType)
+struct FTagCharacterTemplatePair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FCharacterTemplateDef ValueDef;
 };
 
 // --- BODYSWAP / BONE SCALING & SLIDER DEFINITIONS ---
@@ -1747,20 +1808,43 @@ struct FBodyslideSliderDef
     TArray<FName> TargetMorphTargets;
 };
 
-// --- RACIAL SLIDER CLAMP OVERRIDE ---
 USTRUCT(BlueprintType)
-struct FRacialSliderClampOverride
+struct FDynamicCharacterMorphItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
-    FGameplayTag SliderTag;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Customization")
+    FGameplayTag SliderTag; // e.g. Slider.Body.Height, Slider.Body.Muscularity
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
-    float ClampedMin = 0.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Customization")
+    float SliderValue = 0.5f; // [0.0 to 1.0] normalized value
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Clamps")
-    float ClampedMax = 1.0f;
+    void PreReplicatedRemove(const struct FFastCharacterMorphArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastCharacterMorphArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastCharacterMorphArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastCharacterMorphArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicCharacterMorphItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicCustomizationComponent* OwningCustomizationComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicCharacterMorphItem, FFastCharacterMorphArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastCharacterMorphArray> : public TStructOpsTypeTraitsBase2<FFastCharacterMorphArray>
+{
+    enum { WithNetDeltaSerializer = true };
 };
 
 // --- ROUTING MAP PAIRS ---

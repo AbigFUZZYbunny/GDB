@@ -5,8 +5,8 @@
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
 #include "DynamicGameState.h"
-#include "DynamicGameplayEffectContext.h"
 #include "MoverComponent.h"
+#include "DynamicCustomizationComponent.h"
 
 ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -18,6 +18,8 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
 
     MeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComponent"));
     MeshComponent->SetupAttachment(RootComponent);
+    
+    CustomizationComponent = CreateDefaultSubobject<UDynamicCustomizationComponent>(TEXT("CustomizationComponent"));
 
     MoverComponent = CreateDefaultSubobject<UMoverComponent>(TEXT("MoverComponent"));
     PhysicsControlComponent = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControlComponent"));

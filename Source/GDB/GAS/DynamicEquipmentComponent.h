@@ -1,0 +1,57 @@
+﻿// DynamicEquipmentComponent.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
+#include "DynamicGASTypes.h"
+#include "DynamicEquipmentComponent.generated.h"
+
+class ADynamicPhysicsActor;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FDynamicEquipmentChangedSignature, FGameplayTag, SlotTag, FGameplayTag, ItemArchetypeTag, bool, bIsEquipped);
+
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class GDB_API UDynamicEquipmentComponent : public UActorComponent
+{
+    GENERATED_BODY()
+
+public:
+    UDynamicEquipmentComponent();
+
+    virtual void BeginPlay() override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Equipment")
+    FDynamicEquipmentChangedSignature OnEquipmentChanged;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Equipment")
+    TArray<FDynamicEquipmentSlotProfile> ConfiguredSlots;
+
+    UPROPERTY(ReplicatedUsing = OnRep_ReplicatedEquipmentSlots)
+    FFastEquipmentSlotArray ReplicatedEquipmentSlots;
+
+    UFUNCTION()
+    void OnRep_ReplicatedEquipmentSlots();
+
+    // MUST be public so FDynamicEquipmentSlotItem callbacks can invoke it
+    void HandleSingleSlotReplicated(const FDynamicEquipmentSlotItem& Item, bool bIsUnequipped);
+
+    void InitializeEquipmentSlots(const TArray<FDynamicEquipmentSlotProfile>& InSlots);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Equipment")
+    bool CanEquipItem(FGameplayTag ItemArchetypeTag) const;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Equipment")
+    bool ServerEquipItem(ADynamicPhysicsActor* ActorToEquip);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Equipment")
+    ADynamicPhysicsActor* ServerUnequipSlot(FGameplayTag SlotTag, const FTransform& SpawnTransform);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Equipment")
+    FGameplayTag GetEquippedItemInSlot(FGameplayTag SlotTag) const;
+
+private:
+    TMap<FGameplayTag, int32> SlotTagToArrayIndexMap;
+    void RebuildLocalCache();
+};

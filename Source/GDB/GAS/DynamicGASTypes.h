@@ -1471,6 +1471,90 @@ struct FTagPhysicsActorDefPair
     FDynamicPhysicsActorDef ValueDef;
 };
 
+// --- ENUMS FOR EQUIPMENT LAYERS & BODY REGIONS ---
+
+USTRUCT(BlueprintType)
+struct FDynamicEquipmentSlotItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    // Unique slot identifier tag (e.g. Slot.Torso.Outer, Slot.Arm.Left.Outer)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FGameplayTag SlotTag;
+
+    // Associated LimbId (1..255) anchoring this equipment slot to physical bone topology
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    uint8 LinkedLimbId = 0;
+
+    // Archetype tag of the currently equipped item (e.g. Actor.Combat.Armor.Chestplate)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FGameplayTag EquippedItemArchetypeTag;
+
+    // Saved runtime attributes & stats of the equipped item
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TArray<FDynamicAttributeItem> SavedItemAttributeState;
+
+    // Saved interactable states of the equipped item
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FGameplayTagContainer SavedItemInteractableStates;
+
+    void PreReplicatedRemove(const struct FFastEquipmentSlotArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastEquipmentSlotArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastEquipmentSlotArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastEquipmentSlotArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicEquipmentSlotItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicEquipmentComponent* OwningEquipmentComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicEquipmentSlotItem, FFastEquipmentSlotArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastEquipmentSlotArray> : public TStructOpsTypeTraitsBase2<FFastEquipmentSlotArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// Defines an equipment slot definition profile for a character or actor
+USTRUCT(BlueprintType)
+struct FDynamicEquipmentSlotProfile
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FGameplayTag SlotTag; // e.g. Slot.Torso.Outer
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    uint8 LimbId = 0; // Maps to skeletal limb
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FGameplayTag LayerTag; // e.g. Layer.Outer, Layer.Clothing, Layer.Underwear, Layer.Covering
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    FGameplayTagContainer AllowedItemTags; // Whitelist restriction
+};
+
+// Add to FDynamicItemDef inside DynamicGASTypes.h to support multi-slot items (like sweaters)
+USTRUCT(BlueprintType)
+struct FDynamicEquipmentRequirementDef
+{
+    GENERATED_BODY()
+
+    // All slots that this item requires to be equipped simultaneously (e.g. Torso-Outer, Stomach-Outer, Arm.L-Outer, Arm.R-Outer)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    TArray<FGameplayTag> RequiredEquipmentSlots;
+};
 
 // --- ROUTING MAP PAIRS ---
 USTRUCT(BlueprintType) struct FTagAbilityDefPair { GENERATED_BODY() UPROPERTY() FGameplayTag KeyTag; UPROPERTY() FDynamicAbilityDef ValueDef; };

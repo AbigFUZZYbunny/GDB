@@ -1,0 +1,63 @@
+﻿{
+  "_comment": "Character Equipment Slot Profiles & Bone Topology Mapping: Defines available body slots, layers, limbs, and attach sockets.",
+  "CharacterEquipmentConfig": {
+    "EquipmentSlots": [
+      {
+        "SlotTag": "Slot.Torso.Underwear",
+        "LimbId": 1,
+        "BodyRegion": "Torso",
+        "LayerTag": "Layer.Underwear",
+        "TargetBoneName": "spine_02",
+        "AllowedItemTags": [ "Item.Armor.Cloth.Shirt" ]
+      },
+      {
+        "SlotTag": "Slot.Torso.Clothing",
+        "LimbId": 1,
+        "BodyRegion": "Torso",
+        "LayerTag": "Layer.Clothing",
+        "TargetBoneName": "spine_03",
+        "AllowedItemTags": [ "Item.Armor.Cloth.Tunic", "Item.Armor.Cloth.Sweater" ]
+      },
+      {
+        "SlotTag": "Slot.Torso.Outer",
+        "LimbId": 1,
+        "BodyRegion": "Torso",
+        "LayerTag": "Layer.Outerwear",
+        "TargetBoneName": "chest",
+        "AllowedItemTags": [ "Item.Armor.Plate.Chestplate", "Item.Armor.Leather.Vest", "Item.Armor.Cloth.Sweater" ]
+      },
+      {
+        "SlotTag": "Slot.Stomach.Outer",
+        "LimbId": 2,
+        "BodyRegion": "Stomach",
+        "LayerTag": "Layer.Outerwear",
+        "TargetBoneName": "spine_01",
+        "AllowedItemTags": [ "Item.Armor.Plate.Cuirass", "Item.Armor.Cloth.Sweater" ]
+      },
+      {
+        "SlotTag": "Slot.Arm.Left.Outer",
+        "LimbId": 3,
+        "BodyRegion": "ArmLeft",
+        "LayerTag": "Layer.Outerwear",
+        "TargetBoneName": "upperarm_l",
+        "AllowedItemTags": [ "Item.Armor.Plate.PauldronL", "Item.Armor.Cloth.Sweater" ]
+      },
+      {
+        "SlotTag": "Slot.Arm.Right.Outer",
+        "LimbId": 4,
+        "BodyRegion": "ArmRight",
+        "LayerTag": "Layer.Outerwear",
+        "TargetBoneName": "upperarm_r",
+        "AllowedItemTags": [ "Item.Armor.Plate.PauldronR", "Item.Armor.Cloth.Sweater" ]
+      },
+      {
+        "SlotTag": "Slot.Head.Covering",
+        "LimbId": 5,
+        "BodyRegion": "Head",
+        "LayerTag": "Layer.Covering",
+        "TargetBoneName": "head",
+        "AllowedItemTags": [ "Item.Armor.Helmet", "Item.Armor.Hood" ]
+      }
+    ]
+  }
+}

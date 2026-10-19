@@ -27,6 +27,9 @@ public:
     TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     TMap<FGameplayTag, FDynamicPhysicsActorDef> MasterPhysicsActorRegistry;
     TMap<FGameplayTag, FCharacterTemplateDef> CharacterTemplatesRegistry;
+    TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
+    TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
+    TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;

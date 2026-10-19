@@ -167,6 +167,52 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->SetAbilityScoreConfig(ScoreConfig);
         }
     }
+    
+    if (RootObject->HasField(TEXT("RelationshipTypeRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("RelationshipTypeRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> RelObj = Pair.Value->AsObject();
+            FDynamicRelationshipTypeDef RelDef;
+            FJsonObjectConverter::JsonObjectToUStruct(RelObj.ToSharedRef(), &RelDef, 0, 0);
+            DeserializeLocalizationMap(RelObj, TEXT("Localization"), RelDef.Localization);
+            TargetGameState->RelationshipTypeRegistry.Add(KeyTag, RelDef);
+        }
+    }
+
+    if (RootObject->HasField(TEXT("ProfessionMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("ProfessionMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> ProfObj = Pair.Value->AsObject();
+            FDynamicProfessionDef ProfDef;
+            FJsonObjectConverter::JsonObjectToUStruct(ProfObj.ToSharedRef(), &ProfDef, 0, 0);
+            DeserializeLocalizationMap(ProfObj, TEXT("Localization"), ProfDef.Localization);
+            DeserializeMapWrapper(ProfObj, TEXT("PrioritizedItemWeights"), ProfDef.PrioritizedItemWeights);
+            TargetGameState->ProfessionMasterRegistry.Add(KeyTag, ProfDef);
+        }
+    }
+    
+    if (RootObject->HasField(TEXT("MasterAIAgentRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("MasterAIAgentRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> AgentObj = Pair.Value->AsObject();
+            FDynamicAIAgentDef AgentDef;
+            FJsonObjectConverter::JsonObjectToUStruct(AgentObj.ToSharedRef(), &AgentDef, 0, 0);
+        
+            TargetGameState->MasterAIAgentRegistry.Add(KeyTag, AgentDef);
+        }
+    }
 
     return true;
 }

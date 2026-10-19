@@ -1,5 +1,5 @@
 ﻿{
-  "_comment": "Master Character Templates Schema: Complete configuration including hierarchies, attribute ranges, skin/hair gradients, cultural hairstyles, gender variants, and Bodyslide clamps.",
+  "_comment": "Master Character Templates Schema: Complete configuration including hierarchies, attribute ranges, skin/hair gradients, cultural hairstyles, gender variants, Bodyslide clamps, and AI agent bindings for humanoids, arachnids, and beasts.",
   "CharacterTemplates": {
     "Character.Humanoid": {
       "TemplateTag": "Character.Humanoid",
@@ -7,10 +7,11 @@
       "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Mannequin.SK_Mannequin",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Villager",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Base Humanoid" },
-          { "KeyTag": "Localization.Description", "Value": "Standard bipedal humanoid template." }
+          { "KeyTag": "Localization.Description", "Value": "Standard bipedal humanoid template with default socialization and professions." }
         ]
       },
       "AllowedSkinTones": [
@@ -28,6 +29,28 @@
       ],
       "WeightedAttributes": [
         { "AttributeTag": "GDBCombat.Attribute.Trait.Strong", "SelectionChance": 0.25, "AssignedValue": 1.0 }
+      ],
+      "ProfessionRolls": [
+        { "ProfessionTag": "Profession.Labor.Woodcutter", "ChanceWeight": 0.5 },
+        { "ProfessionTag": "Profession.Labor.Farmer", "ChanceWeight": 0.5 }
+      ],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Industrious" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Food.Bread", "Value": 1.2 },
+            { "KeyTag": "Item.Drink.Water", "Value": 1.0 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Activity.Work", "Value": 1.1 }
+          ]
+        }
+      },
+      "DefaultPlaceBindings": [
+        { "PlaceRoleTag": "Place.Home", "DefaultLandmarkTag": "Landmark.Village.Cottage" },
+        { "PlaceRoleTag": "Place.Workstation", "DefaultLandmarkTag": "Landmark.Village.GeneralWorkshop" }
       ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
@@ -49,6 +72,7 @@
       "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Elf.SK_Elf",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Villager",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Elf" },
@@ -68,6 +92,29 @@
         { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 18.0 }
       ],
       "WeightedAttributes": [],
+      "ProfessionRolls": [
+        { "ProfessionTag": "Profession.Labor.Farmer", "ChanceWeight": 0.7 },
+        { "ProfessionTag": "Profession.Labor.Woodcutter", "ChanceWeight": 0.3 }
+      ],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Refined", "Personality.Trait.Ascetic" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Food.Fruit.Elvenberry", "Value": 1.8 },
+            { "KeyTag": "Item.Drink.Wine.Elven", "Value": 1.5 },
+            { "KeyTag": "Item.Food.Meat.Raw", "Value": -0.8 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Activity.Socialize.Tavern", "Value": 1.2 }
+          ]
+        }
+      },
+      "DefaultPlaceBindings": [
+        { "PlaceRoleTag": "Place.Home", "DefaultLandmarkTag": "Landmark.Elven.Treehouse" },
+        { "PlaceRoleTag": "Place.Workstation", "DefaultLandmarkTag": "Landmark.Elven.HerbGarden" }
+      ],
       "RacialSliderClamps": [
         { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.3, "ClampedMax": 0.9 },
         { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.0, "ClampedMax": 0.6 }
@@ -113,10 +160,11 @@
       "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Orc.SK_Orc",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Villager",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Orc" },
-          { "KeyTag": "Localization.Description", "Value": "Bulky and muscular with high default weight and muscle limits." }
+          { "KeyTag": "Localization.Description", "Value": "Bulky and muscular with high default weight, muscle limits, and robust meat preferences." }
         ]
       },
       "AllowedSkinTones": [
@@ -130,6 +178,29 @@
         { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 15.0, "MaxValue": 20.0 }
       ],
       "WeightedAttributes": [],
+      "ProfessionRolls": [
+        { "ProfessionTag": "Profession.Labor.Woodcutter", "ChanceWeight": 0.8 },
+        { "ProfessionTag": "Profession.Labor.Farmer", "ChanceWeight": 0.2 }
+      ],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Glutton", "Personality.Trait.Aggressive" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Food.Meat.Roasted", "Value": 2.0 },
+            { "KeyTag": "Item.Drink.Alcohol.StrongAle", "Value": 1.8 },
+            { "KeyTag": "Item.Food.Vegetable", "Value": -0.5 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Activity.Work.FellTimber", "Value": 1.5 }
+          ]
+        }
+      },
+      "DefaultPlaceBindings": [
+        { "PlaceRoleTag": "Place.Home", "DefaultLandmarkTag": "Landmark.Orc.Longhouse" },
+        { "PlaceRoleTag": "Place.Workstation", "DefaultLandmarkTag": "Landmark.Orc.SawmillCamp" }
+      ],
       "RacialSliderClamps": [
         { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.6, "ClampedMax": 1.0 },
         { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.5, "ClampedMax": 1.0 }
@@ -174,17 +245,46 @@
       "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Dwarf.SK_Dwarf",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Villager",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Dwarf" },
           { "KeyTag": "Localization.Description", "Value": "Stout stature with strict height limitations ensuring shorter proportions." }
         ]
       },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.85, "G": 0.75, "B": 0.65, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.6, "B": 0.5, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.3, "G": 0.2, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.5, "B": 0.4, "A": 1.0 } }
+      ],
       "AttributeRanges": [
         { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 140.0 },
         { "AttributeTag": "Attribute.Stat.Constitution", "MinValue": 14.0, "MaxValue": 18.0 }
       ],
       "WeightedAttributes": [],
+      "ProfessionRolls": [
+        { "ProfessionTag": "Profession.Labor.Woodcutter", "ChanceWeight": 0.5 },
+        { "ProfessionTag": "Profession.Labor.Farmer", "ChanceWeight": 0.5 }
+      ],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Industrious", "Personality.Trait.Hardy" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Drink.Alcohol.DwarvenAle", "Value": 2.5 },
+            { "KeyTag": "Item.Food.Meat.Pork", "Value": 1.5 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Activity.Work", "Value": 1.4 }
+          ]
+        }
+      },
+      "DefaultPlaceBindings": [
+        { "PlaceRoleTag": "Place.Home", "DefaultLandmarkTag": "Landmark.Dwarven.StoneHearth" },
+        { "PlaceRoleTag": "Place.Workstation", "DefaultLandmarkTag": "Landmark.Dwarven.AnvilForge" }
+      ],
       "RacialSliderClamps": [
         { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.0, "ClampedMax": 0.4 },
         { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.4, "ClampedMax": 1.0 }
@@ -196,6 +296,94 @@
       ],
       "GenderVariants": [],
       "StartupAbilities": [],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Arachnid.Spider": {
+      "TemplateTag": "Character.Arachnid.Spider",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Creatures/Arachnid/SK_GiantSpider.SK_GiantSpider",
+      "AnimationControllerClass": "/Game/Creatures/Arachnid/ABP_Spider.ABP_Spider_C",
+      "SkeletonTypeTag": "Skeleton.Creature.Arachnid",
+      "DefaultAIAgentTag": "AI.Type.Monster.Spider",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Giant Spider" },
+          { "KeyTag": "Localization.Description", "Value": "Multi-limbed web spinner with venomous attacks and ambush behaviors." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.15, "G": 0.15, "B": 0.15, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.1, "B": 0.1, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 70.0, "MaxValue": 110.0 },
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 15.0, "MaxValue": 22.0 }
+      ],
+      "WeightedAttributes": [],
+      "ProfessionRolls": [],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Solitary", "Personality.Trait.AmbushPredator" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Food.Meat", "Value": 2.0 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": []
+        }
+      },
+      "DefaultPlaceBindings": [],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [],
+      "StartupAbilities": [
+        "Ability.Monster.SpinWeb",
+        "Ability.Combat.VenomBite"
+      ],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Beast.Wolf": {
+      "TemplateTag": "Character.Beast.Wolf",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Creatures/Beast/SK_Wolf.SK_Wolf",
+      "AnimationControllerClass": "/Game/Creatures/Beast/ABP_Quadruped.ABP_Quadruped_C",
+      "SkeletonTypeTag": "Skeleton.Creature.Quadruped",
+      "DefaultAIAgentTag": "AI.Type.Beast.Wolf",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Wild Wolf" },
+          { "KeyTag": "Localization.Description", "Value": "Pack hunter with high burst speed and cooperative hunting instincts." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.4, "G": 0.4, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.2, "B": 0.2, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 60.0, "MaxValue": 90.0 },
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 19.0 }
+      ],
+      "WeightedAttributes": [],
+      "ProfessionRolls": [],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.PackHunter", "Personality.Trait.Territorial" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Food.Meat", "Value": 2.0 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": []
+        }
+      },
+      "DefaultPlaceBindings": [],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [],
+      "StartupAbilities": [
+        "Ability.Combat.Bite",
+        "Ability.Combat.Howl"
+      ],
       "StartupEquipmentArchetypes": []
     }
   }

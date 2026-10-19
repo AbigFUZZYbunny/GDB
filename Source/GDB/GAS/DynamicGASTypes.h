@@ -14,6 +14,8 @@ class UDynamicForceComponent;
 class UDynamicInteractableComponent;
 class UDynamicContainerComponent;
 class ADynamicPhysicsActor;
+class UDynamicSocialComponent;
+class AAIController;
 
 // --- ENUMS ---
 UENUM(BlueprintType)
@@ -1740,6 +1742,10 @@ struct FCharacterTemplateDef
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     TArray<FDynamicColorGradient> AllowedHairColors;
+    
+    // The default AI Behavior profile assigned if this character is spawned as an NPC
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag DefaultAIAgentTag;
 };
 
 USTRUCT(BlueprintType)
@@ -1848,6 +1854,480 @@ template<>
 struct TStructOpsTypeTraits<FFastCharacterMorphArray> : public TStructOpsTypeTraitsBase2<FFastCharacterMorphArray>
 {
     enum { WithNetDeltaSerializer = true };
+};
+
+UENUM(BlueprintType)
+enum class ERelationshipTargetKind : uint8
+{
+    Character,
+    PhysicsActor,
+    SpatialLandmark,
+    Faction
+};
+
+UENUM(BlueprintType)
+enum class ERelationshipDecayCurve : uint8
+{
+    None,           // Permanent bond (e.g., Mother, Bloodline)
+    Linear,         // Constant erosion per in-game day
+    Exponential,    // Rapid initial drop that flattens out
+    StepThreshold   // Drops in discrete tiers after inactivity periods
+};
+
+// --- 1. RELATIONSHIP TYPE DEFINITION (Static Registry in GameState) ---
+
+USTRUCT(BlueprintType)
+struct FDynamicRelationshipTypeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTag RelationshipTag; // e.g., Relation.Family.Mother, Relation.Social.Acquaintance, Relation.Object.Owner
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    ERelationshipDecayCurve DecayCurve = ERelationshipDecayCurve::Exponential;
+
+    // Rate at which Affinity/Debt erodes per in-game day (24h) of zero interaction
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float AffinityDecayRatePerDay = 0.05f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float FamiliarityDecayRatePerDay = 0.02f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DebtDecayRatePerDay = 0.15f;
+
+    // Minimum floor that decay cannot erode below (e.g., 0.80 for Mother, 0.0 for Tavern Acquaintance)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float MinAffinityDecayFloor = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float MinFamiliarityDecayFloor = 0.0f;
+
+    // Baseline starting values when this relationship is first established
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DefaultAffinity = 0.0f; // [-1.0 .. 1.0]
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DefaultTrust = 0.0f; // [-1.0 .. 1.0]
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DefaultFamiliarity = 0.1f; // [0.0 .. 1.0]
+
+    // Multiplier applied to positive/negative social events on this bond
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float VolatilityScalar = 1.0f;
+};
+
+// --- 2. RUNTIME RELATIONSHIP MATRIX FAST ARRAY (Per-Character) ---
+
+USTRUCT(BlueprintType)
+struct FDynamicRelationshipEdgeItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    // Unique persistent ID of the target Character or ADynamicPhysicsActor
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGuid TargetEntityGuid;
+
+    // Optional cached weak pointer for O(1) runtime access when target is loaded in world
+    UPROPERTY(NotReplicated)
+    TWeakObjectPtr<AActor> CachedTargetActor = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    ERelationshipTargetKind TargetKind = ERelationshipTargetKind::Character;
+
+    // Primary relationship classification (e.g., Relation.Family.Mother, Relation.Social.Acquaintance)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTag PrimaryRelationshipTag;
+
+    // Additional contextual tags (e.g., Relation.Context.Coworker, Relation.Context.Rival, Relation.Object.FavoriteTool)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTagContainer SecondaryContextTags;
+
+    // Core normalized dimensions [-1.0 to 1.0] or [0.0 to 1.0] at LastInteractionWorldTime
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float BaseAffinity = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float BaseTrust = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float BaseFamiliarity = 0.0f;
+
+    // Positive = Target owes this character; Negative = This character feels indebted to Target
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float BaseIndebtedness = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float FearOrRespect = 0.0f;
+
+    // World timestamp (in seconds) when this bond was last reinforced or interacted with
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    double LastInteractionWorldTime = 0.0;
+
+    void PreReplicatedRemove(const struct FFastRelationshipEdgeArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastRelationshipEdgeArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastRelationshipEdgeArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastRelationshipEdgeArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicRelationshipEdgeItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicRelationshipEdgeItem, FFastRelationshipEdgeArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastRelationshipEdgeArray> : public TStructOpsTypeTraitsBase2<FFastRelationshipEdgeArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// --- 3. SPATIAL KNOWLEDGE, LANDMARKS & DAILY SCHEDULE ---
+
+USTRUCT(BlueprintType)
+struct FDynamicKnownPlaceItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    // Role of the place for this character (e.g., Place.Home, Place.Workstation, Place.Bed, Place.FoodSource, Place.Tavern)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
+    FGameplayTag PlaceRoleTag;
+
+    // Specific landmark or building tag (e.g., Landmark.Village.BlacksmithForge, Actor.Workstation.Table.Alchemy)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
+    FGameplayTag PlaceArchetypeOrLandmarkTag;
+
+    // Persistent GUID of the specific ADynamicPhysicsActor (e.g., specific bed, workbench, or chest)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
+    FGuid LinkedActorGuid;
+
+    // Last known world coordinates (quantized for fast network transport)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
+    FVector_NetQuantize10 LastKnownLocation = FVector_NetQuantize10::ZeroVector;
+
+    // [0.0 .. 1.0] certainty of this memory (decays if moveable actor is relocated while unseen)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
+    float ConfidenceScore = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
+    double LastVisitedWorldTime = 0.0;
+
+    void PreReplicatedRemove(const struct FFastKnownPlaceArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastKnownPlaceArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastKnownPlaceArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastKnownPlaceArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicKnownPlaceItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicKnownPlaceItem, FFastKnownPlaceArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastKnownPlaceArray> : public TStructOpsTypeTraitsBase2<FFastKnownPlaceArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// --- 4. PROFESSIONS, TASK PRIORITIES & EXPECTED SCHEDULES ---
+
+USTRUCT(BlueprintType)
+struct FDynamicScheduleBlockDef
+{
+    GENERATED_BODY()
+
+    // Start and end hour in 24-hour game time (e.g., 6.0 = 06:00 AM, 14.5 = 02:30 PM)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    float StartHour24 = 8.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    float EndHour24 = 17.0f;
+
+    // High-level activity (e.g., Activity.Work, Activity.Sleep, Activity.Eat, Activity.Socialize)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    FGameplayTag ScheduledActivityTag;
+
+    // Where the character should go for this block (e.g., Place.Workstation, Place.Home, Place.Tavern)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    FGameplayTag PreferredPlaceRoleTag;
+
+    // Priority weight [0.0 .. 10.0]; survival emergencies (Health/Starvation) can override low-priority schedule blocks
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    float ScheduleAdherenceWeight = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicTaskPriorityRule
+{
+    GENERATED_BODY()
+
+    // Task identifier (e.g., Task.Crafting.ChopWood, Task.Crafting.SplitFirewood, Task.Farming.TendCrops, Task.Farming.SellProduce)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag TaskTag;
+
+    // Base utility weight [0.0 .. 100.0]
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    float BasePriorityWeight = 50.0f;
+
+    // Optional recipe or ability tag executed by this task
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag LinkedAbilityOrRecipeTag;
+
+    // Required tool/item tags in inventory or hands (e.g., Actor.Tool.Axe.Felling)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTagContainer RequiredItemTags;
+
+    // Output item tags produced for the local economy (e.g., Actor.Material.WoodLog, Actor.Material.Firewood)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTagContainer ProducedOutputTags;
+
+    // Optional SharedConditionTree name to gate task validity (e.g., checking if local sawmill needs timber)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FName TaskConditionTreeName = NAME_None;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicStatPriorityRule
+{
+    GENERATED_BODY()
+
+    // Monitored attribute or need tag (e.g., Attribute.Resource.Health, Need.Biological.Hunger)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag AttributeOrNeedTag;
+
+    // Normalized threshold [0.0 .. 1.0] below which emergency self-preservation overrides profession tasks
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    float CriticalThresholdRatio = 0.25f;
+
+    // Priority multiplier when in critical state (e.g., Health = 1000.0 so survival always wins)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    float EmergencyPriorityWeight = 500.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicProfessionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag ProfessionTag; // e.g., Profession.Labor.Woodcutter, Profession.Labor.Farmer
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FDynamicLocalizationProfile Localization;
+
+    // Ordered task priorities defining what is expected of this profession
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    TArray<FDynamicTaskPriorityRule> ExpectedTasks;
+
+    // Archetype tags of tools, raw materials, and commodities this profession prioritizes acquiring/keeping
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FDynamicTagFloatMapWrapper PrioritizedItemWeights;
+
+    // Stat & Need preservation priorities (e.g., Health > Stamina > Hunger > Work)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    TArray<FDynamicStatPriorityRule> StatPriorities;
+
+    // Default 24-hour daily routine for this profession
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    TArray<FDynamicScheduleBlockDef> DefaultDailySchedule;
+};
+
+// --- 5. NEEDS, MOODS & PERSONALITY PREFERENCES (Food/Drink/Comfort) ---
+
+USTRUCT(BlueprintType)
+struct FDynamicNeedStateItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    // e.g., Need.Biological.Hunger, Need.Biological.Thirst, Need.Biological.Sleep, Need.Social.Companionship, Mood.State.Happy
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    FGameplayTag NeedOrMoodTag;
+
+    // Normalized [0.0 .. 100.0] value (100 = Fully Satisfied, 0 = Starving/Exhausted)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    float CurrentValue = 100.0f;
+
+    // Change per in-game hour (e.g., -4.0f for Hunger)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    float ShiftRatePerHour = -2.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    double LastEvaluatedWorldTime = 0.0;
+
+    void PreReplicatedRemove(const struct FFastNeedStateArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastNeedStateArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastNeedStateArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastNeedStateArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicNeedStateItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicNeedStateItem, FFastNeedStateArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastNeedStateArray> : public TStructOpsTypeTraitsBase2<FFastNeedStateArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicPersonalityProfile
+{
+    GENERATED_BODY()
+
+    // Personality trait tags (e.g., Personality.Trait.Glutton, Personality.Trait.Ascetic, Personality.Trait.Industrious)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
+    FGameplayTagContainer PersonalityTraitTags;
+
+    // Food & Drink taste multipliers: Item/Category Tag -> Mood/Satisfaction multiplier
+    // e.g., { "Item.Food.Meat.Roasted": 1.5, "Item.Drink.Alcohol.DwarvenAle": 2.0, "Item.Food.Vegetable.Raw": -0.5 }
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
+    FDynamicTagFloatMapWrapper FoodAndDrinkPreferences;
+
+    // Activity & Social preferences: Activity/Topic Tag -> Affinity/Mood weight
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
+    FDynamicTagFloatMapWrapper ActivityPreferences;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicAIAbilityRule
+{
+    GENERATED_BODY()
+
+    // The ability the AI wants to use (e.g., Ability.Magic.Fireball, Ability.Monster.SpinWeb)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag AbilityTag;
+
+    // Condition tree that MUST evaluate to true for the AI to cast this (e.g., Trigger.Condition.TargetIsStunned)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FName RequiredConditionTreeName = NAME_None;
+
+    // Priority weight [0.0 .. 100.0] if multiple abilities are valid
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float PriorityWeight = 50.0f;
+
+    // Minimum distance to target to consider using this ability
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float MinRange = 0.0f;
+
+    // Maximum distance to target to consider using this ability
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float MaxRange = 1500.0f;
+};
+
+// --- AI GROUP & PACK DYNAMICS ---
+
+USTRUCT(BlueprintType)
+struct FDynamicAIGroupDynamics
+{
+    GENERATED_BODY()
+
+    // Identifies the pack/group type (e.g., Faction.Beast.WolfPack)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag GroupArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bFormsPacks = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    int32 MaxGroupSize = 1;
+
+    // Distance within which AI will share aggro or call for help
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float CohesionRadius = 2000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bDefendsPackMembers = true;
+};
+
+// --- MASTER AI AGENT DEFINITION ---
+
+USTRUCT(BlueprintType)
+struct FDynamicAIAgentDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag AIAgentTag; // e.g., AI.Type.Beast.Wolf, AI.Type.Humanoid.Villager
+
+    // The base Unreal Controller class to spawn (handles standard pathfinding, perception, or LLM bridging)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    TSoftClassPtr<AAIController> AIControllerClass;
+
+    // Defines pack mentality, swarming, or solitary behavior
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FDynamicAIGroupDynamics GroupDynamics;
+
+    // Determines what the AI considers "Food" (e.g., Item.Food.Meat, Tag.Corpse)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTagContainer DietaryTags;
+
+    // If true, the AI will actively hunt entities that drop items matching its DietaryTags
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bHuntsForFood = false;
+
+    // Rules for when and how to use specific abilities in combat or utility
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    TArray<FDynamicAIAbilityRule> AbilityUsageRules;
+
+    // Reusing our Profession Task rules to dictate idle/utility AI behavior (e.g., Spiders building webs, Wolves patrolling)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    TArray<FDynamicTaskPriorityRule> IdleTasks;
+
+    // Morale / Flee threshold (0.0 to 1.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float FleeHealthThreshold = 0.15f;
+};
+
+// Wrapper for the GameState Map replication
+USTRUCT(BlueprintType)
+struct FTagAIAgentDefPair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FDynamicAIAgentDef ValueDef;
 };
 
 // --- ROUTING MAP PAIRS ---

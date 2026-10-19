@@ -1,0 +1,80 @@
+﻿{
+  "_comment": "Dynamic Social Relationship Physics, Profession Schedules, Task Priorities, and Personality Preferences Schema",
+  "RelationshipTypeRegistry": {
+    "Relation.Family.Mother": {
+      "RelationshipTag": "Relation.Family.Mother",
+      "DecayCurve": "None",
+      "AffinityDecayRatePerDay": 0.0,
+      "FamiliarityDecayRatePerDay": 0.0,
+      "DebtDecayRatePerDay": 0.01,
+      "MinAffinityDecayFloor": 0.85,
+      "MinFamiliarityDecayFloor": 1.0,
+      "DefaultAffinity": 0.95,
+      "DefaultTrust": 0.95,
+      "DefaultFamiliarity": 1.0,
+      "VolatilityScalar": 0.25,
+      "Localization": {
+        "ReplicatedEntries": [
+          {
+            "KeyTag": "Localization.Name",
+            "Value": "Mother"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "An enduring maternal blood bond immune to absence decay."
+          }
+        ]
+      }
+    },
+    "Relation.Social.Acquaintance": {
+      "RelationshipTag": "Relation.Social.Acquaintance",
+      "DecayCurve": "Exponential",
+      "AffinityDecayRatePerDay": 0.25,
+      "FamiliarityDecayRatePerDay": 0.35,
+      "DebtDecayRatePerDay": 0.40,
+      "MinAffinityDecayFloor": 0.0,
+      "MinFamiliarityDecayFloor": 0.0,
+      "DefaultAffinity": 0.10,
+      "DefaultTrust": 0.05,
+      "DefaultFamiliarity": 0.15,
+      "VolatilityScalar": 1.25,
+      "Localization": {
+        "ReplicatedEntries": [
+          {
+            "KeyTag": "Localization.Name",
+            "Value": "Tavern Acquaintance"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "A casual social contact whose memory and indebtedness erode quickly without reinforcement."
+          }
+        ]
+      }
+    },
+    "Relation.Object.Owner": {
+      "RelationshipTag": "Relation.Object.Owner",
+      "DecayCurve": "Linear",
+      "AffinityDecayRatePerDay": 0.01,
+      "FamiliarityDecayRatePerDay": 0.0,
+      "DebtDecayRatePerDay": 0.0,
+      "MinAffinityDecayFloor": 0.50,
+      "MinFamiliarityDecayFloor": 0.90,
+      "DefaultAffinity": 0.80,
+      "DefaultTrust": 1.0,
+      "DefaultFamiliarity": 1.0,
+      "VolatilityScalar": 0.5,
+      "Localization": {
+        "ReplicatedEntries": [
+          {
+            "KeyTag": "Localization.Name",
+            "Value": "Personal Property / Owned Actor"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "Character-to-PhysicsActor ownership bond (e.g., personal felling axe, home bed, or storage chest)."
+          }
+        ]
+      }
+    }
+  }
+}

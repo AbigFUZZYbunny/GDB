@@ -86,10 +86,13 @@ public:
     // Evaluates current Need/Mood value with lazy time-elapsed drift
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Needs")
     float GetCurrentNeedOrMoodValue(FGameplayTag NeedOrMoodTag) const;
+    
+    // C++ method with clean default parameter handling
+    void ServerModifyNeedOrMood(FGameplayTag NeedOrMoodTag, float BaseDelta, FGameplayTag ConsumedItemOrActivityTag = FGameplayTag());
 
-    // Modifies a need or mood, automatically factoring FoodAndDrinkPreferences if an ItemTag is provided
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Needs")
-    void ServerModifyNeedOrMood(FGameplayTag NeedOrMoodTag, float BaseDelta, FGameplayTag ConsumedItemOrActivityTag = FGameplayTag::EmptyTag);
+    // UFUNCTION exposed to Blueprints without the unparseable default value on the macro pin
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Needs", meta=(AdvancedDisplay = "ConsumedItemOrActivityTag"))
+    void ServerModifyNeedOrMoodBP(FGameplayTag NeedOrMoodTag, float BaseDelta, FGameplayTag ConsumedItemOrActivityTag);
 
     // Resolves the highest priority task or schedule activity for the current 24h game hour
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Profession")

@@ -1,17 +1,13 @@
 ﻿{
-  "_comment": "Master Skeleton Registry with Complete Skyrim Bodyslide Sliders: Defines master bone scaling limits, translations, and morph targets.",
+  "_comment": "Master Skeleton Registry: Defines base humanoids, quadrupeds, reptiles, and flying creatures with unique tail, horn, and ear bone constraints and Bodyslide morphs.",
   "SkeletonRegistry": {
     "Skeleton.Humanoid.Standard": {
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "ParentSkeletonTag": "None",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Standard Humanoid Skeleton" }
+          { "KeyTag": "Localization.Name", "Value": "Standard Biped Skeleton" }
         ]
-      },
-      "DefaultLimbModifiers": {
-        "AngularMotorMultiplier": 1.0,
-        "LinearMotorMultiplier": 1.0
       },
       "BodyslideSliders": [
         {
@@ -19,85 +15,536 @@
           "DefaultValue": 0.5,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Height" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Height" } ] },
           "TargetBones": [
-            { "BoneName": "spine_01", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 15.0 },
-            { "BoneName": "spine_02", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 },
-            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -12.0, "MaxLengthOffset": 12.0 },
-            { "BoneName": "thigh_r", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -12.0, "MaxLengthOffset": 12.0 },
-            { "BoneName": "calf_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 },
-            { "BoneName": "calf_r", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.1, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 10.0 }
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.15, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 15.0 }
           ],
           "TargetMorphTargets": [ "Body_Height_Scale" ]
         },
+        {
+          "SliderTag": "Slider.Appendage.EarLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Ear Point / Length" } ] },
+          "TargetBones": [
+            { "BoneName": "ear_l", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 25.0 },
+            { "BoneName": "ear_r", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 25.0 }
+          ],
+          "TargetMorphTargets": [ "Ear_Point_Elongate", "Ear_Angle_Spread" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.TailLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Tail Length & Thickness" } ] },
+          "TargetBones": [
+            { "BoneName": "tail_01", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -30.0, "MaxLengthOffset": 50.0 },
+            { "BoneName": "tail_02", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 30.0 }
+          ],
+          "TargetMorphTargets": [ "Tail_Thickness", "Tail_Fluff" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.Horns",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Horn Size & Curvature" } ] },
+          "TargetBones": [
+            { "BoneName": "horn_left", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 40.0 },
+            { "BoneName": "horn_right", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 40.0 }
+          ],
+          "TargetMorphTargets": [ "Horn_Curl", "Horn_Thickness" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Quadruped": {
+      "SkeletonTypeTag": "Skeleton.Creature.Quadruped",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Quadruped Skeleton" } ]
+      },
+      "BodyslideSliders": [
         {
           "SliderTag": "Slider.Body.Weight",
           "DefaultValue": 0.5,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Weight (Bodyslide)" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Body Mass / Bulk" } ] },
           "TargetBones": [
-            { "BoneName": "spine_01", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false },
-            { "BoneName": "spine_02", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false },
-            { "BoneName": "pelvis", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": false }
+            { "BoneName": "spine_02", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.4, "bAllowLengthAdjustment": false }
           ],
-          "TargetMorphTargets": [ "Body_Weight_Fat", "Body_Width_Scale" ]
+          "TargetMorphTargets": [ "Beast_Mass_Scale" ]
         },
         {
-          "SliderTag": "Slider.Body.Muscularity",
+          "SliderTag": "Slider.Appendage.TailLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Tail Length" } ] },
+          "TargetBones": [
+            { "BoneName": "tail_01", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 1.6, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 30.0 }
+          ],
+          "TargetMorphTargets": [ "Tail_Thickness", "Tail_Fluff" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.EarLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Ear Size" } ] },
+          "TargetBones": [
+            { "BoneName": "ear_l", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 15.0 },
+            { "BoneName": "ear_r", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 15.0 }
+          ],
+          "TargetMorphTargets": [ "Ear_Point_Elongate" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.SnoutLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Snout Elongation" } ] },
+          "TargetBones": [
+            { "BoneName": "jaw", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.4, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 20.0 }
+          ],
+          "TargetMorphTargets": [ "Snout_Length", "Jaw_Width" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Avian": {
+      "SkeletonTypeTag": "Skeleton.Creature.Avian",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Avian / Bird Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.Wingspan",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Wingspan" } ] },
+          "TargetBones": [
+            { "BoneName": "wing_l_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -40.0, "MaxLengthOffset": 60.0 },
+            { "BoneName": "wing_r_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -40.0, "MaxLengthOffset": 60.0 }
+          ],
+          "TargetMorphTargets": [ "Wing_Span_Scale" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Dragon": {
+      "SkeletonTypeTag": "Skeleton.Creature.Dragon",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Draconic Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Appendage.Horns",
+          "DefaultValue": 0.6,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Dragon Horns" } ] },
+          "TargetBones": [
+            { "BoneName": "horn_left", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 80.0 },
+            { "BoneName": "horn_right", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 80.0 }
+          ],
+          "TargetMorphTargets": [ "Dragon_Horn_Length", "Dragon_Crest_Spread" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Dragon.True": {
+      "SkeletonTypeTag": "Skeleton.Creature.Dragon.True",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "True Dragon Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.Wingspan",
+          "DefaultValue": 0.6,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Wingspan" } ] },
+          "TargetBones": [
+            { "BoneName": "wing_l_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.6, "bAllowLengthAdjustment": true, "MinLengthOffset": -50.0, "MaxLengthOffset": 100.0 },
+            { "BoneName": "wing_r_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.6, "bAllowLengthAdjustment": true, "MinLengthOffset": -50.0, "MaxLengthOffset": 100.0 }
+          ],
+          "TargetMorphTargets": [ "Dragon_Wingspan_Scale" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.Horns",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Horn & Crest Size" } ] },
+          "TargetBones": [
+            { "BoneName": "horn_left", "MinScaleMultiplier": 0.3, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 50.0 },
+            { "BoneName": "horn_right", "MinScaleMultiplier": 0.3, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 50.0 }
+          ],
+          "TargetMorphTargets": [ "Dragon_Horn_Length", "Dragon_Crest_Spread" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Hydra": {
+      "SkeletonTypeTag": "Skeleton.Creature.Hydra",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Multi-Headed Hydra Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Appendage.HeadCount",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Neck Spread & Count" } ] },
+          "TargetBones": [
+            { "BoneName": "neck_center", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.4, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 40.0 },
+            { "BoneName": "neck_left", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.4, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 40.0 },
+            { "BoneName": "neck_right", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.4, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 40.0 }
+          ],
+          "TargetMorphTargets": [ "Hydra_Neck_Spread" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Amphiptere": {
+      "SkeletonTypeTag": "Skeleton.Creature.Amphiptere",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Winged Serpent Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.SerpentineLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Body Length" } ] },
+          "TargetBones": [
+            { "BoneName": "spine_serpent", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.8, "bAllowLengthAdjustment": true, "MinLengthOffset": -80.0, "MaxLengthOffset": 150.0 }
+          ],
+          "TargetMorphTargets": [ "Serpent_Body_Length" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Cervidae": {
+      "SkeletonTypeTag": "Skeleton.Creature.Cervidae",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Cervidae (Deer/Stag) Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Appendage.Antlers",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Antler Spread & Branching" } ] },
+          "TargetBones": [
+            { "BoneName": "antler_left_root", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 60.0 },
+            { "BoneName": "antler_right_root", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 60.0 }
+          ],
+          "TargetMorphTargets": [ "Antler_Spread_Scale", "Antler_Branch_Density", "Crown_Glow_Intensity" ]
+        },
+        {
+          "SliderTag": "Slider.Body.LeanMuscularity",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Lean Muscle & Leg Length" } ] },
+          "TargetBones": [
+            { "BoneName": "thigh_l", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 20.0 },
+            { "BoneName": "thigh_r", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 20.0 }
+          ],
+          "TargetMorphTargets": [ "Leg_Elongate", "Chest_Depth" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Equidae": {
+      "SkeletonTypeTag": "Skeleton.Creature.Equidae",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Equidae (Horse) Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.DraftMusculature",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Draft Muscle & Build" } ] },
+          "TargetBones": [
+            { "BoneName": "spine_02", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.35, "bAllowLengthAdjustment": false },
+            { "BoneName": "shoulder", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false }
+          ],
+          "TargetMorphTargets": [ "Horse_Draft_Bulk", "Chest_Width_Scale" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.ManeAndTail",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Mane & Tail Flow" } ] },
+          "TargetBones": [
+            { "BoneName": "tail_root", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -15.0, "MaxLengthOffset": 30.0 }
+          ],
+          "TargetMorphTargets": [ "Mane_Length", "Tail_Volume" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.MythicalHorn",
           "DefaultValue": 0.0,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Muscularity" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Unicorn Horn Length" } ] },
           "TargetBones": [
-            { "BoneName": "upperarm_l", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.35, "bAllowLengthAdjustment": false },
-            { "BoneName": "upperarm_r", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.35, "bAllowLengthAdjustment": false },
-            { "BoneName": "chest", "MinScaleMultiplier": 0.9, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": false }
+            { "BoneName": "horn_forehead", "MinScaleMultiplier": 0.0, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 45.0 }
           ],
-          "TargetMorphTargets": [ "Body_Muscle_Mass", "Chest_Expansion" ]
-        },
+          "TargetMorphTargets": [ "Unicorn_Horn_Spiral" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Sus": {
+      "SkeletonTypeTag": "Skeleton.Creature.Sus",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Sus (Boar/Pig) Skeleton" } ]
+      },
+      "BodyslideSliders": [
         {
-          "SliderTag": "Slider.Body.BreastSize",
+          "SliderTag": "Slider.Body.BoarBulk",
           "DefaultValue": 0.5,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Breast Size" } ]
-          },
-          "TargetBones": [],
-          "TargetMorphTargets": [ "Breasts_Scale", "Breasts_Cleavage", "Breasts_Gravity" ]
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Body Bulk & Fat Mass" } ] },
+          "TargetBones": [
+            { "BoneName": "spine_02", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.45, "bAllowLengthAdjustment": false },
+            { "BoneName": "pelvis", "MinScaleMultiplier": 0.85, "MaxScaleMultiplier": 1.35, "bAllowLengthAdjustment": false }
+          ],
+          "TargetMorphTargets": [ "Sus_Body_Bulk", "Sus_Shoulder_Hump" ]
         },
         {
-          "SliderTag": "Slider.Body.WaistWidth",
+          "SliderTag": "Slider.Appendage.Tusks",
           "DefaultValue": 0.5,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Waist Width" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Tusk Length & Curvature" } ] },
           "TargetBones": [
-            { "BoneName": "spine_01", "MinScaleMultiplier": 0.75, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": false }
+            { "BoneName": "tusk_l", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 25.0 },
+            { "BoneName": "tusk_r", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 25.0 }
           ],
-          "TargetMorphTargets": [ "Waist_Narrow_Wide", "Tummy_Flat_Round" ]
+          "TargetMorphTargets": [ "Tusk_Elongate", "Tusk_Spread" ]
         },
         {
-          "SliderTag": "Slider.Face.JawWidth",
+          "SliderTag": "Slider.Appendage.Bristles",
           "DefaultValue": 0.5,
           "MinLimit": 0.0,
           "MaxLimit": 1.0,
-          "Localization": {
-            "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Jaw Width" } ]
-          },
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Dorsal Bristle Stiffness" } ] },
           "TargetBones": [
-            { "BoneName": "jaw", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.25, "bAllowLengthAdjustment": false }
+            { "BoneName": "spine_crest", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 15.0 }
           ],
-          "TargetMorphTargets": [ "Jaw_Width", "Chin_Forward_Recede" ]
+          "TargetMorphTargets": [ "Bristle_Length", "Mane_Stiffness" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Avian": {
+      "SkeletonTypeTag": "Skeleton.Creature.Avian",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Avian (Bird) Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.Wingspan",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Wingspan & Flight Surface" } ] },
+          "TargetBones": [
+            { "BoneName": "wing_l_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.8, "bAllowLengthAdjustment": true, "MinLengthOffset": -30.0, "MaxLengthOffset": 80.0 },
+            { "BoneName": "wing_r_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.8, "bAllowLengthAdjustment": true, "MinLengthOffset": -30.0, "MaxLengthOffset": 80.0 }
+          ],
+          "TargetMorphTargets": [ "Wing_Span_Scale", "Wing_Surface_Area" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.BeakLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Beak Curvature & Length" } ] },
+          "TargetBones": [
+            { "BoneName": "beak_upper", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 25.0 }
+          ],
+          "TargetMorphTargets": [ "Beak_Elongate", "Beak_Hook_Curve" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.PlumageCrest",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Crest & Tail Plume Volume" } ] },
+          "TargetBones": [
+            { "BoneName": "head_crest", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 30.0 },
+            { "BoneName": "tail_feathers", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 40.0 }
+          ],
+          "TargetMorphTargets": [ "Crest_Length", "Tail_Feather_Spread" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Reptile": {
+      "SkeletonTypeTag": "Skeleton.Creature.Reptile",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Reptilian Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.SerpentineLength",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Body Length & Elongation" } ] },
+          "TargetBones": [
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.6, "bAllowLengthAdjustment": true, "MinLengthOffset": -40.0, "MaxLengthOffset": 80.0 }
+          ],
+          "TargetMorphTargets": [ "Reptile_Body_Elongate", "Tail_Mass_Scale" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.FrillOrHood",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Neck Frill & Hood Spread" } ] },
+          "TargetBones": [
+            { "BoneName": "neck_crest_l", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 30.0 },
+            { "BoneName": "neck_crest_r", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 30.0 }
+          ],
+          "TargetMorphTargets": [ "Neck_Frill_Spread", "Hood_Expansion" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.DorsalSpines",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Dorsal Spines & Crest Height" } ] },
+          "TargetBones": [
+            { "BoneName": "spine_crest", "MinScaleMultiplier": 0.3, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 25.0 }
+          ],
+          "TargetMorphTargets": [ "Dorsal_Spine_Height", "Scale_Roughness" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Fish": {
+      "SkeletonTypeTag": "Skeleton.Creature.Fish",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Aquatic / Fish Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.FinSpan",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Fin Spread & Hydrodynamics" } ] },
+          "TargetBones": [
+            { "BoneName": "pectoral_fin_l", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 30.0 },
+            { "BoneName": "pectoral_fin_r", "MinScaleMultiplier": 0.5, "MaxScaleMultiplier": 2.0, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 30.0 }
+          ],
+          "TargetMorphTargets": [ "Fin_Span_Scale", "Tail_Propulsion_Surface" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.Bioluminescence",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Lure & Luminous Crest Intensity" } ] },
+          "TargetBones": [
+            { "BoneName": "dorsal_lure_bone", "MinScaleMultiplier": 0.2, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": 0.0, "MaxLengthOffset": 40.0 }
+          ],
+          "TargetMorphTargets": [ "Bioluminescent_Lure_Scale", "Fin_Glow_Pulse" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Creature.Arthropod": {
+      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Arthropod / Exoskeleton Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Body.CarapaceWidth",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Carapace Width & Bulk" } ] },
+          "TargetBones": [
+            { "BoneName": "thorax", "MinScaleMultiplier": 0.8, "MaxScaleMultiplier": 1.5, "bAllowLengthAdjustment": false },
+            { "BoneName": "abdomen", "MinScaleMultiplier": 0.75, "MaxScaleMultiplier": 1.6, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 30.0 }
+          ],
+          "TargetMorphTargets": [ "Carapace_Width_Scale", "Abdomen_Volume" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.Mandibles",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Mandibles & Chelicerae Size" } ] },
+          "TargetBones": [
+            { "BoneName": "mandible_l", "MinScaleMultiplier": 0.4, "MaxScaleMultiplier": 2.2, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 20.0 },
+            { "BoneName": "mandible_r", "MinScaleMultiplier": 0.4, "MaxScaleMultiplier": 2.2, "bAllowLengthAdjustment": true, "MinLengthOffset": -5.0, "MaxLengthOffset": 20.0 }
+          ],
+          "TargetMorphTargets": [ "Mandible_Length", "Chelicerae_Spread" ]
+        },
+        {
+          "SliderTag": "Slider.Appendage.Pincers",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Pincer & Claw Mass" } ] },
+          "TargetBones": [
+            { "BoneName": "claw_base_l", "MinScaleMultiplier": 0.3, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 35.0 },
+            { "BoneName": "claw_base_r", "MinScaleMultiplier": 0.3, "MaxScaleMultiplier": 2.5, "bAllowLengthAdjustment": true, "MinLengthOffset": -10.0, "MaxLengthOffset": 35.0 }
+          ],
+          "TargetMorphTargets": [ "Pincer_Bulk_Scale", "Claw_Span" ]
+        }
+      ],
+      "Limbs": []
+    },
+    "Skeleton.Monster.Undead.Spectral": {
+      "SkeletonTypeTag": "Skeleton.Monster.Undead.Spectral",
+      "ParentSkeletonTag": "None",
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Spectral / Ethereal Skeleton" } ]
+      },
+      "BodyslideSliders": [
+        {
+          "SliderTag": "Slider.Appendage.SpectralShroud",
+          "DefaultValue": 0.5,
+          "MinLimit": 0.0,
+          "MaxLimit": 1.0,
+          "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Shroud Density & Tail Dissipation" } ] },
+          "TargetBones": [
+            { "BoneName": "spine_01", "MinScaleMultiplier": 0.7, "MaxScaleMultiplier": 1.3, "bAllowLengthAdjustment": true, "MinLengthOffset": -20.0, "MaxLengthOffset": 40.0 }
+          ],
+          "TargetMorphTargets": [ "Spectral_Trail_Dissipate", "Shroud_Volume" ]
         }
       ],
       "Limbs": []

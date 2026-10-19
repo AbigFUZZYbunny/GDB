@@ -336,6 +336,11 @@ float UDynamicSocialComponent::GetCurrentNeedOrMoodValue(FGameplayTag NeedOrMood
     return FMath::Clamp(Item.CurrentValue + (Item.ShiftRatePerHour * ElapsedHours), 0.0f, 100.0f);
 }
 
+void UDynamicSocialComponent::ServerModifyNeedOrMoodBP(FGameplayTag NeedOrMoodTag, float BaseDelta, FGameplayTag ConsumedItemOrActivityTag)
+{
+    ServerModifyNeedOrMood(NeedOrMoodTag, BaseDelta, ConsumedItemOrActivityTag);
+}
+
 void UDynamicSocialComponent::ServerModifyNeedOrMood(FGameplayTag NeedOrMoodTag, float BaseDelta, FGameplayTag ConsumedItemOrActivityTag)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !NeedOrMoodTag.IsValid()) return;

@@ -50,7 +50,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     bool ServerAddActorByTag(FGameplayTag ArchetypeTag, int32 Quantity, const TArray<FDynamicAttributeItem>& CustomAttributes);
 
-    // FIXED: Properly declared inside the class header
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     bool ServerRemoveStoredActorByTag(FGameplayTag ArchetypeTag, int32 Quantity = 1);
 
@@ -60,7 +59,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     ADynamicPhysicsActor* ServerExtractActorToHands(int32 GridX, int32 GridY, ADynamicCharacter* Looter, FName HandBone = TEXT("hand_r"));
 
-    // FIXED: Properly declared inside the class header
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
     int32 GetTotalCountOfArchetype(FGameplayTag ArchetypeTag) const;
 

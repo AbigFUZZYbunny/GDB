@@ -23,41 +23,15 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Customization")
     FOnCharacterMorphUpdatedSignature OnMorphUpdated;
 
-    // Active Template and Gender governing slider clamps and base configuration
     UPROPERTY(ReplicatedUsing = OnRep_CharacterIdentity, BlueprintReadOnly, Category = "Dynamic GAS|Customization")
     FGameplayTag ActiveCharacterTemplateTag;
 
     UPROPERTY(ReplicatedUsing = OnRep_CharacterIdentity, BlueprintReadOnly, Category = "Dynamic GAS|Customization")
     ECharacterGender ActiveGender = ECharacterGender::Neutral;
 
-    // Replicated fast array containing all unique custom slider values for this character instance
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedMorphs)
     FFastCharacterMorphArray ReplicatedMorphs;
 
-    UFUNCTION()
-    void OnRep_CharacterIdentity();
-
-    UFUNCTION()
-    void OnRep_ReplicatedMorphs();
-
-    // Fast array item callback handler
-    void HandleSingleMorphReplicated(const FDynamicCharacterMorphItem& MorphItem);
-
-    // Initializes character identity and applies default template/gender sliders
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Customization")
-    void InitializeCustomization(FGameplayTag TemplateTag, ECharacterGender Gender);
-
-    // Sets a specific Bodyslide slider value (clamps to racial/gender limits) and marks dirty for replication
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Customization")
-    void ServerSetMorphSliderValue(FGameplayTag SliderTag, float Value);
-
-    // Applies all active morphs and bone scaling/length offsets to the character's SkeletalMeshComponent
-    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Customization")
-    void ApplyCustomizationToMesh();
-
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Customization")
-    float GetMorphSliderValue(FGameplayTag SliderTag) const;
-    
     UPROPERTY(ReplicatedUsing = OnRep_AppearanceColors, BlueprintReadOnly, Category = "Dynamic GAS|Customization")
     FDynamicColorGradient SkinColor;
 
@@ -67,15 +41,52 @@ public:
     UPROPERTY(ReplicatedUsing = OnRep_HairStyle, BlueprintReadOnly, Category = "Dynamic GAS|Customization")
     FGameplayTag ActiveHairArchetypeTag;
 
-    UFUNCTION()
-    void OnRep_AppearanceColors();
+    // Tracks active conversions (e.g. Transformation.Vampirism, Transformation.Undead.General)
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Transformation")
+    FGameplayTagContainer ActiveTransformations;
 
-    UFUNCTION()
-    void OnRep_HairStyle();
+    // Tracks super-categories granted by transformations (e.g. SuperCategory.Undead)
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Transformation")
+    FGameplayTagContainer ActiveInheritedCategories;
+
+    UFUNCTION() void OnRep_CharacterIdentity();
+    UFUNCTION() void OnRep_ReplicatedMorphs();
+    UFUNCTION() void OnRep_AppearanceColors();
+    UFUNCTION() void OnRep_HairStyle();
+
+    void HandleSingleMorphReplicated(const FDynamicCharacterMorphItem& MorphItem);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Customization")
+    void InitializeCustomization(FGameplayTag TemplateTag, ECharacterGender Gender);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Customization")
+    void ServerSetMorphSliderValue(FGameplayTag SliderTag, float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Customization")
+    void ApplyCustomizationToMesh();
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Customization")
+    float GetMorphSliderValue(FGameplayTag SliderTag) const;
+
+    // --- Dynamic Transformation & Siring API ---
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Transformation")
+    void ServerApplyTransformation(FGameplayTag TransformationTag);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Transformation")
+    void ServerSireConversion(UDynamicCustomizationComponent* TargetCustomization, FGameplayTag TransformationTag);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Transformation")
+    bool DoesCharacterInvertHealingToDamage() const { return bCachedInvertsHealingToDamage; }
+    
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Evolution")
+    bool ServerCheckAndTriggerEvolution(FGameplayTag BaseTemplateTag);
 
 private:
     float ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const;
     void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value);
 
     TMap<FGameplayTag, float> LocalMorphCache;
+
+    UPROPERTY(Replicated)
+    bool bCachedInvertsHealingToDamage = false;
 };

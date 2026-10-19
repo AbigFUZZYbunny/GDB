@@ -6,6 +6,7 @@
 #include "DynamicLogicEvaluator.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicGameState.h"
+#include "DynamicCustomizationComponent.h"
 
 UDynamicEffectExecution::UDynamicEffectExecution() {}
 
@@ -18,6 +19,7 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
     UAbilitySystemComponent* SourceASC = ExecutionParams.GetSourceAbilitySystemComponent();
     UAbilitySystemComponent* TargetASC = ExecutionParams.GetTargetAbilitySystemComponent();
     if (!TargetASC) return;
+
     AActor* TargetActor = TargetASC->GetOwner();
     if (!TargetActor) return;
 
@@ -35,6 +37,7 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
             if (const FGameplayTagContainer* SourceTagsPtr = Spec.CapturedSourceTags.GetAggregatedTags()) SourceTags = *SourceTagsPtr;
             FGameplayTagContainer TargetTags;
             if (const FGameplayTagContainer* TargetTagsPtr = Spec.CapturedTargetTags.GetAggregatedTags()) TargetTags = *TargetTagsPtr;
+
             if (!UDynamicLogicEvaluator::EvaluateConditionTree(*ConditionTree, SourceASC, TargetASC, SourceTags, TargetTags)) return;
         }
     }
@@ -46,10 +49,16 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
     const FPhysicsLimbConfig* LimbData = DynamicGS->GetLimbData(DynContext->GetTargetLimbId());
     const uint8 HitLimbId = DynContext->GetTargetLimbId();
 
-    // Resolve target damage attribute from LimbConfig or global CalculationSettings
     const FGameplayTag DamageTargetTag = (LimbData && LimbData->IntegrityAttributeTag.IsValid())
         ? LimbData->IntegrityAttributeTag
         : CalcSettings.PrimaryDamageTargetAttributeTag;
+
+    // Check if Target has an active Transformation that inverts Healing into Damage (Undead / Vampire)
+    bool bInvertHealing = false;
+    if (const UDynamicCustomizationComponent* TargetCust = TargetActor->FindComponentByClass<UDynamicCustomizationComponent>())
+    {
+        bInvertHealing = TargetCust->DoesCharacterInvertHealingToDamage();
+    }
 
     float EvaluatedDamage = 0.0f;
 
@@ -81,25 +90,34 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
             {
                 if (!ModDef.TargetAttributeTag.IsValid()) continue;
 
-                float CurrentVal = TargetAttributes->GetDynamicAttributeValue(ModDef.TargetAttributeTag, 0);
+                float EffectiveBaseMag = ModDef.BaseMagnitude;
+
+                // Invert positive healing on Health attribute into negative damage if target is Undead/Vampire
+                if (bInvertHealing && DamageTargetTag.IsValid() && ModDef.TargetAttributeTag == DamageTargetTag &&
+                    ModDef.ModifierOp == EEffectModifierOp::Additive && EffectiveBaseMag > 0.0f)
+                {
+                    EffectiveBaseMag = -EffectiveBaseMag;
+                }
+
+                const float CurrentVal = TargetAttributes->GetDynamicAttributeValue(ModDef.TargetAttributeTag, 0);
                 float CalculatedVal = CurrentVal;
 
                 switch (ModDef.ModifierOp)
                 {
                     case EEffectModifierOp::Additive:
-                        CalculatedVal = CurrentVal + ModDef.BaseMagnitude;
+                        CalculatedVal = CurrentVal + EffectiveBaseMag;
                         break;
                     case EEffectModifierOp::Multiplicative:
-                        CalculatedVal = CurrentVal * (1.0f + ModDef.BaseMagnitude);
+                        CalculatedVal = CurrentVal * (1.0f + EffectiveBaseMag);
                         break;
                     case EEffectModifierOp::Override:
-                        CalculatedVal = ModDef.BaseMagnitude;
+                        CalculatedVal = EffectiveBaseMag;
                         break;
                 }
 
-                if (DamageTargetTag.IsValid() && ModDef.TargetAttributeTag == DamageTargetTag && ModDef.ModifierOp == EEffectModifierOp::Additive && ModDef.BaseMagnitude < 0.0f)
+                if (DamageTargetTag.IsValid() && ModDef.TargetAttributeTag == DamageTargetTag && ModDef.ModifierOp == EEffectModifierOp::Additive && EffectiveBaseMag < 0.0f)
                 {
-                    const float ModDamage = FMath::Abs(ModDef.BaseMagnitude);
+                    const float ModDamage = FMath::Abs(EffectiveBaseMag);
                     EvaluatedDamage += ModDamage;
                     if (HitLimbId > 0)
                     {
@@ -107,7 +125,6 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
                         TargetAttributes->SetDynamicAttributeValue(DamageTargetTag, FMath::Max(0.0f, CurLimbVal - ModDamage), HitLimbId);
                     }
                 }
-
                 TargetAttributes->SetDynamicAttributeValue(ModDef.TargetAttributeTag, CalculatedVal, 0);
             }
         }

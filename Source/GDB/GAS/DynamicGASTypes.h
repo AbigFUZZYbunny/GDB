@@ -1693,71 +1693,57 @@ struct FCharacterGenderProfile
 };
 
 USTRUCT(BlueprintType)
-struct FCharacterTemplateDef
+struct FUndeadTemplateConversionRule
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag TemplateTag;
+    // If true, converts any base character template into an undead variant on spawn
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Undead")
+    bool bCanBeUndead = true;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag ParentTemplateTag;
+    // Suffix or prefix applied to localization name (e.g., "Undead Elf" or "Skeleton Wolf")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Undead")
+    FString NamePrefix = TEXT("Undead ");
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FDynamicLocalizationProfile Localization;
+    // Overridden AI Agent Profile (e.g., switching from Grazer or Villager AI to Haunt/Necromancer AI)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Undead")
+    FGameplayTag OverrideAIAgentTag = FGameplayTag::RequestGameplayTag(FName("AI.Type.Monster.Undead.Spectral"));
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
+    // Multiplicative or Additive Stat Modifiers applied during conversion (e.g., Agility penalty, Health bonus)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Undead")
+    TArray<FGenderAttributeModifier> UndeadStatModifiers;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TSoftClassPtr<UAnimInstance> AnimationControllerClass;
+    // Forced Color Gradient Tint applied to skin/fur/scales to turn them ashen/decayed
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Undead")
+    FDynamicColorGradient UndeadColorTint;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag SkeletonTypeTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FCharacterAttributeRangeDef> AttributeRanges;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FCharacterWeightedAttributeDef> WeightedAttributes;
-
-    // Gender variants incorporating stat and slider clamp modifiers
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FCharacterGenderProfile> GenderVariants;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FRacialSliderClampOverride> RacialSliderClamps;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FTagFloatPair> DefaultBodyslideSliders;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FGameplayTag> StartupAbilities;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FGameplayTag> StartupEquipmentArchetypes;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FDynamicColorGradient> AllowedSkinTones;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    TArray<FDynamicColorGradient> AllowedHairColors;
-    
-    // The default AI Behavior profile assigned if this character is spawned as an NPC
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
-    FGameplayTag DefaultAIAgentTag;
+    // Granted special abilities upon conversion (e.g., Life Drain, Immunity to Poison)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Undead")
+    TArray<FGameplayTag> GrantedUndeadAbilities;
 };
 
 USTRUCT(BlueprintType)
-struct FTagCharacterTemplatePair
+struct FCharacterProfessionRollDef
 {
     GENERATED_BODY()
 
-    UPROPERTY()
-    FGameplayTag KeyTag;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag ProfessionTag;
 
-    UPROPERTY()
-    FCharacterTemplateDef ValueDef;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    float ChanceWeight = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterDefaultPlaceBindingDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag PlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag DefaultLandmarkTag;
 };
 
 // --- BODYSWAP / BONE SCALING & SLIDER DEFINITIONS ---
@@ -1815,6 +1801,121 @@ struct FBodyslideSliderDef
     // Associated Mesh Morph Targets driven by this slider (e.g. "Body_Muscular", "Ear_Elf_Long")
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Sliders")
     TArray<FName> TargetMorphTargets;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicSkeletonDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
+    FGameplayTag SkeletonTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
+    FGameplayTag ParentSkeletonTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
+    TArray<FBodyslideSliderDef> BodyslideSliders;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
+    TArray<FPhysicsLimbConfig> Limbs;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicPersonalityProfile
+{
+    GENERATED_BODY()
+
+    // Personality trait tags (e.g., Personality.Trait.Glutton, Personality.Trait.Ascetic, Personality.Trait.Industrious)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
+    FGameplayTagContainer PersonalityTraitTags;
+
+    // Food & Drink taste multipliers: Item/Category Tag -> Mood/Satisfaction multiplier
+    // e.g., { "Item.Food.Meat.Roasted": 1.5, "Item.Drink.Alcohol.DwarvenAle": 2.0, "Item.Food.Vegetable.Raw": -0.5 }
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
+    FDynamicTagFloatMapWrapper FoodAndDrinkPreferences;
+
+    // Activity & Social preferences: Activity/Topic Tag -> Affinity/Mood weight
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
+    FDynamicTagFloatMapWrapper ActivityPreferences;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterTemplateDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag TemplateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag ParentTemplateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TSoftClassPtr<UAnimInstance> AnimationControllerClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag SkeletonTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag DefaultAIAgentTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FDynamicColorGradient> AllowedSkinTones;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FDynamicColorGradient> AllowedHairColors;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterAttributeRangeDef> AttributeRanges;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterWeightedAttributeDef> WeightedAttributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterProfessionRollDef> ProfessionRolls;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FDynamicPersonalityProfile PersonalityProfile;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterDefaultPlaceBindingDef> DefaultPlaceBindings;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FCharacterGenderProfile> GenderVariants;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FRacialSliderClampOverride> RacialSliderClamps;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FTagFloatPair> DefaultBodyslideSliders;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FGameplayTag> StartupAbilities;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    TArray<FGameplayTag> StartupEquipmentArchetypes;
+};
+
+USTRUCT(BlueprintType)
+struct FTagCharacterTemplatePair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FCharacterTemplateDef ValueDef;
 };
 
 USTRUCT(BlueprintType)
@@ -2209,25 +2310,6 @@ struct TStructOpsTypeTraits<FFastNeedStateArray> : public TStructOpsTypeTraitsBa
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicPersonalityProfile
-{
-    GENERATED_BODY()
-
-    // Personality trait tags (e.g., Personality.Trait.Glutton, Personality.Trait.Ascetic, Personality.Trait.Industrious)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
-    FGameplayTagContainer PersonalityTraitTags;
-
-    // Food & Drink taste multipliers: Item/Category Tag -> Mood/Satisfaction multiplier
-    // e.g., { "Item.Food.Meat.Roasted": 1.5, "Item.Drink.Alcohol.DwarvenAle": 2.0, "Item.Food.Vegetable.Raw": -0.5 }
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
-    FDynamicTagFloatMapWrapper FoodAndDrinkPreferences;
-
-    // Activity & Social preferences: Activity/Topic Tag -> Affinity/Mood weight
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
-    FDynamicTagFloatMapWrapper ActivityPreferences;
-};
-
-USTRUCT(BlueprintType)
 struct FDynamicAIAbilityRule
 {
     GENERATED_BODY()
@@ -2328,6 +2410,132 @@ struct FTagAIAgentDefPair
 
     UPROPERTY()
     FDynamicAIAgentDef ValueDef;
+};
+
+// --- DYNAMIC TRANSFORMATION & CONVERSION SYSTEM ---
+
+USTRUCT(BlueprintType)
+struct FDynamicTransformationRule
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    FGameplayTag TransformationTag; // e.g. Transformation.Vampirism, Transformation.Lycanthropy.Werewolf, Transformation.Undead, Transformation.Lichdom
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    FDynamicLocalizationProfile Localization;
+
+    // Sub-category tags (e.g. SuperCategory.Undead applied to Vampires)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    FGameplayTagContainer InheritedCategoryTags; 
+
+    // Restrictions on what base character templates can undergo this transformation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    FGameplayTagContainer AllowedBaseTemplateTags; // e.g. Character.Humanoid (Empty = Any Skeleton)
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    FGameplayTag OverrideAIAgentTag;
+
+    // Color gradient tint override (e.g. Ashen pale skin for vampires/undead, fur coloration for werewolves)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    bool bApplyColorTint = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    FDynamicColorGradient TransformationColorTint;
+
+    // Attribute modifiers applied upon transformation (e.g. Vampires gain agility/strength, lose max HP when siring)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    TArray<FGenderAttributeModifier> TransformationStatModifiers;
+
+    // Granted special abilities (e.g. BatForm, BloodSiphon, Howl)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation")
+    TArray<FGameplayTag> GrantedAbilities;
+
+    // --- Systemic Rules ---
+    // If true, healing magic deals damage instead of restoring health (Undead/Vampire rule)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation|Rules")
+    bool bInvertsHealingToDamage = false;
+
+    // If true, character can consume blood/meat to restore health
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation|Rules")
+    bool bCanSustainViaBloodDrain = false;
+
+    // If true, siring/turning another character permanently drains this character's Max HP (Sharing eternal life)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation|Rules")
+    bool bSiringDrainsMaxHP = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Transformation|Rules")
+    float SiringMaxHPPenaltyAmount = 15.0f;
+};
+
+// Wrapper for GameState Master Registry Map
+USTRUCT(BlueprintType)
+struct FTagTransformationPair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FDynamicTransformationRule ValueDef;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEvolutionBranch
+{
+    GENERATED_BODY()
+
+    // Unique identifier for this evolutionary path (e.g. Evolution.Goblin.ToHobgoblin)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag EvolutionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FDynamicLocalizationProfile Localization;
+
+    // Target Character Template Tag to mutate into (e.g. Character.Monster.Goblin.Hobgoblin)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag TargetCharacterTemplateTag;
+
+    // Optional ConditionTree evaluated on the character (e.g. checking Experience >= 1000 or DaysWithoutEatingFlesh >= 5)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FName PrerequisiteConditionTreeName = NAME_None;
+
+    // Direct attribute milestone checks required (e.g. Attribute.Stat.Level >= 5.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag RequiredAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float RequiredAttributeMinimumValue = 0.0f;
+
+    // Stat bonuses or attribute resets applied upon successful evolution
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    TArray<FDynamicModifierDef> EvolutionStatModifiers;
+
+    // New AI Agent Profile applied upon evolution (e.g. switching from scavenger to berserker AI)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag NewAIAgentTag;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEvolutionContainer
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    TArray<FDynamicEvolutionBranch> EvolutionBranches;
+};
+
+USTRUCT(BlueprintType)
+struct FTagEvolutionPair
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag KeyTag;
+
+    UPROPERTY()
+    FDynamicEvolutionContainer ValueContainer;
 };
 
 // --- ROUTING MAP PAIRS ---

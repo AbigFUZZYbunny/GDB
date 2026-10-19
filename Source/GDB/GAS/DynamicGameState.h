@@ -27,9 +27,12 @@ public:
     TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     TMap<FGameplayTag, FDynamicPhysicsActorDef> MasterPhysicsActorRegistry;
     TMap<FGameplayTag, FCharacterTemplateDef> CharacterTemplatesRegistry;
+    TMap<FGameplayTag, FDynamicSkeletonDef> SkeletonMasterRegistry;
     TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
     TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
     TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
+    TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
+    TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
@@ -63,7 +66,7 @@ public:
     const FPhysicsLimbConfig* GetLimbData(uint8 LimbId) const;
     const FPhysicsJointNodeConfig* GetBoneJointData(const FName& BoneName) const;
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
-    
+
     const FPhysicsCalculationSettings& GetCalculationSettings() const { return CalculationSettings; }
 
 private:

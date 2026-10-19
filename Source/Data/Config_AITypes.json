@@ -1,57 +1,409 @@
 ﻿{
-  "_comment": "Master AI Agent Definitions: Dictates combat logic, ability conditions, pack cohesion, dietary rules, and idle tasks for dynamic characters.",
+  "_comment": "Master AI Agent Registry: Controls autonomous behavior, pack hunting, web spinning, grazing, and territorial aggression.",
   "MasterAIAgentRegistry": {
+    "AI.Type.Humanoid.Standard": {
+      "AIAgentTag": "AI.Type.Humanoid.Standard",
+      "AIControllerClass": "/Game/AI/BP_HumanoidAIController.BP_HumanoidAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Civilization", "bFormsPacks": true, "MaxGroupSize": 25, "CohesionRadius": 4000.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Cooked", "Item.Food.Bread", "Item.Drink.Water" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.40,
+      "AbilityUsageRules": [],
+      "IdleTasks": []
+    },
     "AI.Type.Beast.Wolf": {
       "AIAgentTag": "AI.Type.Beast.Wolf",
       "AIControllerClass": "/Game/AI/BP_BeastAIController.BP_BeastAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Beast.WolfPack",
-        "bFormsPacks": true,
-        "MaxGroupSize": 6,
-        "CohesionRadius": 3000.0,
-        "bDefendsPackMembers": true
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Pack", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 3000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.20,
       "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.Bite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 180.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Grazer": {
+      "AIAgentTag": "AI.Type.Beast.Grazer",
+      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 15, "CohesionRadius": 2500.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.99,
+      "AbilityUsageRules": [],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Dragon": {
+      "AIAgentTag": "AI.Type.Monster.Dragon",
+      "AIControllerClass": "/Game/AI/BP_DragonAIController.BP_DragonAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Solitary", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.05,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.DragonFireBreath", "RequiredConditionTreeName": "Trigger.Condition.TargetInCone", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 2000.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Canine.GreyWolf": {
+      "AIAgentTag": "AI.Type.Beast.Canine.GreyWolf",
+      "AIControllerClass": "/Game/AI/BP_PackHunterAIController.BP_PackHunterAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Beast.GreyWolfPack",
+        "bFormsPacks": true,
+        "MaxGroupSize": 8,
+        "CohesionRadius": 4000.0,
+        "bDefendsPackMembers": true
+      },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Cervidae" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.20,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.Bite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 160.0 },
+        { "AbilityTag": "Ability.Combat.PackHowl", "RequiredConditionTreeName": "Trigger.Condition.PackIsolatedOrTargetSpotted", "PriorityWeight": 95.0, "MinRange": 0.0, "MaxRange": 6000.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Canine.WhiteWolf": {
+      "AIAgentTag": "AI.Type.Beast.Canine.WhiteWolf",
+      "AIControllerClass": "/Game/AI/BP_PackHunterAIController.BP_PackHunterAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Beast.TundraPack",
+        "bFormsPacks": true,
+        "MaxGroupSize": 6,
+        "CohesionRadius": 3500.0,
+        "bDefendsPackMembers": true
+      },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.15,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.Bite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 160.0 },
+        { "AbilityTag": "Ability.Combat.FrostPounce", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 95.0, "MinRange": 200.0, "MaxRange": 800.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Canine.RedWolf": {
+      "AIAgentTag": "AI.Type.Beast.Canine.RedWolf",
+      "AIControllerClass": "/Game/AI/BP_StealthHunterAIController.BP_StealthHunterAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Beast.ForestFamily",
+        "bFormsPacks": true,
+        "MaxGroupSize": 4,
+        "CohesionRadius": 2500.0,
+        "bDefendsPackMembers": true
+      },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.30,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.QuickBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 150.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Canine.DireWolf": {
+      "AIAgentTag": "AI.Type.Beast.Canine.DireWolf",
+      "AIControllerClass": "/Game/AI/BP_ApexPredatorAIController.BP_ApexPredatorAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Beast.DirePack",
+        "bFormsPacks": true,
+        "MaxGroupSize": 5,
+        "CohesionRadius": 5000.0,
+        "bDefendsPackMembers": true
+      },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.05,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.CrushingBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 200.0 },
+        { "AbilityTag": "Ability.Combat.TerrifyingRoar", "RequiredConditionTreeName": "Trigger.Condition.MultipleEnemiesNearby", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 1000.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.TrueDragon": {
+      "AIAgentTag": "AI.Type.Monster.TrueDragon",
+      "AIControllerClass": "/Game/AI/BP_DragonAIController.BP_DragonAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryApex", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.02,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.ElementalBreath", "RequiredConditionTreeName": "Trigger.Condition.TargetInCone", "PriorityWeight": 100.0, "MinRange": 300.0, "MaxRange": 2500.0 },
+        { "AbilityTag": "Ability.Combat.TailSwipe", "RequiredConditionTreeName": "Trigger.Condition.TargetBehind", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 300.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Hydra": {
+      "AIAgentTag": "AI.Type.Monster.Hydra",
+      "AIControllerClass": "/Game/AI/BP_HydraAIController.BP_HydraAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Solitary", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.MultiBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 250.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.WyvernOrDrake": {
+      "AIAgentTag": "AI.Type.Monster.WyvernOrDrake",
+      "AIControllerClass": "/Game/AI/BP_AggressiveBeastAIController.BP_AggressiveBeastAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Pack", "bFormsPacks": true, "MaxGroupSize": 3, "CohesionRadius": 2000.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.VenomStingOrClaw", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 200.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Cervidae.Standard": {
+      "AIAgentTag": "AI.Type.Beast.Cervidae.Standard",
+      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 12, "CohesionRadius": 3000.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass", "Item.Food.Leaves" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 1.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Movement.FleeDash", "RequiredConditionTreeName": "Trigger.Condition.EnemyNearby", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 1000.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Cervidae.Guardian": {
+      "AIAgentTag": "AI.Type.Monster.Cervidae.Guardian",
+      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.FaeProtector", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Plant" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.05,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.NatureWrath", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1200.0 },
+        { "AbilityTag": "Ability.Combat.AntlerCharge", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 300.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Equidae.Standard": {
+      "AIAgentTag": "AI.Type.Beast.Equidae.Standard",
+      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 10, "CohesionRadius": 3500.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass", "Item.Food.Hay" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 1.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Movement.GallopEscape", "RequiredConditionTreeName": "Trigger.Condition.EnemyNearby", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 1200.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Equidae.Mythical": {
+      "AIAgentTag": "AI.Type.Monster.Equidae.Mythical",
+      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.FaeProtector", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Plant" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.HolyBeamOrHellflame", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1500.0 },
+        { "AbilityTag": "Ability.Combat.HoofStomp", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 200.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Sus.Domestic": {
+      "AIAgentTag": "AI.Type.Beast.Sus.Domestic",
+      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Farmherd", "bFormsPacks": true, "MaxGroupSize": 8, "CohesionRadius": 2000.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Vegetable", "Item.Food.Scraps" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.95,
+      "AbilityUsageRules": [],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Sus.WildBoar": {
+      "AIAgentTag": "AI.Type.Beast.Sus.WildBoar",
+      "AIControllerClass": "/Game/AI/BP_AggressiveBeastAIController.BP_AggressiveBeastAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Sounder", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 2500.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Root", "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.BoarCharge", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 1000.0 },
+        { "AbilityTag": "Ability.Combat.TuskGore", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 180.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Sus.Fantasy": {
+      "AIAgentTag": "AI.Type.Monster.Sus.Fantasy",
+      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryBeast", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "Item.Food.Plant" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.EarthshakerCharge", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 1200.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Avian.Songbird": {
+      "AIAgentTag": "AI.Type.Beast.Avian.Songbird",
+      "AIControllerClass": "/Game/AI/BP_FlockAIController.BP_FlockAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Flock", "bFormsPacks": true, "MaxGroupSize": 30, "CohesionRadius": 1500.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Seed", "Item.Food.Insect" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 1.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Movement.FlightEscape", "RequiredConditionTreeName": "Trigger.Condition.EnemyNearby", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 800.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Avian.Raptor": {
+      "AIAgentTag": "AI.Type.Beast.Avian.Raptor",
+      "AIControllerClass": "/Game/AI/BP_AerialPredatorAIController.BP_AerialPredatorAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.SolitaryHunter", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "Item.Food.Rodent" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.15,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.AerialDive", "RequiredConditionTreeName": "Trigger.Condition.TargetInLongRange", "PriorityWeight": 100.0, "MinRange": 300.0, "MaxRange": 2000.0 },
+        { "AbilityTag": "Ability.Combat.Talons", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 150.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Avian.Fantasy": {
+      "AIAgentTag": "AI.Type.Monster.Avian.Fantasy",
+      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Mythical", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.FlameWingsOrStormCall", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 150.0, "MaxRange": 1500.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Reptile.Ambush": {
+      "AIAgentTag": "AI.Type.Beast.Reptile.Ambush",
+      "AIControllerClass": "/Game/AI/BP_AmbushPredatorAIController.BP_AmbushPredatorAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.SolitaryReptile", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.VenomousBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 180.0 },
+        { "AbilityTag": "Ability.Combat.TailLash", "RequiredConditionTreeName": "Trigger.Condition.TargetBehind", "PriorityWeight": 80.0, "MinRange": 0.0, "MaxRange": 250.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Reptile.Magical": {
+      "AIAgentTag": "AI.Type.Monster.Reptile.Magical",
+      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryBeast", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.PetrifyingGazeOrAcidSpit", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 150.0, "MaxRange": 1000.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Fish.Schooling": {
+      "AIAgentTag": "AI.Type.Beast.Fish.Schooling",
+      "AIControllerClass": "/Game/AI/BP_SchoolingFishAIController.BP_SchoolingFishAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.School", "bFormsPacks": true, "MaxGroupSize": 50, "CohesionRadius": 1000.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Plankton", "Item.Food.Insect" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 1.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Movement.SchoolScatter", "RequiredConditionTreeName": "Trigger.Condition.EnemyNearby", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 500.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Beast.Fish.Predator": {
+      "AIAgentTag": "AI.Type.Beast.Fish.Predator",
+      "AIControllerClass": "/Game/AI/BP_AquaticPredatorAIController.BP_AquaticPredatorAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.AquaticHunter", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Fish" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.15,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.AquaticBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 150.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Fish.Abyssal": {
+      "AIAgentTag": "AI.Type.Monster.Fish.Abyssal",
+      "AIControllerClass": "/Game/AI/BP_AbyssalAmbushAIController.BP_AbyssalAmbushAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Abyss", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.BioluminescentLureCurse", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 100.0, "MaxRange": 1000.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Arthropod.Spider": {
+      "AIAgentTag": "AI.Type.Monster.Arthropod.Spider",
+      "AIControllerClass": "/Game/AI/BP_AmbushPredatorAIController.BP_AmbushPredatorAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Monster.SpinWeb", "RequiredConditionTreeName": "Trigger.Condition.TargetIsMoving", "PriorityWeight": 95.0, "MinRange": 200.0, "MaxRange": 1000.0 },
+        { "AbilityTag": "Ability.Combat.VenomBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 160.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Arthropod.Spider.Hunter": {
+      "AIAgentTag": "AI.Type.Monster.Arthropod.Spider.Hunter",
+      "AIControllerClass": "/Game/AI/BP_AggressiveHunterAIController.BP_AggressiveHunterAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Monster.Arachnid",
+        "bFormsPacks": false,
+        "MaxGroupSize": 1,
+        "CohesionRadius": 0.0,
+        "bDefendsPackMembers": false
+      },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Insect" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
         {
-          "AbilityTag": "Ability.Combat.Bite",
-          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
-          "PriorityWeight": 80.0,
-          "MinRange": 0.0,
-          "MaxRange": 150.0
+          "AbilityTag": "Ability.Movement.LeapAmbush",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange",
+          "PriorityWeight": 90.0,
+          "MinRange": 300.0,
+          "MaxRange": 800.0
         },
         {
-          "AbilityTag": "Ability.Combat.Howl",
-          "RequiredConditionTreeName": "Trigger.Condition.HasPackMembersNearby",
+          "AbilityTag": "Ability.Combat.VenomBite",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
           "PriorityWeight": 100.0,
           "MinRange": 0.0,
-          "MaxRange": 5000.0
+          "MaxRange": 160.0
         }
       ],
       "IdleTasks": [
         {
-          "TaskTag": "Task.Beast.PatrolTerritory",
-          "BasePriorityWeight": 50.0,
+          "TaskTag": "Task.Monster.ProwlForPrey",
+          "BasePriorityWeight": 85.0,
           "LinkedAbilityOrRecipeTag": "None",
           "RequiredItemTags": [],
           "ProducedOutputTags": [],
-          "TaskConditionTreeName": "None"
+          "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible"
         },
         {
-          "TaskTag": "Task.Beast.Sleep",
-          "BasePriorityWeight": 80.0,
+          "TaskTag": "Task.Monster.StalkPrey",
+          "BasePriorityWeight": 95.0,
           "LinkedAbilityOrRecipeTag": "None",
           "RequiredItemTags": [],
           "ProducedOutputTags": [],
-          "TaskConditionTreeName": "Trigger.Condition.IsNightTime"
+          "TaskConditionTreeName": "Trigger.Condition.TargetDetected"
         }
       ]
     },
-    "AI.Type.Monster.Spider": {
-      "AIAgentTag": "AI.Type.Monster.Spider",
-      "AIControllerClass": "/Game/AI/BP_MonsterAIController.BP_MonsterAIController_C",
+    "AI.Type.Monster.Arthropod.Spider.Trapper": {
+      "AIAgentTag": "AI.Type.Monster.Arthropod.Spider.Trapper",
+      "AIControllerClass": "/Game/AI/BP_AmbushTrapperAIController.BP_AmbushTrapperAIController_C",
       "GroupDynamics": {
         "GroupArchetypeTag": "Faction.Monster.Arachnid",
         "bFormsPacks": false,
@@ -60,15 +412,15 @@
         "bDefendsPackMembers": false
       },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "State.Status.Webbed" ],
-      "bHuntsForFood": true,
-      "FleeHealthThreshold": 0.10,
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.05,
       "AbilityUsageRules": [
         {
           "AbilityTag": "Ability.Monster.SpinWeb",
-          "RequiredConditionTreeName": "Trigger.Condition.TargetIsMoving",
+          "RequiredConditionTreeName": "Trigger.Condition.NeedsWebTrap",
           "PriorityWeight": 90.0,
-          "MinRange": 300.0,
-          "MaxRange": 1200.0
+          "MinRange": 0.0,
+          "MaxRange": 500.0
         },
         {
           "AbilityTag": "Ability.Combat.VenomBite",
@@ -80,16 +432,16 @@
       ],
       "IdleTasks": [
         {
-          "TaskTag": "Task.Monster.BuildWebTrap",
+          "TaskTag": "Task.Monster.ConstructWebNode",
           "BasePriorityWeight": 70.0,
-          "LinkedAbilityOrRecipeTag": "Ability.Monster.ConstructWebNode",
+          "LinkedAbilityOrRecipeTag": "Ability.Monster.SpinWeb",
           "RequiredItemTags": [],
           "ProducedOutputTags": [ "Actor.Hazard.SpiderWeb" ],
           "TaskConditionTreeName": "Trigger.Condition.NoWebsNearby"
         },
         {
-          "TaskTag": "Task.Monster.AmbushWait",
-          "BasePriorityWeight": 85.0,
+          "TaskTag": "Task.Monster.WaitInWebAmbush",
+          "BasePriorityWeight": 95.0,
           "LinkedAbilityOrRecipeTag": "None",
           "RequiredItemTags": [],
           "ProducedOutputTags": [],
@@ -97,30 +449,55 @@
         }
       ]
     },
-    "AI.Type.Humanoid.Villager": {
-      "AIAgentTag": "AI.Type.Humanoid.Villager",
-      "AIControllerClass": "/Game/AI/BP_HumanoidAIController.BP_HumanoidAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Civilization.Townsfolk",
-        "bFormsPacks": true,
-        "MaxGroupSize": 20,
-        "CohesionRadius": 5000.0,
-        "bDefendsPackMembers": false
-      },
-      "DietaryTags": [ "Item.Food.Cooked", "Item.Food.Bread", "Item.Drink.Water", "Item.Drink.Alcohol" ],
+    "AI.Type.Beast.Arthropod.InsectSwarm": {
+      "AIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
+      "AIControllerClass": "/Game/AI/BP_SwarmAIController.BP_SwarmAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Colony", "bFormsPacks": true, "MaxGroupSize": 40, "CohesionRadius": 1500.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Organic" ],
       "bHuntsForFood": false,
-      "FleeHealthThreshold": 0.50,
+      "FleeHealthThreshold": 0.05,
       "AbilityUsageRules": [
-        {
-          "AbilityTag": "Ability.Combat.UnarmedStrike",
-          "RequiredConditionTreeName": "Trigger.Condition.IsCornered",
-          "PriorityWeight": 50.0,
-          "MinRange": 0.0,
-          "MaxRange": 150.0
-        }
+        { "AbilityTag": "Ability.Combat.MandibleStab", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 120.0 }
       ],
       "IdleTasks": []
-      "_comment_IdleTasks": "Humanoids leave IdleTasks empty because their tasks are injected dynamically by their Assigned Profession (e.g., Woodcutter, Farmer) defined in SocialAndProfessions.json"
+    },
+    "AI.Type.Beast.Arthropod.Crustacean": {
+      "AIAgentTag": "AI.Type.Beast.Arthropod.Crustacean",
+      "AIControllerClass": "/Game/AI/BP_DefensiveAquaticAIController.BP_DefensiveAquaticAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Scuttler", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Scraps", "Item.Food.Plant" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.30,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.PincerSnap", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 200.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Undead.Spectral": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Spectral",
+      "AIControllerClass": "/Game/AI/BP_HauntAIController.BP_HauntAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.UndeadHorde", "bFormsPacks": true, "MaxGroupSize": 10, "CohesionRadius": 4000.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "State.Status.LifeForce" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.SoulDrain", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 100.0, "MaxRange": 800.0 },
+        { "AbilityTag": "Ability.Magic.TerrifyingWail", "RequiredConditionTreeName": "Trigger.Condition.MultipleEnemiesNearby", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 1200.0 }
+      ],
+      "IdleTasks": []
+    },
+    "AI.Type.Monster.Undead.Lich": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Lich",
+      "AIControllerClass": "/Game/AI/BP_NecromancerAIController.BP_NecromancerAIController_C",
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.DarkCoven", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "State.Status.LifeForce" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.DeathBolt", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 2000.0 },
+        { "AbilityTag": "Ability.Magic.RaiseMinion", "RequiredConditionTreeName": "Trigger.Condition.CorpsesNearby", "PriorityWeight": 95.0, "MinRange": 0.0, "MaxRange": 1500.0 }
+      ],
+      "IdleTasks": []
     }
   }
 }

@@ -1,0 +1,119 @@
+﻿{
+  "_comment": "Master Conversion & Transformation Registry: Data-driven definitions for Vampirism, Werewolf Lycanthropy, Lichdom, and General Undead transformations, complete with stat multipliers, inheritance category tags, healing inversions, and siring penalties.",
+  "ConversionRegistry": {
+    "Transformation.Vampirism": {
+      "TransformationTag": "Transformation.Vampirism",
+      "InheritedCategoryTags": [ "SuperCategory.Undead", "SuperCategory.Vampire" ],
+      "AllowedBaseTemplateTags": [ "Character.Humanoid" ],
+      "OverrideAIAgentTag": "AI.Type.Monster.Undead.Spectral",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Vampirism" },
+          { "KeyTag": "Localization.Description", "Value": "Curses the mortal with eternal life, sunlight vulnerability, blood hunger, and the ability to sire progeny at the cost of permanent max health." }
+        ]
+      },
+      "bApplyColorTint": true,
+      "TransformationColorTint": {
+        "PrimaryColor": { "R": 0.95, "G": 0.9, "B": 0.9, "A": 1.0 },
+        "SecondaryColor": { "R": 0.4, "G": 0.05, "B": 0.05, "A": 1.0 }
+      },
+      "TransformationStatModifiers": [
+        { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Multiplicative", "Magnitude": 0.20 },
+        { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": 0.25 },
+        { "TargetAttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Additive", "Magnitude": -50.0 }
+      ],
+      "GrantedAbilities": [
+        "Ability.Magic.VampiricBite",
+        "Ability.Movement.BatFormTransform"
+      ],
+      "bInvertsHealingToDamage": true,
+      "bCanSustainViaBloodDrain": true,
+      "bSiringDrainsMaxHP": true,
+      "SiringMaxHPPenaltyAmount": 20.0
+    },
+    "Transformation.Lycanthropy.Werewolf": {
+      "TransformationTag": "Transformation.Lycanthropy.Werewolf",
+      "InheritedCategoryTags": [ "SuperCategory.Beast", "SuperCategory.Lycanthrope" ],
+      "AllowedBaseTemplateTags": [ "Character.Humanoid" ],
+      "OverrideAIAgentTag": "AI.Type.Beast.Canine.DireWolf",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Werewolf Lycanthropy" },
+          { "KeyTag": "Localization.Description", "Value": "Inflicts beast blood, granting immense physical power and predatory speed under lunar influence." }
+        ]
+      },
+      "bApplyColorTint": true,
+      "TransformationColorTint": {
+        "PrimaryColor": { "R": 0.3, "G": 0.25, "B": 0.2, "A": 1.0 },
+        "SecondaryColor": { "R": 0.1, "G": 0.08, "B": 0.05, "A": 1.0 }
+      },
+      "TransformationStatModifiers": [
+        { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": 0.40 },
+        { "TargetAttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Additive", "Magnitude": 100.0 }
+      ],
+      "GrantedAbilities": [
+        "Ability.Combat.BeastClaw",
+        "Ability.Combat.PackHowl"
+      ],
+      "bInvertsHealingToDamage": false,
+      "bCanSustainViaBloodDrain": true,
+      "bSiringDrainsMaxHP": false,
+      "SiringMaxHPPenaltyAmount": 0.0
+    },
+    "Transformation.Lichdom": {
+      "TransformationTag": "Transformation.Lichdom",
+      "InheritedCategoryTags": [ "SuperCategory.Undead", "SuperCategory.Lich" ],
+      "AllowedBaseTemplateTags": [ "Character.Humanoid" ],
+      "OverrideAIAgentTag": "AI.Type.Monster.Undead.Lich",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Lichdom" },
+          { "KeyTag": "Localization.Description", "Value": "Transcends mortal limits through dark arcana, binding the soul to a phylactery." }
+        ]
+      },
+      "bApplyColorTint": true,
+      "TransformationColorTint": {
+        "PrimaryColor": { "R": 0.2, "G": 0.2, "B": 0.25, "A": 1.0 },
+        "SecondaryColor": { "R": 0.4, "G": 0.1, "B": 0.7, "A": 1.0 }
+      },
+      "TransformationStatModifiers": [
+        { "TargetAttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Multiplicative", "Magnitude": 0.50 }
+      ],
+      "GrantedAbilities": [
+        "Ability.Magic.DeathBolt",
+        "Ability.Magic.RaiseMinion"
+      ],
+      "bInvertsHealingToDamage": true,
+      "bCanSustainViaBloodDrain": false,
+      "bSiringDrainsMaxHP": false,
+      "SiringMaxHPPenaltyAmount": 0.0
+    },
+    "Transformation.Undead.General": {
+      "TransformationTag": "Transformation.Undead.General",
+      "InheritedCategoryTags": [ "SuperCategory.Undead" ],
+      "AllowedBaseTemplateTags": [],
+      "OverrideAIAgentTag": "AI.Type.Monster.Undead.Spectral",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Undead Transformation" },
+          { "KeyTag": "Localization.Description", "Value": "General resurrection into unlife." }
+        ]
+      },
+      "bApplyColorTint": true,
+      "TransformationColorTint": {
+        "PrimaryColor": { "R": 0.35, "G": 0.4, "B": 0.45, "A": 1.0 },
+        "SecondaryColor": { "R": 0.15, "G": 0.2, "B": 0.25, "A": 1.0 }
+      },
+      "TransformationStatModifiers": [
+        { "TargetAttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Multiplicative", "Magnitude": -0.20 }
+      ],
+      "GrantedAbilities": [
+        "Ability.Magic.SoulDrain"
+      ],
+      "bInvertsHealingToDamage": true,
+      "bCanSustainViaBloodDrain": false,
+      "bSiringDrainsMaxHP": false,
+      "SiringMaxHPPenaltyAmount": 0.0
+    }
+  }
+}

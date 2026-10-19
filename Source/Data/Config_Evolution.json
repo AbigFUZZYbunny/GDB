@@ -1,0 +1,79 @@
+﻿{
+  "_comment": "Master Character Evolution Registry: Dictates evolutionary branches, experience/level prerequisites, starvation decay paths, and specialized mutant transformations.",
+  "EvolutionRegistry": {
+    "Character.Monster.Goblin": {
+      "EvolutionBranches": [
+        {
+          "EvolutionTag": "Evolution.Goblin.ToHobgoblin",
+          "TargetCharacterTemplateTag": "Character.Monster.Goblin.Hobgoblin",
+          "RequiredAttributeTag": "Attribute.Stat.Level",
+          "RequiredAttributeMinimumValue": 5.0,
+          "PrerequisiteConditionTreeName": "Trigger.Condition.GoblinReadyToAdvance",
+          "EvolutionStatModifiers": [
+            { "TargetAttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Additive", "BaseMagnitude": 50.0 },
+            { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Additive", "BaseMagnitude": 5.0 }
+          ],
+          "NewAIAgentTag": "AI.Type.Monster.Goblinoid",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Hobgoblin Evolution" },
+              { "KeyTag": "Localization.Description", "Value": "A seasoned goblin that has grown larger and stronger through combat experience." }
+            ]
+          }
+        }
+      ]
+    },
+    "Character.Monster.Zombie": {
+      "EvolutionBranches": [
+        {
+          "EvolutionTag": "Evolution.Zombie.StarvationDecayToSkeleton",
+          "TargetCharacterTemplateTag": "Character.Monster.Skeleton",
+          "RequiredAttributeTag": "None",
+          "PrerequisiteConditionTreeName": "Trigger.Condition.DaysWithoutFleshExceeded",
+          "EvolutionStatModifiers": [
+            { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Additive", "BaseMagnitude": 3.0 }
+          ],
+          "NewAIAgentTag": "AI.Type.Monster.Undead.Spectral",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Skeletal Decay" },
+              { "KeyTag": "Localization.Description", "Value": "Having consumed no fresh flesh, the zombie's rotting flesh sloughs off completely, leaving an agile skeleton." }
+            ]
+          }
+        },
+        {
+          "EvolutionTag": "Evolution.Zombie.MutationToRunner",
+          "TargetCharacterTemplateTag": "Character.Monster.Zombie.Runner",
+          "RequiredAttributeTag": "None",
+          "PrerequisiteConditionTreeName": "Trigger.Condition.HighAdrenalineInfection",
+          "EvolutionStatModifiers": [
+            { "AttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Additive", "BaseMagnitude": 8.0 }
+          ],
+          "NewAIAgentTag": "AI.Type.Beast.Wolf",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Runner Mutation" },
+              { "KeyTag": "Localization.Description", "Value": "The infection mutates the host's nervous system, creating a fast-moving, aggressive pursuer." }
+            ]
+          }
+        },
+        {
+          "EvolutionTag": "Evolution.Zombie.MutationToBloater",
+          "TargetCharacterTemplateTag": "Character.Monster.Zombie.Bloater",
+          "RequiredAttributeTag": "None",
+          "PrerequisiteConditionTreeName": "Trigger.Condition.ExcessiveConsumptionOrGasAccumulation",
+          "EvolutionStatModifiers": [
+            { "AttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Additive", "BaseMagnitude": 200.0 }
+          ],
+          "NewAIAgentTag": "AI.Type.Monster.Troll",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Bloater Mutation" },
+              { "KeyTag": "Localization.Description", "Value": "Fungal spores bloat the undead into a massive, volatile tank capable of bursting acid." }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

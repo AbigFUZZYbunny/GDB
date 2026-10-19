@@ -2,6 +2,11 @@
 #include "DynamicCustomizationComponent.h"
 #include "DynamicCharacter.h"
 #include "DynamicGameState.h"
+#include "DynamicAttributeSet.h"
+#include "DynamicGameplayAbility.h"
+#include "AbilitySystemComponent.h"
+#include "DynamicGASManagerComponent.h"
+#include "DynamicLogicEvaluator.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/SkeletalMeshComponent.h"
 
@@ -27,6 +32,9 @@ void UDynamicCustomizationComponent::GetLifetimeReplicatedProps(TArray<FLifetime
     DOREPLIFETIME(UDynamicCustomizationComponent, SkinColor);
     DOREPLIFETIME(UDynamicCustomizationComponent, HairColor);
     DOREPLIFETIME(UDynamicCustomizationComponent, ActiveHairArchetypeTag);
+    DOREPLIFETIME(UDynamicCustomizationComponent, ActiveTransformations);
+    DOREPLIFETIME(UDynamicCustomizationComponent, ActiveInheritedCategories);
+    DOREPLIFETIME(UDynamicCustomizationComponent, bCachedInvertsHealingToDamage);
 }
 
 void FDynamicCharacterMorphItem::PreReplicatedRemove(const FFastCharacterMorphArray& InArrayOwner)
@@ -90,17 +98,18 @@ void UDynamicCustomizationComponent::InitializeCustomization(FGameplayTag Templa
     if (!GS->GetCharacterTemplate(TemplateTag, TemplateDef)) return;
 
     ReplicatedMorphs.Items.Empty();
+    LocalMorphCache.Empty();
 
-    // Populate default slider values from template
     for (const FTagFloatPair& DefaultPair : TemplateDef.DefaultBodyslideSliders)
     {
         if (DefaultPair.KeyTag.IsValid())
         {
-            float ClampedVal = ClampSliderToLimits(DefaultPair.KeyTag, DefaultPair.Value);
+            const float ClampedVal = ClampSliderToLimits(DefaultPair.KeyTag, DefaultPair.Value);
             FDynamicCharacterMorphItem NewItem;
             NewItem.SliderTag = DefaultPair.KeyTag;
             NewItem.SliderValue = ClampedVal;
-            ReplicatedMorphs.Items.Add(NewItem);
+            FDynamicCharacterMorphItem& Added = ReplicatedMorphs.Items.Add_GetRef(NewItem);
+            ReplicatedMorphs.MarkItemDirty(Added);
             LocalMorphCache.Add(DefaultPair.KeyTag, ClampedVal);
         }
     }
@@ -117,9 +126,6 @@ float UDynamicCustomizationComponent::ClampSliderToLimits(FGameplayTag SliderTag
     FCharacterTemplateDef TemplateDef;
     if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return RawValue;
 
-    float MinL = 0.0f;
-    float MaxL = 1.0f;
-
     // 1. Check gender-specific slider clamps first
     for (const FCharacterGenderProfile& Variant : TemplateDef.GenderVariants)
     {
@@ -129,9 +135,7 @@ float UDynamicCustomizationComponent::ClampSliderToLimits(FGameplayTag SliderTag
             {
                 if (Clamp.SliderTag == SliderTag)
                 {
-                    MinL = Clamp.ClampedMin;
-                    MaxL = Clamp.ClampedMax;
-                    return FMath::Clamp(RawValue, MinL, MaxL);
+                    return FMath::Clamp(RawValue, Clamp.ClampedMin, Clamp.ClampedMax);
                 }
             }
         }
@@ -142,9 +146,7 @@ float UDynamicCustomizationComponent::ClampSliderToLimits(FGameplayTag SliderTag
     {
         if (Clamp.SliderTag == SliderTag)
         {
-            MinL = Clamp.ClampedMin;
-            MaxL = Clamp.ClampedMax;
-            return FMath::Clamp(RawValue, MinL, MaxL);
+            return FMath::Clamp(RawValue, Clamp.ClampedMin, Clamp.ClampedMax);
         }
     }
 
@@ -155,7 +157,7 @@ void UDynamicCustomizationComponent::ServerSetMorphSliderValue(FGameplayTag Slid
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !SliderTag.IsValid()) return;
 
-    float ClampedValue = ClampSliderToLimits(SliderTag, Value);
+    const float ClampedValue = ClampSliderToLimits(SliderTag, Value);
     LocalMorphCache.Add(SliderTag, ClampedValue);
 
     bool bFound = false;
@@ -208,10 +210,23 @@ void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag S
     FCharacterTemplateDef TemplateDef;
     if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return;
 
-    // Look up skeletal Bodyslide slider definitions from the skeleton registry
-    // (Assuming SkeletonRegistry is accessible via GameState or stored locally)
-    // Here we apply morph targets directly:
-    // MeshComp->SetMorphTarget(MorphName, Value);
+    if (const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag))
+    {
+        for (const FBodyslideSliderDef& SliderDef : SkelDef->BodyslideSliders)
+        {
+            if (SliderDef.SliderTag == SliderTag)
+            {
+                for (const FName& MorphName : SliderDef.TargetMorphTargets)
+                {
+                    if (!MorphName.IsNone())
+                    {
+                        MeshComp->SetMorphTarget(MorphName, Value);
+                    }
+                }
+                break;
+            }
+        }
+    }
 }
 
 void UDynamicCustomizationComponent::OnRep_AppearanceColors()
@@ -219,7 +234,6 @@ void UDynamicCustomizationComponent::OnRep_AppearanceColors()
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
     if (CharOwner && CharOwner->GetMeshComponent())
     {
-        // Pushes vector parameters to the Dynamic Material Instance
         CharOwner->GetMeshComponent()->SetVectorParameterValueOnMaterials(TEXT("SkinColorPrimary"), FVector(SkinColor.PrimaryColor));
         CharOwner->GetMeshComponent()->SetVectorParameterValueOnMaterials(TEXT("SkinColorSecondary"), FVector(SkinColor.SecondaryColor));
         CharOwner->GetMeshComponent()->SetVectorParameterValueOnMaterials(TEXT("HairColorPrimary"), FVector(HairColor.PrimaryColor));
@@ -229,5 +243,201 @@ void UDynamicCustomizationComponent::OnRep_AppearanceColors()
 
 void UDynamicCustomizationComponent::OnRep_HairStyle()
 {
-    // Implementation: Spawns the ADynamicPhysicsActor for the hair and attaches it to the head bone using LeaderPoseComponent to share morphs.
+}
+
+void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag TransformationTag)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !TransformationTag.IsValid()) return;
+    if (ActiveTransformations.HasTagExact(TransformationTag)) return;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    const FDynamicTransformationRule* Rule = GS->ConversionRegistry.Find(TransformationTag);
+    if (!Rule) return;
+
+    // Note: Uses hierarchical MatchesTag so Character.Humanoid.Elf matches AllowedBaseTemplateTags = [Character.Humanoid]
+    if (Rule->AllowedBaseTemplateTags.Num() > 0 && !ActiveCharacterTemplateTag.MatchesAny(Rule->AllowedBaseTemplateTags))
+    {
+        return;
+    }
+
+    ActiveTransformations.AddTag(TransformationTag);
+    ActiveInheritedCategories.AppendTags(Rule->InheritedCategoryTags);
+    if (Rule->bInvertsHealingToDamage)
+    {
+        bCachedInvertsHealingToDamage = true;
+    }
+
+    if (Rule->bApplyColorTint)
+    {
+        SkinColor = Rule->TransformationColorTint;
+        OnRep_AppearanceColors();
+    }
+
+    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(CharOwner->GetDynamicAttributeSet()))
+        {
+            for (const FGenderAttributeModifier& Mod : Rule->TransformationStatModifiers)
+            {
+                if (Mod.TargetAttributeTag.IsValid())
+                {
+                    const float CurVal = AttrSet->GetDynamicAttributeValue(Mod.TargetAttributeTag, 0);
+                    float NewVal = CurVal;
+                    if (Mod.ModifierOp == EEffectModifierOp::Additive)
+                    {
+                        NewVal = CurVal + Mod.Magnitude;
+                    }
+                    else if (Mod.ModifierOp == EEffectModifierOp::Multiplicative)
+                    {
+                        NewVal = CurVal * (1.0f + Mod.Magnitude);
+                    }
+                    else if (Mod.ModifierOp == EEffectModifierOp::Override)
+                    {
+                        NewVal = Mod.Magnitude;
+                    }
+                    AttrSet->SetDynamicAttributeValue(Mod.TargetAttributeTag, NewVal, 0);
+                }
+            }
+        }
+
+        if (UAbilitySystemComponent* ASC = CharOwner->GetAbilitySystemComponent())
+        {
+            // Also grant InheritedCategoryTags as loose gameplay tags so ConditionTrees can query SuperCategory.Undead
+            ASC->AddLooseGameplayTags(Rule->InheritedCategoryTags);
+
+            for (const FGameplayTag& AbilityTag : Rule->GrantedAbilities)
+            {
+                if (const FDynamicAbilityDef* AbilityDef = GS->AbilityMasterRegistry.Find(AbilityTag))
+                {
+                    FGameplayAbilitySpec Spec(UDynamicGameplayAbility::StaticClass(), 1, INDEX_NONE, CharOwner);
+                    Spec.GetDynamicSpecSourceTags().AddTag(AbilityTag);
+                    FGameplayAbilitySpecHandle Handle = ASC->GiveAbility(Spec);
+                    if (FGameplayAbilitySpec* GrantedSpec = ASC->FindAbilitySpecFromHandle(Handle))
+                    {
+                        if (UDynamicGameplayAbility* Instanced = Cast<UDynamicGameplayAbility>(GrantedSpec->GetPrimaryInstance()))
+                        {
+                            Instanced->ActiveAbilityRegistryTag = AbilityTag;
+                            Instanced->AbilityConfig = *AbilityDef;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void UDynamicCustomizationComponent::ServerSireConversion(UDynamicCustomizationComponent* TargetCustomization, FGameplayTag TransformationTag)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !TargetCustomization) return;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    const FDynamicTransformationRule* Rule = GS->ConversionRegistry.Find(TransformationTag);
+    if (!Rule) return;
+
+    TargetCustomization->ServerApplyTransformation(TransformationTag);
+
+    if (Rule->bSiringDrainsMaxHP)
+    {
+        if (ADynamicCharacter* SireChar = Cast<ADynamicCharacter>(GetOwner()))
+        {
+            if (UDynamicAttributeSet* SireAttr = const_cast<UDynamicAttributeSet*>(SireChar->GetDynamicAttributeSet()))
+            {
+                static const FGameplayTag MaxHpTag = FGameplayTag::RequestGameplayTag(FName("Attribute.Resource.Health.Max"), false);
+                if (MaxHpTag.IsValid())
+                {
+                    const float CurMaxHP = SireAttr->GetDynamicAttributeValue(MaxHpTag, 0);
+                    const float PenalizedHP = FMath::Max(10.0f, CurMaxHP - Rule->SiringMaxHPPenaltyAmount);
+                    SireAttr->SetDynamicAttributeValue(MaxHpTag, PenalizedHP, 0);
+                }
+            }
+        }
+    }
+}
+
+bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag BaseTemplateTag)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return false;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return false;
+
+    // Look up available evolutionary branches for this base template tag
+    const FDynamicEvolutionContainer* EvoContainer = GS->EvolutionMasterRegistry.Find(BaseTemplateTag);
+    if (!EvoContainer) return false;
+
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    if (!CharOwner) return false;
+
+    UAbilitySystemComponent* ASC = CharOwner->GetAbilitySystemComponent();
+    UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(CharOwner->GetDynamicAttributeSet());
+    if (!ASC || !AttrSet) return false;
+
+    for (const FDynamicEvolutionBranch& Branch : EvoContainer->EvolutionBranches)
+    {
+        bool bPassesCheck = true;
+
+        // 1. Evaluate Attribute Threshold (e.g. Level >= 5)
+        if (Branch.RequiredAttributeTag.IsValid())
+        {
+            float CurVal = AttrSet->GetDynamicAttributeValue(Branch.RequiredAttributeTag, 0);
+            if (CurVal < Branch.RequiredAttributeMinimumValue)
+            {
+                bPassesCheck = false;
+            }
+        }
+
+        // 2. Evaluate Logic Condition Tree (e.g. Starvation or Experience checks)
+        if (bPassesCheck && !Branch.PrerequisiteConditionTreeName.IsNone())
+        {
+            const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(CharOwner, Branch.PrerequisiteConditionTreeName);
+            if (Tree)
+            {
+                FGameplayTagContainer SourceTags, TargetTags;
+                ASC->GetOwnedGameplayTags(TargetTags);
+                if (!UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, ASC, ASC, SourceTags, TargetTags))
+                {
+                    bPassesCheck = false;
+                }
+            }
+        }
+
+        // 3. Trigger Evolution if all conditions are met
+        if (bPassesCheck)
+        {
+            // Mutate template tag
+            ActiveCharacterTemplateTag = Branch.TargetCharacterTemplateTag;
+
+            // Apply evolution stat modifications
+            for (const FDynamicModifierDef& Mod : Branch.EvolutionStatModifiers)
+            {
+                if (Mod.TargetAttributeTag.IsValid())
+                {
+                    float Cur = AttrSet->GetDynamicAttributeValue(Mod.TargetAttributeTag, 0);
+                    AttrSet->SetDynamicAttributeValue(Mod.TargetAttributeTag, Cur + Mod.BaseMagnitude, 0);
+                }
+            }
+
+            // Reinitialize mesh and appearance for the new template
+            FCharacterTemplateDef NewTemplate;
+            if (GS->GetCharacterTemplate(Branch.TargetCharacterTemplateTag, NewTemplate))
+            {
+                if (USkeletalMeshComponent* MeshComp = CharOwner->GetMeshComponent())
+                {
+                    if (!NewTemplate.SkeletalMeshAsset.IsNull())
+                    {
+                        if (USkeletalMesh* NewMesh = NewTemplate.SkeletalMeshAsset.LoadSynchronous())
+                        {
+                            MeshComp->SetSkeletalMeshAsset(NewMesh);
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+    }
+    return false;
 }

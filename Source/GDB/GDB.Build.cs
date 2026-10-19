@@ -22,7 +22,8 @@ public class GDB : ModuleRules
 			"NetCore",
 			"Mover",               // Required for Mover Component
 			"PhysicsControl",       // Required for Active Ragdoll 5.8 configurations 
-			"MotionTrajectory" 
+			"MotionTrajectory",
+			"AIModule"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

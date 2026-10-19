@@ -4,6 +4,100 @@
 #include "JsonObjectConverter.h"
 #include "DynamicGameState.h"
 
+void UDynamicDataSerializer::DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper)
+{
+    OutWrapper.ReplicatedEntries.Empty();
+    if (!InObject.IsValid() || !InObject->HasField(FieldName)) return;
+
+    TSharedPtr<FJsonObject> MapSection = InObject->GetObjectField(FieldName);
+    if (!MapSection.IsValid()) return;
+
+    if (MapSection->HasField(TEXT("ReplicatedEntries")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>& ArrayField = MapSection->GetArrayField(TEXT("ReplicatedEntries"));
+        for (const auto& Element : ArrayField)
+        {
+            TSharedPtr<FJsonObject> EntryObj = Element->AsObject();
+            if (EntryObj.IsValid())
+            {
+                FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("KeyTag"))), false);
+                if (KeyTag.IsValid())
+                {
+                    FTagFloatPair Entry;
+                    Entry.KeyTag = KeyTag;
+                    Entry.Value = static_cast<float>(EntryObj->GetNumberField(TEXT("Value")));
+                    OutWrapper.ReplicatedEntries.Add(Entry);
+                }
+            }
+        }
+    }
+    OutWrapper.SyncMapFromChangesArray();
+}
+
+TSharedPtr<FJsonObject> UDynamicDataSerializer::SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper)
+{
+    TSharedRef<FJsonObject> WrapperObj = MakeShareable(new FJsonObject());
+    TArray<TSharedPtr<FJsonValue>> ArrayJson;
+
+    for (const FTagFloatPair& Pair : InWrapper.ReplicatedEntries)
+    {
+        TSharedRef<FJsonObject> EntryObj = MakeShareable(new FJsonObject());
+        EntryObj->SetStringField(TEXT("KeyTag"), Pair.KeyTag.ToString());
+        EntryObj->SetNumberField(TEXT("Value"), Pair.Value);
+        ArrayJson.Add(MakeShareable(new FJsonValueObject(EntryObj)));
+    }
+
+    WrapperObj->SetArrayField(TEXT("ReplicatedEntries"), ArrayJson);
+    return WrapperObj;
+}
+
+void UDynamicDataSerializer::DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile)
+{
+    OutProfile.ReplicatedEntries.Empty();
+    if (!InObject.IsValid() || !InObject->HasField(FieldName)) return;
+
+    TSharedPtr<FJsonObject> MapSection = InObject->GetObjectField(FieldName);
+    if (!MapSection.IsValid()) return;
+
+    if (MapSection->HasField(TEXT("ReplicatedEntries")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>& ArrayField = MapSection->GetArrayField(TEXT("ReplicatedEntries"));
+        for (const auto& Element : ArrayField)
+        {
+            TSharedPtr<FJsonObject> EntryObj = Element->AsObject();
+            if (EntryObj.IsValid())
+            {
+                FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("KeyTag"))), false);
+                if (KeyTag.IsValid())
+                {
+                    FTagStringPair Entry;
+                    Entry.KeyTag = KeyTag;
+                    Entry.DisplayValue = EntryObj->GetStringField(TEXT("Value"));
+                    OutProfile.ReplicatedEntries.Add(Entry);
+                }
+            }
+        }
+    }
+    OutProfile.SyncMapFromChangesArray();
+}
+
+TSharedPtr<FJsonObject> UDynamicDataSerializer::SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile)
+{
+    TSharedRef<FJsonObject> WrapperObj = MakeShareable(new FJsonObject());
+    TArray<TSharedPtr<FJsonValue>> ArrayJson;
+
+    for (const FTagStringPair& Pair : InProfile.ReplicatedEntries)
+    {
+        TSharedRef<FJsonObject> EntryObj = MakeShareable(new FJsonObject());
+        EntryObj->SetStringField(TEXT("KeyTag"), Pair.KeyTag.ToString());
+        EntryObj->SetStringField(TEXT("Value"), Pair.DisplayValue);
+        ArrayJson.Add(MakeShareable(new FJsonValueObject(EntryObj)));
+    }
+
+    WrapperObj->SetArrayField(TEXT("ReplicatedEntries"), ArrayJson);
+    return WrapperObj;
+}
+
 bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonString, ADynamicGameState* TargetGameState)
 {
     if (!TargetGameState) return false;
@@ -19,8 +113,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
 
+            TSharedPtr<FJsonObject> AttrObj = Pair.Value->AsObject();
             FDynamicAttributeDef AttrDef;
-            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &AttrDef, 0, 0);
+            FJsonObjectConverter::JsonObjectToUStruct(AttrObj.ToSharedRef(), &AttrDef, 0, 0);
+            DeserializeLocalizationMap(AttrObj, TEXT("Localization"), AttrDef.Localization);
             TargetGameState->AttributeMasterRegistry.Add(KeyTag, AttrDef);
         }
     }
@@ -36,6 +132,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FDynamicDeliveryArchetype ArchDef;
             FJsonObjectConverter::JsonObjectToUStruct(ArchObj.ToSharedRef(), &ArchDef, 0, 0);
 
+            DeserializeLocalizationMap(ArchObj, TEXT("Localization"), ArchDef.Localization);
             DeserializeMapWrapper(ArchObj, TEXT("Metrics"), ArchDef.Metrics);
             TargetGameState->DeliveryArchetypes.Add(KeyTag, ArchDef);
         }
@@ -52,11 +149,19 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FDynamicAbilityDef AbilityDef;
             FJsonObjectConverter::JsonObjectToUStruct(AbilityObj.ToSharedRef(), &AbilityDef, 0, 0);
 
+            DeserializeLocalizationMap(AbilityObj, TEXT("Localization"), AbilityDef.Localization);
             DeserializeMapWrapper(AbilityObj, TEXT("NumericParams"), AbilityDef.NumericParams);
-            DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("SpatialDelivery")), TEXT("RuntimeMetricModifiers"), AbilityDef.SpatialDelivery.RuntimeMetricModifiers);
-            DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("InteractionConfig")), TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
-            DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("MovementConfig")), TEXT("MovementMetrics"), AbilityDef.MovementConfig.MovementMetrics);
-            DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("MovementConfig"))->GetObjectField(TEXT("GaspMotorSettings")), TEXT("RequiredAttributeThresholds"), AbilityDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds);
+            if (AbilityObj->HasField(TEXT("SpatialDelivery")))
+                DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("SpatialDelivery")), TEXT("RuntimeMetricModifiers"), AbilityDef.SpatialDelivery.RuntimeMetricModifiers);
+            if (AbilityObj->HasField(TEXT("InteractionConfig")))
+                DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("InteractionConfig")), TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
+            if (AbilityObj->HasField(TEXT("MovementConfig")))
+            {
+                TSharedPtr<FJsonObject> MovObj = AbilityObj->GetObjectField(TEXT("MovementConfig"));
+                DeserializeMapWrapper(MovObj, TEXT("MovementMetrics"), AbilityDef.MovementConfig.MovementMetrics);
+                if (MovObj->HasField(TEXT("GaspMotorSettings")))
+                    DeserializeMapWrapper(MovObj->GetObjectField(TEXT("GaspMotorSettings")), TEXT("RequiredAttributeThresholds"), AbilityDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds);
+            }
 
             TargetGameState->AbilityMasterRegistry.Add(KeyTag, AbilityDef);
         }
@@ -148,7 +253,24 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         }
     }
 
-    if (RootObject->HasField(TEXT("CalculationSettings")))
+    if (RootObject->HasField(TEXT("CalculationSettings")) && RootObject->HasField(TEXT("Limbs")))
+    {
+        FPhysicsDamageConfigData PhysicsConfig;
+        if (FJsonObjectConverter::JsonObjectToUStruct(RootObject.ToSharedRef(), &PhysicsConfig, 0, 0))
+        {
+            const TArray<TSharedPtr<FJsonValue>>& LimbsJsonArr = RootObject->GetArrayField(TEXT("Limbs"));
+            for (int32 i = 0; i < LimbsJsonArr.Num() && PhysicsConfig.Limbs.IsValidIndex(i); ++i)
+            {
+                TSharedPtr<FJsonObject> LimbObj = LimbsJsonArr[i]->AsObject();
+                DeserializeLocalizationMap(LimbObj, TEXT("Localization"), PhysicsConfig.Limbs[i].Localization);
+                DeserializeMapWrapper(LimbObj, TEXT("DefaultLimbAttributes"), PhysicsConfig.Limbs[i].DefaultLimbAttributes);
+                DeserializeMapWrapper(LimbObj, TEXT("AngularMotorAttributeScalars"), PhysicsConfig.Limbs[i].AngularMotorAttributeScalars);
+                DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), PhysicsConfig.Limbs[i].LinearMotorAttributeScalars);
+            }
+            TargetGameState->SetPhysicsConfig(PhysicsConfig);
+        }
+    }
+    else if (RootObject->HasField(TEXT("CalculationSettings")))
     {
         FPhysicsCalculationSettings CalcSettings;
         if (FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalculationSettings")).ToSharedRef(), &CalcSettings, 0, 0))
@@ -167,7 +289,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->SetAbilityScoreConfig(ScoreConfig);
         }
     }
-    
+
     if (RootObject->HasField(TEXT("RelationshipTypeRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("RelationshipTypeRegistry"))->Values)
@@ -198,7 +320,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->ProfessionMasterRegistry.Add(KeyTag, ProfDef);
         }
     }
-    
+
     if (RootObject->HasField(TEXT("MasterAIAgentRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("MasterAIAgentRegistry"))->Values)
@@ -209,8 +331,72 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TSharedPtr<FJsonObject> AgentObj = Pair.Value->AsObject();
             FDynamicAIAgentDef AgentDef;
             FJsonObjectConverter::JsonObjectToUStruct(AgentObj.ToSharedRef(), &AgentDef, 0, 0);
-        
             TargetGameState->MasterAIAgentRegistry.Add(KeyTag, AgentDef);
+        }
+    }
+
+    if (RootObject->HasField(TEXT("CharacterTemplates")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("CharacterTemplates"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> TempObj = Pair.Value->AsObject();
+            FCharacterTemplateDef TempDef;
+            FJsonObjectConverter::JsonObjectToUStruct(TempObj.ToSharedRef(), &TempDef, 0, 0);
+            DeserializeLocalizationMap(TempObj, TEXT("Localization"), TempDef.Localization);
+            if (TempObj->HasField(TEXT("PersonalityProfile")))
+            {
+                TSharedPtr<FJsonObject> PersObj = TempObj->GetObjectField(TEXT("PersonalityProfile"));
+                DeserializeMapWrapper(PersObj, TEXT("FoodAndDrinkPreferences"), TempDef.PersonalityProfile.FoodAndDrinkPreferences);
+                DeserializeMapWrapper(PersObj, TEXT("ActivityPreferences"), TempDef.PersonalityProfile.ActivityPreferences);
+            }
+            TargetGameState->CharacterTemplatesRegistry.Add(KeyTag, TempDef);
+        }
+    }
+
+    if (RootObject->HasField(TEXT("SkeletonRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("SkeletonRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> SkelObj = Pair.Value->AsObject();
+            FDynamicSkeletonDef SkelDef;
+            FJsonObjectConverter::JsonObjectToUStruct(SkelObj.ToSharedRef(), &SkelDef, 0, 0);
+            DeserializeLocalizationMap(SkelObj, TEXT("Localization"), SkelDef.Localization);
+            TargetGameState->SkeletonMasterRegistry.Add(KeyTag, SkelDef);
+        }
+    }
+
+    if (RootObject->HasField(TEXT("ConversionRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("ConversionRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> ConvObj = Pair.Value->AsObject();
+            FDynamicTransformationRule RuleDef;
+            FJsonObjectConverter::JsonObjectToUStruct(ConvObj.ToSharedRef(), &RuleDef, 0, 0);
+            DeserializeLocalizationMap(ConvObj, TEXT("Localization"), RuleDef.Localization);
+            TargetGameState->ConversionRegistry.Add(KeyTag, RuleDef);
+        }
+    }
+    
+    if (RootObject->HasField(TEXT("EvolutionRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("EvolutionRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> EvoObj = Pair.Value->AsObject();
+            FDynamicEvolutionContainer Container;
+            FJsonObjectConverter::JsonObjectToUStruct(EvoObj.ToSharedRef(), &Container, 0, 0);
+            TargetGameState->EvolutionMasterRegistry.Add(KeyTag, Container);
         }
     }
 
@@ -220,9 +406,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
 bool UDynamicDataSerializer::SerializeMasterRegistry(const ADynamicGameState* InGameState, FString& OutJsonString)
 {
     if (!InGameState) return false;
-
     TSharedRef<FJsonObject> Root = MakeShareable(new FJsonObject());
-    // (Serialization maps for save profiles...)
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonString);
     return FJsonSerializer::Serialize(Root, Writer);
 }
@@ -239,7 +423,7 @@ int32 UDynamicDataSerializer::FlattenAndParseJsonNode(const TSharedPtr<FJsonObje
     WorkingNode.ComparisonOperator = StringToEnum<EComparisonOp>(JsonObj->GetStringField(TEXT("ComparisonOperator")));
     WorkingNode.UserDefinedKey = FName(*JsonObj->GetStringField(TEXT("UserDefinedKey")));
     WorkingNode.bCheckSource = JsonObj->GetBoolField(TEXT("bCheckSource"));
-    WorkingNode.ComparisonValue = JsonObj->GetNumberField(TEXT("ComparisonValue"));
+    WorkingNode.ComparisonValue = static_cast<float>(JsonObj->GetNumberField(TEXT("ComparisonValue")));
 
     if (JsonObj->HasField(TEXT("ChildNodes")))
     {
@@ -275,11 +459,92 @@ TSharedPtr<FJsonObject> UDynamicDataSerializer::ReconstructJsonFromFlatNode(int3
     return JsonObj;
 }
 
-bool UDynamicDataSerializer::SerializeFastAttributes(const FFastAttributeArray& InFastAttributes, FString& OutJsonString) { return true; }
-bool UDynamicDataSerializer::DeserializeFastAttributes(const FString& InJsonString, FFastAttributeArray& OutFastAttributes) { return true; }
-bool UDynamicDataSerializer::SerializeContainerSlots(const FFastContainerSlotArray& InSlots, FString& OutJsonString) { return true; }
-bool UDynamicDataSerializer::DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots) { return true; }
-void UDynamicDataSerializer::DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper) {}
-TSharedPtr<FJsonObject> UDynamicDataSerializer::SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper) { return nullptr; }
-void UDynamicDataSerializer::DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile) {}
-TSharedPtr<FJsonObject> UDynamicDataSerializer::SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile) { return nullptr; }
+bool UDynamicDataSerializer::SerializeFastAttributes(const FFastAttributeArray& InFastAttributes, FString& OutJsonString)
+{
+    TSharedRef<FJsonObject> RootObject = MakeShareable(new FJsonObject());
+    TSharedPtr<FJsonObject> ArrayObject = MakeShareable(new FJsonObject());
+
+    for (const FDynamicAttributeItem& Entry : InFastAttributes.Items)
+    {
+        if (Entry.AttributeTag.IsValid())
+        {
+            ArrayObject->SetNumberField(Entry.AttributeTag.ToString(), Entry.Value);
+        }
+    }
+
+    RootObject->SetObjectField(TEXT("FastAttributes"), ArrayObject);
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonString);
+    return FJsonSerializer::Serialize(RootObject, Writer);
+}
+
+bool UDynamicDataSerializer::DeserializeFastAttributes(const FString& InJsonString, FFastAttributeArray& OutFastAttributes)
+{
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InJsonString);
+    TSharedPtr<FJsonObject> RootObject;
+    if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid()) return false;
+
+    if (RootObject->HasField(TEXT("FastAttributes")))
+    {
+        OutFastAttributes.Items.Empty();
+        TSharedPtr<FJsonObject> AttrMapObj = RootObject->GetObjectField(TEXT("FastAttributes"));
+
+        for (auto& Pair : AttrMapObj->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (KeyTag.IsValid())
+            {
+                FDynamicAttributeItem NewEntry;
+                NewEntry.AttributeTag = KeyTag;
+                NewEntry.Value = static_cast<float>(Pair.Value->AsNumber());
+                OutFastAttributes.Items.Add(NewEntry);
+            }
+        }
+        OutFastAttributes.MarkArrayDirty();
+        return true;
+    }
+    return false;
+}
+
+bool UDynamicDataSerializer::SerializeContainerSlots(const FFastContainerSlotArray& InSlots, FString& OutJsonString)
+{
+    TSharedRef<FJsonObject> RootObj = MakeShareable(new FJsonObject());
+    TArray<TSharedPtr<FJsonValue>> SlotsArr;
+
+    for (const FDynamicContainerSlotItem& Item : InSlots.Items)
+    {
+        if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid()) continue;
+        TSharedPtr<FJsonObject> SlotObj = FJsonObjectConverter::UStructToJsonObject(Item);
+        if (SlotObj.IsValid())
+        {
+            SlotsArr.Add(MakeShareable(new FJsonValueObject(SlotObj)));
+        }
+    }
+
+    RootObj->SetArrayField(TEXT("ContainerSlots"), SlotsArr);
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonString);
+    return FJsonSerializer::Serialize(RootObj, Writer);
+}
+
+bool UDynamicDataSerializer::DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots)
+{
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InJsonString);
+    TSharedPtr<FJsonObject> RootObj;
+    if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid()) return false;
+
+    if (RootObj->HasField(TEXT("ContainerSlots")))
+    {
+        OutSlots.Items.Empty();
+        const TArray<TSharedPtr<FJsonValue>>& SlotsArr = RootObj->GetArrayField(TEXT("ContainerSlots"));
+        for (const TSharedPtr<FJsonValue>& Val : SlotsArr)
+        {
+            FDynamicContainerSlotItem Item;
+            if (FJsonObjectConverter::JsonObjectToUStruct(Val->AsObject().ToSharedRef(), &Item, 0, 0))
+            {
+                OutSlots.Items.Add(Item);
+            }
+        }
+        OutSlots.MarkArrayDirty();
+        return true;
+    }
+    return false;
+}

@@ -75,6 +75,63 @@
           }
         ]
       }
+    },
+    "Relation.Faction.PackLoyalty": {
+      "RelationshipTag": "Relation.Faction.PackLoyalty",
+      "DecayCurve": "None",
+      "AffinityDecayRatePerDay": 0.0,
+      "FamiliarityDecayRatePerDay": 0.0,
+      "DebtDecayRatePerDay": 0.0,
+      "MinAffinityDecayFloor": 0.90,
+      "MinFamiliarityDecayFloor": 1.0,
+      "DefaultAffinity": 0.90,
+      "DefaultTrust": 0.95,
+      "DefaultFamiliarity": 1.0,
+      "VolatilityScalar": 0.2,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pack Bond" },
+          { "KeyTag": "Localization.Description", "Value": "Unshakeable pack loyalty uniting wolves of the same clan." }
+        ]
+      }
+    },
+    "Relation.Faction.TerritorialRivalry": {
+      "RelationshipTag": "Relation.Faction.TerritorialRivalry",
+      "DecayCurve": "Linear",
+      "AffinityDecayRatePerDay": 0.05,
+      "FamiliarityDecayRatePerDay": 0.02,
+      "DebtDecayRatePerDay": 0.1,
+      "MinAffinityDecayFloor": -0.80,
+      "MinFamiliarityDecayFloor": 0.20,
+      "DefaultAffinity": -0.70,
+      "DefaultTrust": -0.85,
+      "DefaultFamiliarity": 0.40,
+      "VolatilityScalar": 1.3,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Territorial Enmity" },
+          { "KeyTag": "Localization.Description", "Value": "Hostility exhibited against rival packs or invading predators entering hunting grounds." }
+        ]
+      }
+    },
+    "Relation.Faction.DragonRivalry": {
+      "RelationshipTag": "Relation.Faction.DragonRivalry",
+      "DecayCurve": "None",
+      "AffinityDecayRatePerDay": 0.0,
+      "FamiliarityDecayRatePerDay": 0.0,
+      "DebtDecayRatePerDay": 0.0,
+      "MinAffinityDecayFloor": -1.0,
+      "MinFamiliarityDecayFloor": 1.0,
+      "DefaultAffinity": -1.0,
+      "DefaultTrust": -1.0,
+      "DefaultFamiliarity": 1.0,
+      "VolatilityScalar": 2.0,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Draconic Territorial Rivalry" },
+          { "KeyTag": "Localization.Description", "Value": "Absolute elemental and territorial hatred between distinct dragon varieties." }
+        ]
+      }
     }
   }
 }

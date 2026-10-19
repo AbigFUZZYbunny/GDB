@@ -32,8 +32,8 @@ public:
     FGuid CharacterPersistentGuid;
 
     // Active Profession (links to ADynamicGameState::ProfessionMasterRegistry)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Profession")
-    FGameplayTag ActiveProfessionTag;
+    UPROPERTY(ReplicatedUsing = OnRep_Professions, BlueprintReadOnly, Category = "Dynamic GAS|Profession")
+    FFastAssignedProfessionArray ReplicatedProfessions;
 
     // Replicated Personality & Food/Drink preferences
     UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_PersonalityProfile, Category = "Dynamic GAS|Personality")
@@ -53,6 +53,15 @@ public:
     UFUNCTION() void OnRep_RelationshipEdges();
     UFUNCTION() void OnRep_KnownPlaces();
     UFUNCTION() void OnRep_NeedStates();
+    UFUNCTION() void OnRep_Professions();
+
+    void HandleProfessionReplicated(const FDynamicAssignedProfessionItem& Item, bool bRemoved = false);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Profession")
+    void ServerAddOrUpdateProfession(FGameplayTag ProfessionTag, float InitialProficiency = 1.0f, float Priority = 1.0f);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Profession")
+    bool ServerRemoveProfession(FGameplayTag ProfessionTag);
 
     // Fast-Array Incremental Callbacks (Must be public for FFastArraySerializerItem)
     void HandleRelationshipEdgeReplicated(const FDynamicRelationshipEdgeItem& Item, bool bRemoved = false);

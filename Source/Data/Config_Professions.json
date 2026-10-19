@@ -1,109 +1,54 @@
 ﻿{
-  "_comment": "Dynamic Social Relationship Physics, Profession Schedules, Task Priorities, and Personality Preferences Schema",
+  "_comment": "Multi-Profession Master Registry: Defines independent career paths that characters can hold simultaneously to sustain small town economies.",
   "ProfessionMasterRegistry": {
     "Profession.Labor.Woodcutter": {
       "ProfessionTag": "Profession.Labor.Woodcutter",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Woodcutter" },
-          { "KeyTag": "Localization.Description", "Value": "Fells timber for carpentry and splits firewood for the settlement." }
+          { "KeyTag": "Localization.Description", "Value": "Fells timber and splits firewood for winter heating." }
         ]
       },
-      "StatPriorities": [
-        { "AttributeOrNeedTag": "Attribute.Resource.Health", "CriticalThresholdRatio": 0.30, "EmergencyPriorityWeight": 1000.0 },
-        { "AttributeOrNeedTag": "Need.Biological.Hunger", "CriticalThresholdRatio": 0.15, "EmergencyPriorityWeight": 600.0 },
-        { "AttributeOrNeedTag": "Need.Biological.Thirst", "CriticalThresholdRatio": 0.15, "EmergencyPriorityWeight": 650.0 },
-        { "AttributeOrNeedTag": "Need.Biological.Sleep", "CriticalThresholdRatio": 0.10, "EmergencyPriorityWeight": 550.0 },
-        { "AttributeOrNeedTag": "Attribute.Resource.Stamina", "CriticalThresholdRatio": 0.15, "EmergencyPriorityWeight": 300.0 }
-      ],
       "ExpectedTasks": [
         {
           "TaskTag": "Task.Crafting.ChopWood",
           "BasePriorityWeight": 85.0,
           "LinkedAbilityOrRecipeTag": "Ability.Harvest.FellTree",
           "RequiredItemTags": [ "Actor.Tool.Axe.Felling" ],
-          "ProducedOutputTags": [ "Actor.Material.TimberLog" ],
-          "TaskConditionTreeName": "None"
-        },
-        {
-          "TaskTag": "Task.Crafting.SupplyCarpentryTimber",
-          "BasePriorityWeight": 75.0,
-          "LinkedAbilityOrRecipeTag": "Recipe.Crafting.SawPlanks",
-          "RequiredItemTags": [ "Actor.Material.TimberLog" ],
-          "ProducedOutputTags": [ "Actor.Material.WoodPlank" ],
-          "TaskConditionTreeName": "None"
-        },
-        {
-          "TaskTag": "Task.Crafting.SplitFirewood",
-          "BasePriorityWeight": 65.0,
-          "LinkedAbilityOrRecipeTag": "Recipe.Crafting.SplitFirewood",
-          "RequiredItemTags": [ "Actor.Tool.Axe.Splitting", "Actor.Material.TimberLog" ],
-          "ProducedOutputTags": [ "Actor.Survival.Material.Firewood" ],
-          "TaskConditionTreeName": "None"
+          "ProducedOutputTags": [ "Actor.Material.TimberLog" ]
         }
       ],
       "PrioritizedItemWeights": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Actor.Tool.Axe.Felling", "Value": 100.0 },
-          { "KeyTag": "Actor.Tool.Axe.Splitting", "Value": 85.0 },
-          { "KeyTag": "Actor.Material.TimberLog", "Value": 70.0 },
-          { "KeyTag": "Actor.Survival.Material.Firewood", "Value": 60.0 }
-        ]
+        "ReplicatedEntries": [ { "KeyTag": "Actor.Tool.Axe.Felling", "Value": 100.0 } ]
       },
+      "StatPriorities": [],
       "DefaultDailySchedule": [
-        { "StartHour24": 6.0, "EndHour24": 7.5, "ScheduledActivityTag": "Activity.Eat.Breakfast", "PreferredPlaceRoleTag": "Place.Home", "ScheduleAdherenceWeight": 2.0 },
-        { "StartHour24": 7.5, "EndHour24": 12.5, "ScheduledActivityTag": "Activity.Work.FellTimber", "PreferredPlaceRoleTag": "Place.Workstation.ForestCamp", "ScheduleAdherenceWeight": 5.0 },
-        { "StartHour24": 12.5, "EndHour24": 13.5, "ScheduledActivityTag": "Activity.Eat.Lunch", "PreferredPlaceRoleTag": "Place.Workstation.Sawmill", "ScheduleAdherenceWeight": 2.0 },
-        { "StartHour24": 13.5, "EndHour24": 18.0, "ScheduledActivityTag": "Activity.Work.SplitFirewood", "PreferredPlaceRoleTag": "Place.Workstation.Sawmill", "ScheduleAdherenceWeight": 4.5 },
-        { "StartHour24": 18.0, "EndHour24": 21.5, "ScheduledActivityTag": "Activity.Socialize.Tavern", "PreferredPlaceRoleTag": "Place.Tavern", "ScheduleAdherenceWeight": 1.5 },
-        { "StartHour24": 21.5, "EndHour24": 6.0, "ScheduledActivityTag": "Activity.Sleep", "PreferredPlaceRoleTag": "Place.Bed", "ScheduleAdherenceWeight": 8.0 }
+        { "StartHour24": 6.0, "EndHour24": 12.0, "ScheduledActivityTag": "Activity.Work.FellTimber", "PreferredPlaceRoleTag": "Place.Workstation.Forest", "ScheduleAdherenceWeight": 5.0 }
       ]
     },
-    "Profession.Labor.Farmer": {
-      "ProfessionTag": "Profession.Labor.Farmer",
+    "Profession.Crafting.Carpenter": {
+      "ProfessionTag": "Profession.Crafting.Carpenter",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Farmer" },
-          { "KeyTag": "Localization.Description", "Value": "Cultivates fields, harvests crops, and sells produce at the local market." }
+          { "KeyTag": "Localization.Name", "Value": "Carpenter" },
+          { "KeyTag": "Localization.Description", "Value": "Crafts wooden tables, chairs, and structural housing components for the town." }
         ]
       },
-      "StatPriorities": [
-        { "AttributeOrNeedTag": "Attribute.Resource.Health", "CriticalThresholdRatio": 0.30, "EmergencyPriorityWeight": 1000.0 },
-        { "AttributeOrNeedTag": "Need.Biological.Hunger", "CriticalThresholdRatio": 0.20, "EmergencyPriorityWeight": 600.0 },
-        { "AttributeOrNeedTag": "Need.Biological.Thirst", "CriticalThresholdRatio": 0.20, "EmergencyPriorityWeight": 650.0 },
-        { "AttributeOrNeedTag": "Need.Biological.Sleep", "CriticalThresholdRatio": 0.15, "EmergencyPriorityWeight": 550.0 }
-      ],
       "ExpectedTasks": [
         {
-          "TaskTag": "Task.Farming.TendCrops",
+          "TaskTag": "Task.Crafting.BuildFurniture",
           "BasePriorityWeight": 90.0,
-          "LinkedAbilityOrRecipeTag": "Ability.Farming.TillAndWater",
-          "RequiredItemTags": [ "Actor.Tool.Farming.Hoe", "Actor.Tool.Bucket.Water" ],
-          "ProducedOutputTags": [ "Actor.Food.Crop.Wheat", "Actor.Food.Crop.RootVegetable" ],
-          "TaskConditionTreeName": "None"
-        },
-        {
-          "TaskTag": "Task.Farming.SellProduce",
-          "BasePriorityWeight": 70.0,
-          "LinkedAbilityOrRecipeTag": "Ability.Commerce.SellGoods",
-          "RequiredItemTags": [ "Actor.Food.Crop.Wheat" ],
-          "ProducedOutputTags": [ "Actor.Currency.GoldCoin" ],
-          "TaskConditionTreeName": "None"
+          "LinkedAbilityOrRecipeTag": "Recipe.Crafting.WoodenTable",
+          "RequiredItemTags": [ "Actor.Material.WoodPlank", "Actor.Tool.Hammer" ],
+          "ProducedOutputTags": [ "Actor.Furniture.Table" ]
         }
       ],
       "PrioritizedItemWeights": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Actor.Tool.Farming.Hoe", "Value": 100.0 },
-          { "KeyTag": "Actor.Tool.Bucket.Water", "Value": 90.0 },
-          { "KeyTag": "Actor.Food.Crop.Wheat", "Value": 75.0 }
-        ]
+        "ReplicatedEntries": [ { "KeyTag": "Actor.Material.WoodPlank", "Value": 100.0 } ]
       },
+      "StatPriorities": [],
       "DefaultDailySchedule": [
-        { "StartHour24": 5.5, "EndHour24": 6.5, "ScheduledActivityTag": "Activity.Eat.Breakfast", "PreferredPlaceRoleTag": "Place.Home", "ScheduleAdherenceWeight": 2.5 },
-        { "StartHour24": 6.5, "EndHour24": 14.0, "ScheduledActivityTag": "Activity.Work.TendFields", "PreferredPlaceRoleTag": "Place.Workstation.FarmField", "ScheduleAdherenceWeight": 5.0 },
-        { "StartHour24": 14.0, "EndHour24": 17.5, "ScheduledActivityTag": "Activity.Work.SellCrops", "PreferredPlaceRoleTag": "Place.MarketStall", "ScheduleAdherenceWeight": 4.0 },
-        { "StartHour24": 17.5, "EndHour24": 20.5, "ScheduledActivityTag": "Activity.Socialize.Dinner", "PreferredPlaceRoleTag": "Place.Tavern", "ScheduleAdherenceWeight": 2.0 },
-        { "StartHour24": 20.5, "EndHour24": 5.5, "ScheduledActivityTag": "Activity.Sleep", "PreferredPlaceRoleTag": "Place.Bed", "ScheduleAdherenceWeight": 8.0 }
+        { "StartHour24": 13.0, "EndHour24": 18.0, "ScheduledActivityTag": "Activity.Work.Carpentry", "PreferredPlaceRoleTag": "Place.Workstation.Sawmill", "ScheduleAdherenceWeight": 5.5 }
       ]
     }
   }

@@ -1746,6 +1746,53 @@ struct FCharacterDefaultPlaceBindingDef
     FGameplayTag DefaultLandmarkTag;
 };
 
+// --- MULTI-PROFESSION FAST ARRAY ---
+
+USTRUCT(BlueprintType)
+struct FDynamicAssignedProfessionItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    // Reference to master profession definition (e.g., Profession.Labor.Woodcutter, Profession.Crafting.Carpenter)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag ProfessionTag;
+
+    // Skill level or mastery rank in this specific profession [1.0 to 100.0]
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    float ProficiencyLevel = 1.0f;
+
+    // Relative priority weight when multiple professions overlap in schedule (Higher = Takes precedence)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    float ProfessionPriorityWeight = 1.0f;
+
+    void PreReplicatedRemove(const struct FFastAssignedProfessionArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastAssignedProfessionArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastAssignedProfessionArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastAssignedProfessionArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicAssignedProfessionItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicAssignedProfessionItem, FFastAssignedProfessionArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastAssignedProfessionArray> : public TStructOpsTypeTraitsBase2<FFastAssignedProfessionArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
 // --- BODYSWAP / BONE SCALING & SLIDER DEFINITIONS ---
 
 USTRUCT(BlueprintType)

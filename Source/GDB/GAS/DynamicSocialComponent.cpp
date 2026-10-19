@@ -37,7 +37,7 @@ void UDynamicSocialComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(UDynamicSocialComponent, CharacterPersistentGuid);
-    DOREPLIFETIME(UDynamicSocialComponent, ActiveProfessionTag);
+    DOREPLIFETIME(UDynamicSocialComponent, ReplicatedProfessions);
     DOREPLIFETIME(UDynamicSocialComponent, PersonalityProfile);
     DOREPLIFETIME_CONDITION(UDynamicSocialComponent, ReplicatedRelationships, COND_InitialOrOwner);
     DOREPLIFETIME_CONDITION(UDynamicSocialComponent, ReplicatedKnownPlaces, COND_InitialOrOwner);
@@ -381,64 +381,119 @@ void UDynamicSocialComponent::ServerModifyNeedOrMood(FGameplayTag NeedOrMoodTag,
     OnNeedOrMoodChanged.Broadcast(NeedOrMoodTag, Added.CurrentValue);
 }
 
+void UDynamicSocialComponent::ServerAddOrUpdateProfession(FGameplayTag ProfessionTag, float InitialProficiency, float Priority)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !ProfessionTag.IsValid()) return;
+
+    for (FDynamicAssignedProfessionItem& Prof : ReplicatedProfessions.Items)
+    {
+        if (Prof.ProfessionTag == ProfessionTag)
+        {
+            Prof.ProficiencyLevel = InitialProficiency;
+            Prof.ProfessionPriorityWeight = Priority;
+            ReplicatedProfessions.MarkItemDirty(Prof);
+            return;
+        }
+    }
+
+    FDynamicAssignedProfessionItem NewProf;
+    NewProf.ProfessionTag = ProfessionTag;
+    NewProf.ProficiencyLevel = InitialProficiency;
+    NewProf.ProfessionPriorityWeight = Priority;
+
+    FDynamicAssignedProfessionItem& Added = ReplicatedProfessions.Items.Add_GetRef(NewProf);
+    ReplicatedProfessions.MarkItemDirty(Added);
+}
+
 FGameplayTag UDynamicSocialComponent::EvaluateCurrentExpectedActivity(float CurrentGameHour24, FGameplayTag& OutTargetPlaceRoleTag) const
 {
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS || !ActiveProfessionTag.IsValid()) return FGameplayTag::EmptyTag;
+    if (!GS || ReplicatedProfessions.Items.Num() == 0) return FGameplayTag::EmptyTag;
 
-    const FDynamicProfessionDef* ProfDef = GS->ProfessionMasterRegistry.Find(ActiveProfessionTag);
-    if (!ProfDef) return FGameplayTag::EmptyTag;
-
-    // 1. Check critical survival stat/need priorities first (e.g. Health or Starvation)
     const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
     const UDynamicAttributeSet* AttrSet = CharOwner ? CharOwner->GetDynamicAttributeSet() : nullptr;
 
-    for (const FDynamicStatPriorityRule& StatRule : ProfDef->StatPriorities)
+    // 1. Evaluate emergency stat/need priorities across all professions first
+    for (const FDynamicAssignedProfessionItem& ProfItem : ReplicatedProfessions.Items)
     {
-        if (TagToNeedIndexMap.Contains(StatRule.AttributeOrNeedTag))
+        const FDynamicProfessionDef* ProfDef = GS->ProfessionMasterRegistry.Find(ProfItem.ProfessionTag);
+        if (!ProfDef) continue;
+
+        for (const FDynamicStatPriorityRule& StatRule : ProfDef->StatPriorities)
         {
-            const float NeedRatio = GetCurrentNeedOrMoodValue(StatRule.AttributeOrNeedTag) / 100.0f;
-            if (NeedRatio <= StatRule.CriticalThresholdRatio)
+            if (TagToNeedIndexMap.Contains(StatRule.AttributeOrNeedTag))
             {
-                OutTargetPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName("Place.FoodSource"), false);
-                return StatRule.AttributeOrNeedTag;
+                const float NeedRatio = GetCurrentNeedOrMoodValue(StatRule.AttributeOrNeedTag) / 100.0f;
+                if (NeedRatio <= StatRule.CriticalThresholdRatio)
+                {
+                    OutTargetPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName("Place.FoodSource"), false);
+                    return StatRule.AttributeOrNeedTag;
+                }
             }
-        }
-        else if (AttrSet && StatRule.AttributeOrNeedTag.IsValid())
-        {
-            const float CurVal = AttrSet->GetDynamicAttributeValue(StatRule.AttributeOrNeedTag, 0);
-            if (CurVal <= StatRule.CriticalThresholdRatio * 100.0f)
+            else if (AttrSet && StatRule.AttributeOrNeedTag.IsValid())
             {
-                OutTargetPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName("Place.Home"), false);
-                return StatRule.AttributeOrNeedTag;
+                const float CurVal = AttrSet->GetDynamicAttributeValue(StatRule.AttributeOrNeedTag, 0);
+                if (CurVal <= StatRule.CriticalThresholdRatio * 100.0f)
+                {
+                    OutTargetPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName("Place.Home"), false);
+                    return StatRule.AttributeOrNeedTag;
+                }
             }
         }
     }
 
-    // 2. Evaluate time-of-day schedule blocks
-    for (const FDynamicScheduleBlockDef& Block : ProfDef->DefaultDailySchedule)
-    {
-        const bool bInWindow = (Block.StartHour24 <= Block.EndHour24)
-            ? (CurrentGameHour24 >= Block.StartHour24 && CurrentGameHour24 < Block.EndHour24)
-            : (CurrentGameHour24 >= Block.StartHour24 || CurrentGameHour24 < Block.EndHour24); // Wraps midnight
+    // 2. Scan all active professions for schedule blocks matching the current time window, weighted by profession priority
+    FGameplayTag BestActivity = FGameplayTag::EmptyTag;
+    float HighestAdherenceWeight = -1.0f;
 
-        if (bInWindow)
+    for (const FDynamicAssignedProfessionItem& ProfItem : ReplicatedProfessions.Items)
+    {
+        const FDynamicProfessionDef* ProfDef = GS->ProfessionMasterRegistry.Find(ProfItem.ProfessionTag);
+        if (!ProfDef) continue;
+
+        for (const FDynamicScheduleBlockDef& Block : ProfDef->DefaultDailySchedule)
         {
-            OutTargetPlaceRoleTag = Block.PreferredPlaceRoleTag;
-            return Block.ScheduledActivityTag;
+            const bool bInWindow = (Block.StartHour24 <= Block.EndHour24)
+                ? (CurrentGameHour24 >= Block.StartHour24 && CurrentGameHour24 < Block.EndHour24)
+                : (CurrentGameHour24 >= Block.StartHour24 || CurrentGameHour24 < Block.EndHour24);
+
+            if (bInWindow)
+            {
+                float CombinedScore = Block.ScheduleAdherenceWeight * ProfItem.ProfessionPriorityWeight;
+                if (CombinedScore > HighestAdherenceWeight)
+                {
+                    HighestAdherenceWeight = CombinedScore;
+                    OutTargetPlaceRoleTag = Block.PreferredPlaceRoleTag;
+                    BestActivity = Block.ScheduledActivityTag;
+                }
+            }
         }
     }
 
-    return FGameplayTag::EmptyTag;
+    return BestActivity;
 }
 
 bool UDynamicSocialComponent::ExportComputeNodePayloadJson(FString& OutTelemetryJson) const
 {
     TSharedRef<FJsonObject> RootObj = MakeShareable(new FJsonObject());
     RootObj->SetStringField(TEXT("EntityGuid"), CharacterPersistentGuid.ToString());
-    RootObj->SetStringField(TEXT("Profession"), ActiveProfessionTag.ToString());
 
-    // 1. Needs & Moods Snapshot
+    // 1. Serialize Multiple Assigned Professions into a JSON Array
+    TArray<TSharedPtr<FJsonValue>> ProfArray;
+    for (const FDynamicAssignedProfessionItem& ProfItem : ReplicatedProfessions.Items)
+    {
+        if (ProfItem.ProfessionTag.IsValid())
+        {
+            TSharedRef<FJsonObject> ProfObj = MakeShareable(new FJsonObject());
+            ProfObj->SetStringField(TEXT("ProfessionTag"), ProfItem.ProfessionTag.ToString());
+            ProfObj->SetNumberField(TEXT("Proficiency"), ProfItem.ProficiencyLevel);
+            ProfObj->SetNumberField(TEXT("Priority"), ProfItem.ProfessionPriorityWeight);
+            ProfArray.Add(MakeShareable(new FJsonValueObject(ProfObj)));
+        }
+    }
+    RootObj->SetArrayField(TEXT("Professions"), ProfArray);
+
+    // 2. Needs & Moods Snapshot
     TSharedPtr<FJsonObject> NeedsObj = MakeShareable(new FJsonObject());
     for (const FDynamicNeedStateItem& Need : ReplicatedNeedsAndMoods.Items)
     {
@@ -449,7 +504,7 @@ bool UDynamicSocialComponent::ExportComputeNodePayloadJson(FString& OutTelemetry
     }
     RootObj->SetObjectField(TEXT("NeedsAndMoods"), NeedsObj);
 
-    // 2. Decayed Relationships Matrix
+    // 3. Decayed Relationships Matrix
     TArray<TSharedPtr<FJsonValue>> RelArray;
     for (const FDynamicRelationshipEdgeItem& Edge : ReplicatedRelationships.Items)
     {
@@ -468,7 +523,7 @@ bool UDynamicSocialComponent::ExportComputeNodePayloadJson(FString& OutTelemetry
     }
     RootObj->SetArrayField(TEXT("Relationships"), RelArray);
 
-    // 3. Spatial Places Memory
+    // 4. Spatial Places Memory
     TArray<TSharedPtr<FJsonValue>> PlacesArray;
     for (const FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
     {
@@ -483,3 +538,55 @@ bool UDynamicSocialComponent::ExportComputeNodePayloadJson(FString& OutTelemetry
     TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutTelemetryJson);
     return FJsonSerializer::Serialize(RootObj, Writer);
 }
+
+// --- Fast-Array Item Callback Implementations ---
+void FDynamicAssignedProfessionItem::PreReplicatedRemove(const FFastAssignedProfessionArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningSocialComp)
+    {
+        InArrayOwner.OwningSocialComp->HandleProfessionReplicated(*this, true);
+    }
+}
+
+void FDynamicAssignedProfessionItem::PostReplicatedAdd(const FFastAssignedProfessionArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningSocialComp)
+    {
+        InArrayOwner.OwningSocialComp->HandleProfessionReplicated(*this, false);
+    }
+}
+
+void FDynamicAssignedProfessionItem::PostReplicatedChange(const FFastAssignedProfessionArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningSocialComp)
+    {
+        InArrayOwner.OwningSocialComp->HandleProfessionReplicated(*this, false);
+    }
+}
+
+void UDynamicSocialComponent::HandleProfessionReplicated(const FDynamicAssignedProfessionItem& Item, bool bRemoved)
+{
+    // Handle replication updates or broadcast changes if required
+}
+
+void UDynamicSocialComponent::OnRep_Professions()
+{
+    // Rebuild local indexes or handle replication sync if required
+}
+
+bool UDynamicSocialComponent::ServerRemoveProfession(FGameplayTag ProfessionTag)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !ProfessionTag.IsValid()) return false;
+
+    int32 RemovedCount = ReplicatedProfessions.Items.RemoveAll([ProfessionTag](const FDynamicAssignedProfessionItem& Item) {
+        return Item.ProfessionTag == ProfessionTag;
+    });
+
+    if (RemovedCount > 0)
+    {
+        ReplicatedProfessions.MarkArrayDirty();
+        return true;
+    }
+    return false;
+}
+

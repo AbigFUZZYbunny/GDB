@@ -1,0 +1,43 @@
+﻿{
+  "_comment": "Dynamic Time and Life Stage System",
+  "CalendarConfig": {
+    "TimeScalar": 60.0,
+    "HoursPerDay": 24,
+    "DaysPerSeason": 30,
+    "SeasonsPerYear": 4
+  },
+  "LifeStagesRegistry": [
+    {
+      "StageTag": "Age.Baby",
+      "MinimumAgeYears": 0.0,
+      "BaseScaleMultiplier": 0.35,
+      "StageAttributeModifiers": [
+        { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": -0.80 },
+        { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Multiplicative", "Magnitude": -0.80 }
+      ]
+    },
+    {
+      "StageTag": "Age.Child",
+      "MinimumAgeYears": 4.0,
+      "BaseScaleMultiplier": 0.65,
+      "StageAttributeModifiers": [
+        { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": -0.40 }
+      ]
+    },
+    {
+      "StageTag": "Age.Adult",
+      "MinimumAgeYears": 18.0,
+      "BaseScaleMultiplier": 1.0,
+      "StageAttributeModifiers": []
+    },
+    {
+      "StageTag": "Age.Elder",
+      "MinimumAgeYears": 65.0,
+      "BaseScaleMultiplier": 0.95,
+      "StageAttributeModifiers": [
+        { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": -0.30 },
+        { "TargetAttributeTag": "Attribute.Stat.Intelligence", "ModifierOp": "Additive", "Magnitude": 5.0 }
+      ]
+    }
+  ]
+}

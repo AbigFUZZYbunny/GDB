@@ -352,6 +352,14 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                 DeserializeMapWrapper(PersObj, TEXT("FoodAndDrinkPreferences"), TempDef.PersonalityProfile.FoodAndDrinkPreferences);
                 DeserializeMapWrapper(PersObj, TEXT("ActivityPreferences"), TempDef.PersonalityProfile.ActivityPreferences);
             }
+            if (TempObj->HasField(TEXT("AgingProfile")))
+            {
+                FJsonObjectConverter::JsonObjectToUStruct(TempObj->GetObjectField(TEXT("AgingProfile")).ToSharedRef(), &TempDef.AgingProfile, 0, 0);
+            }
+            if (TempObj->HasField(TEXT("AlleleDominanceOverrides")))
+            {
+                DeserializeMapWrapper(TempObj->GetObjectField(TEXT("AlleleDominanceOverrides")), TEXT("ReplicatedEntries"), TempDef.AlleleDominanceOverrides);
+            }
             TargetGameState->CharacterTemplatesRegistry.Add(KeyTag, TempDef);
         }
     }
@@ -397,6 +405,38 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FDynamicEvolutionContainer Container;
             FJsonObjectConverter::JsonObjectToUStruct(EvoObj.ToSharedRef(), &Container, 0, 0);
             TargetGameState->EvolutionMasterRegistry.Add(KeyTag, Container);
+        }
+    }
+    
+    // 1. Calendar
+    if (RootObject->HasField(TEXT("CalendarConfig")))
+    {
+        FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalendarConfig")).ToSharedRef(), &TargetGameState->CalendarConfig, 0, 0);
+    }
+
+    // 2. Aging
+    if (RootObject->HasField(TEXT("LifeStagesRegistry")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>& Array = RootObject->GetArrayField(TEXT("LifeStagesRegistry"));
+        for (const auto& Val : Array)
+        {
+            FDynamicLifeStageDef Stage;
+            FJsonObjectConverter::JsonObjectToUStruct(Val->AsObject().ToSharedRef(), &Stage, 0, 0);
+            TargetGameState->LifeStagesRegistry.Add(Stage);
+        }
+    }
+
+    // 3. Genetics
+    if (RootObject->HasField(TEXT("GeneticsMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("GeneticsMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            FDynamicGeneLocusDef Locus;
+            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Locus, 0, 0);
+            TargetGameState->GeneticsMasterRegistry.Add(KeyTag, Locus);
         }
     }
 

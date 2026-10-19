@@ -1793,6 +1793,136 @@ struct TStructOpsTypeTraits<FFastAssignedProfessionArray> : public TStructOpsTyp
     enum { WithNetDeltaSerializer = true };
 };
 
+// --- DYNAMIC CALENDAR & TIME SYSTEM ---
+USTRUCT(BlueprintType)
+struct FDynamicCalendarDef
+{
+    GENERATED_BODY()
+
+    // How many game-world seconds pass per real-world second (e.g. 60.0 = 1 minute game time per 1 second real time)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Calendar")
+    float TimeScalar = 60.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Calendar")
+    int32 HoursPerDay = 24;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Calendar")
+    int32 DaysPerSeason = 30;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Calendar")
+    int32 SeasonsPerYear = 4;
+};
+
+// --- AGING & LIFE STAGES ---
+USTRUCT(BlueprintType)
+struct FDynamicLifeStageDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    FGameplayTag StageTag; // e.g. Age.Baby, Age.Adult, Age.Elder
+
+    // Minimum age in Game Years to reach this stage
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    float MinimumAgeYears = 0.0f;
+
+    // Physical mesh scaling for this life stage (e.g. Baby = 0.35)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    float BaseScaleMultiplier = 1.0f;
+
+    // Modifiers applied while in this life stage (e.g. Elder loses Strength, gains Intelligence)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    TArray<FGenderAttributeModifier> StageAttributeModifiers;
+};
+
+// --- GENETIC INHERITANCE: DISCRETE ALLELES (Traits, Hair Color, Eye Color) ---
+USTRUCT(BlueprintType)
+struct FDynamicAlleleDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FGameplayTag AlleleTag; // e.g. Gene.Hair.Blonde, Trait.Congenital.Genius
+
+    // Higher value determines expression dominance when paired against a recessive allele
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    float DominanceWeight = 1.0f;
+
+    // Optional physical color expression (if this is a color gene)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FDynamicColorGradient PhenotypeColor;
+
+    // Optional abilities granted by this gene (e.g. dragon-blood breath attack)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    TArray<FGameplayTag> PhenotypeAbilities;
+
+    // Optional stat modifiers granted when this allele is EXPRESSED
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    TArray<FGenderAttributeModifier> PhenotypeModifiers;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicGeneLocusDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FGameplayTag LocusTag; // e.g. GeneSlot.HairColor, GeneSlot.CongenitalTrait
+
+    // Chance to randomly mutate into any other allele defined in this locus during inheritance
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    float MutationChance = 0.02f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    TArray<FDynamicAlleleDef> PossibleAlleles;
+};
+
+// --- FAST ARRAY: PER-CHARACTER GENOME ---
+USTRUCT(BlueprintType)
+struct FDynamicGenePairItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FGameplayTag LocusTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FGameplayTag MaternalAllele;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FGameplayTag PaternalAllele;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    FGameplayTag ExpressedAllele; // Derived via dominance logic
+
+    void PreReplicatedRemove(const struct FFastGenomeArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastGenomeArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastGenomeArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastGenomeArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicGenePairItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicLifeComponent* OwningLifeComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicGenePairItem, FFastGenomeArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastGenomeArray> : public TStructOpsTypeTraitsBase2<FFastGenomeArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
 // --- BODYSWAP / BONE SCALING & SLIDER DEFINITIONS ---
 
 USTRUCT(BlueprintType)
@@ -1890,6 +2020,52 @@ struct FDynamicPersonalityProfile
     FDynamicTagFloatMapWrapper ActivityPreferences;
 };
 
+// --- GENETICS & CONTINUOUS AGING ---
+
+USTRUCT(BlueprintType)
+struct FContinuousGrowthKeyframe
+{
+    GENERATED_BODY()
+
+    // Normalized progression through the expected lifespan [0.0 = Birth, 1.0 = Death]
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    float NormalizedAge = 0.0f;
+
+    // Physical mesh scale at this age
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    float ScaleMultiplier = 1.0f;
+
+    // Multiplier applied to GASP physics motors (e.g. 0.1 for weak crawling babies, 1.0 for prime adults)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    float PhysicsMotorMultiplier = 1.0f;
+
+    // Animation state tag read by the AnimBP (e.g., Anim.Locomotion.Crawl, Anim.Locomotion.Toddle, Anim.Locomotion.Walk)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    FGameplayTag LocomotionAnimTag;
+
+    // Additive overrides to Bodyslide sliders (e.g., adding wrinkles, drooping ears, or growing horns over time)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    TArray<FTagFloatPair> MorphTargetOffsets;
+
+    // Continuous stat modifiers lerped over time (e.g. Strength increases to adulthood, then decays in elder years)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    TArray<FTagFloatPair> StatModifiers;
+};
+
+USTRUCT(BlueprintType)
+struct FAgingProfileDef
+{
+    GENERATED_BODY()
+
+    // Absolute lifespan in game-years (e.g., Goblin = 0.08, Human = 80.0, Elf = 800.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    float ExpectedLifespanYears = 80.0f;
+
+    // Time-series array defining the physical and statistical lifecycle of the character
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
+    TArray<FContinuousGrowthKeyframe> GrowthPhases;
+};
+
 USTRUCT(BlueprintType)
 struct FCharacterTemplateDef
 {
@@ -1951,6 +2127,14 @@ struct FCharacterTemplateDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     TArray<FGameplayTag> StartupEquipmentArchetypes;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FAgingProfileDef AgingProfile;
+
+    // Maps AlleleTag -> DominanceWeight. Overrides the global dominance weight for this specific race.
+    // e.g. Elves map Gene.Hair.Blonde to 100.0, Humans map Gene.Hair.Black to 10.0.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FDynamicTagFloatMapWrapper AlleleDominanceOverrides;
 };
 
 USTRUCT(BlueprintType)

@@ -33,6 +33,12 @@ public:
     TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
     TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
     TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
+    TArray<FDynamicLifeStageDef> LifeStagesRegistry;
+    TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
+    
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Calendar")
+    FDynamicCalendarDef CalendarConfig;
+
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;

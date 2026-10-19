@@ -1,0 +1,63 @@
+﻿{
+  "_comment": "Master Genetic Locus and Allele Definitions: Determines heritable traits, colors, and magical bloodlines.",
+  "GeneticsMasterRegistry": {
+    "GeneSlot.HairColor": {
+      "LocusTag": "GeneSlot.HairColor",
+      "MutationChance": 0.02,
+      "PossibleAlleles": [
+        {
+          "AlleleTag": "Gene.Hair.Black",
+          "DominanceWeight": 10.0,
+          "PhenotypeColor": { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.15, "G": 0.15, "B": 0.15, "A": 1.0 } }
+        },
+        {
+          "AlleleTag": "Gene.Hair.Blonde",
+          "DominanceWeight": 3.0,
+          "PhenotypeColor": { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.7, "B": 0.2, "A": 1.0 } }
+        }
+      ]
+    },
+    "GeneSlot.CongenitalTrait.Body": {
+      "LocusTag": "GeneSlot.CongenitalTrait.Body",
+      "MutationChance": 0.05,
+      "PossibleAlleles": [
+        {
+          "AlleleTag": "Trait.Congenital.None",
+          "DominanceWeight": 50.0
+        },
+        {
+          "AlleleTag": "Trait.Congenital.Strong",
+          "DominanceWeight": 5.0,
+          "PhenotypeModifiers": [
+            { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": 0.20 }
+          ]
+        },
+        {
+          "AlleleTag": "Trait.Congenital.Frail",
+          "DominanceWeight": 5.0,
+          "PhenotypeModifiers": [
+            { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Multiplicative", "Magnitude": -0.20 }
+          ]
+        }
+      ]
+    },
+    "GeneSlot.Bloodline.Magic": {
+      "LocusTag": "GeneSlot.Bloodline.Magic",
+      "MutationChance": 0.01,
+      "PossibleAlleles": [
+        {
+          "AlleleTag": "Trait.Bloodline.Mundane",
+          "DominanceWeight": 100.0
+        },
+        {
+          "AlleleTag": "Trait.Bloodline.DraconicFire",
+          "DominanceWeight": 1.0,
+          "PhenotypeAbilities": [ "Ability.Magic.FireBreath" ],
+          "PhenotypeModifiers": [
+            { "TargetAttributeTag": "Attribute.Mastery.Element.Fire", "ModifierOp": "Additive", "Magnitude": 10.0 }
+          ]
+        }
+      ]
+    }
+  }
+}

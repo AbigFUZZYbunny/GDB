@@ -1,6 +1,79 @@
 ﻿{
-  "_comment": "Complete Character & Creature Templates Registry: Defines 20 distinct races/creatures with anatomical bone morphs, color gradients, and AI bindings.",
+  "_comment": "Master Character Templates Schema: Complete configuration including hierarchies, attribute ranges, skin/hair gradients, cultural hairstyles, gender variants, Bodyslide clamps, continuous aging profiles, and AI agent bindings for humanoids, beasts, aquatics, arthropods, dragons, high fantasy monsters, and undead.",
   "CharacterTemplates": {
+    "Character.Humanoid": {
+      "TemplateTag": "Character.Humanoid",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Mannequin.SK_Mannequin",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Villager",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Base Humanoid" },
+          { "KeyTag": "Localization.Description", "Value": "Standard bipedal humanoid template with default socialization and professions." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.6, "B": 0.5, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.2, "G": 0.1, "B": 0.0, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.2, "B": 0.1, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 80.0, "MaxValue": 120.0 },
+        { "AttributeTag": "Attribute.Resource.Stamina", "MinValue": 90.0, "MaxValue": 110.0 },
+        { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 8.0, "MaxValue": 15.0 },
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 8.0, "MaxValue": 15.0 },
+        { "AttributeTag": "Attribute.Stat.Constitution", "MinValue": 8.0, "MaxValue": 15.0 }
+      ],
+      "WeightedAttributes": [
+        { "AttributeTag": "GDBCombat.Attribute.Trait.Strong", "SelectionChance": 0.25, "AssignedValue": 1.0 }
+      ],
+      "ProfessionRolls": [
+        { "ProfessionTag": "Profession.Labor.Woodcutter", "ChanceWeight": 0.5 },
+        { "ProfessionTag": "Profession.Labor.Farmer", "ChanceWeight": 0.5 }
+      ],
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Industrious" ],
+        "FoodAndDrinkPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Item.Food.Bread", "Value": 1.2 },
+            { "KeyTag": "Item.Drink.Water", "Value": 1.0 }
+          ]
+        },
+        "ActivityPreferences": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Activity.Work", "Value": 1.1 }
+          ]
+        }
+      },
+      "DefaultPlaceBindings": [
+        { "PlaceRoleTag": "Place.Home", "DefaultLandmarkTag": "Landmark.Village.Cottage" },
+        { "PlaceRoleTag": "Place.Workstation", "DefaultLandmarkTag": "Landmark.Village.GeneralWorkshop" }
+      ],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.5 },
+        { "KeyTag": "Slider.Body.Weight", "Value": 0.5 },
+        { "KeyTag": "Slider.Body.Muscularity", "Value": 0.5 }
+      ],
+      "AgingProfile": {
+        "ExpectedLifespanYears": 80.0,
+        "GrowthPhases": [
+          { "NormalizedAge": 0.0, "ScaleMultiplier": 0.35, "PhysicsMotorMultiplier": 0.1, "LocomotionAnimTag": "Anim.Locomotion.Crawl", "MorphTargetOffsets": [], "StatModifiers": [] },
+          { "NormalizedAge": 0.15, "ScaleMultiplier": 0.65, "PhysicsMotorMultiplier": 0.6, "LocomotionAnimTag": "Anim.Locomotion.Toddle", "MorphTargetOffsets": [], "StatModifiers": [] },
+          { "NormalizedAge": 0.3, "ScaleMultiplier": 1.0, "PhysicsMotorMultiplier": 1.0, "LocomotionAnimTag": "Anim.Locomotion.Walk", "MorphTargetOffsets": [], "StatModifiers": [] }
+        ]
+      },
+      "StartupAbilities": [
+        "Ability.Interaction.Open",
+        "Ability.Interaction.Close",
+        "Ability.Interaction.Grab"
+      ],
+      "StartupEquipmentArchetypes": []
+    },
     "Character.Humanoid.Human": {
       "TemplateTag": "Character.Humanoid.Human",
       "ParentTemplateTag": "Character.Humanoid",
@@ -191,6 +264,13 @@
       "GenderVariants": [],
       "RacialSliderClamps": [],
       "DefaultBodyslideSliders": [],
+      "AgingProfile": {
+        "ExpectedLifespanYears": 10.0,
+        "GrowthPhases": [
+          { "NormalizedAge": 0.0, "ScaleMultiplier": 0.4, "PhysicsMotorMultiplier": 0.2, "LocomotionAnimTag": "Anim.Locomotion.Crawl", "MorphTargetOffsets": [], "StatModifiers": [] },
+          { "NormalizedAge": 0.2, "ScaleMultiplier": 1.0, "PhysicsMotorMultiplier": 1.0, "LocomotionAnimTag": "Anim.Locomotion.Fly", "MorphTargetOffsets": [], "StatModifiers": [] }
+        ]
+      },
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
@@ -794,6 +874,13 @@
       "GenderVariants": [],
       "RacialSliderClamps": [],
       "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Horns", "Value": 0.8 } ],
+      "AgingProfile": {
+        "ExpectedLifespanYears": 2000.0,
+        "GrowthPhases": [
+          { "NormalizedAge": 0.0, "ScaleMultiplier": 0.25, "PhysicsMotorMultiplier": 0.1, "LocomotionAnimTag": "Anim.Locomotion.Crawl", "MorphTargetOffsets": [], "StatModifiers": [] },
+          { "NormalizedAge": 0.05, "ScaleMultiplier": 1.0, "PhysicsMotorMultiplier": 1.0, "LocomotionAnimTag": "Anim.Locomotion.Fly", "MorphTargetOffsets": [], "StatModifiers": [] }
+        ]
+      },
       "StartupAbilities": [ "Ability.Magic.DragonFireBreath" ],
       "StartupEquipmentArchetypes": []
     },
@@ -934,7 +1021,7 @@
       "ParentTemplateTag": "None",
       "SkeletalMeshAsset": "/Game/Creatures/Quadruped/SK_Cervidae.SK_Cervidae",
       "AnimationControllerClass": "/Game/Creatures/Quadruped/ABP_Quadruped.ABP_Quadruped_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Quadruped",
+      "SkeletonTypeTag": "Skeleton.Creature.Cervidae",
       "DefaultAIAgentTag": "AI.Type.Beast.Grazer",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Cervidae (Deer/Stag)" } ] },
       "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.6, "G": 0.4, "B": 0.25, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.7, "B": 0.6, "A": 1.0 } } ],
@@ -951,7 +1038,7 @@
       "ParentTemplateTag": "None",
       "SkeletalMeshAsset": "/Game/Creatures/Quadruped/SK_Equidae.SK_Equidae",
       "AnimationControllerClass": "/Game/Creatures/Quadruped/ABP_Quadruped.ABP_Quadruped_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Quadruped",
+      "SkeletonTypeTag": "Skeleton.Creature.Equidae",
       "DefaultAIAgentTag": "AI.Type.Beast.Grazer",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Equidae (Horse)" } ] },
       "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.4, "G": 0.25, "B": 0.15, "A": 1.0 }, "SecondaryColor": { "R": 0.9, "G": 0.9, "B": 0.9, "A": 1.0 } } ],
@@ -1251,403 +1338,258 @@
       ],
       "StartupAbilities": [ "Ability.Magic.StarlightBurst", "Ability.Movement.FlightGlide" ]
     },
-    "Character.Creature.Fish": {
-      "TemplateTag": "Character.Creature.Fish",
+    "Character.Monster.Goblin": {
+      "TemplateTag": "Character.Monster.Goblin",
       "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Fish.SK_Fish",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Beast.Fish.Schooling",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Goblin.SK_Goblin",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Goblinoid",
+      "DefaultAIAgentTag": "AI.Type.Monster.Goblinoid",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Default Fish" },
-          { "KeyTag": "Localization.Description", "Value": "Standard aquatic fish template for common species." }
-        ]
-      },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.6, "G": 0.7, "B": 0.8, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.5, "B": 0.6, "A": 1.0 } } ],
-      "AllowedHairColors": [],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 30.0, "MaxValue": 50.0 } ],
-      "WeightedAttributes": [],
-      "ProfessionRolls": [],
-      "PersonalityProfile": {
-        "PersonalityTraitTags": [ "Personality.Trait.Schooling" ],
-        "FoodAndDrinkPreferences": { "ReplicatedEntries": [] },
-        "ActivityPreferences": { "ReplicatedEntries": [] }
-      },
-      "DefaultPlaceBindings": [],
-      "GenderVariants": [],
-      "RacialSliderClamps": [],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.5 } ],
-      "StartupAbilities": [ "Ability.Movement.SchoolScatter" ],
-      "StartupEquipmentArchetypes": []
-    },
-    "Character.Creature.Fish.Salmon": {
-      "TemplateTag": "Character.Creature.Fish.Salmon",
-      "ParentTemplateTag": "Character.Creature.Fish",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Salmon.SK_Salmon",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Beast.Fish.Schooling",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "River Salmon" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.7, "G": 0.4, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.5, "B": 0.5, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Stamina", "MinValue": 100.0, "MaxValue": 140.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.6 } ],
-      "StartupAbilities": [ "Ability.Movement.SchoolScatter" ]
-    },
-    "Character.Creature.Fish.Tuna": {
-      "TemplateTag": "Character.Creature.Fish.Tuna",
-      "ParentTemplateTag": "Character.Creature.Fish",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Tuna.SK_Tuna",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Beast.Fish.Schooling",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Bluefin Tuna" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.3, "B": 0.6, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.8, "B": 0.8, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 25.0, "MaxValue": 35.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.75 } ],
-      "StartupAbilities": [ "Ability.Movement.SchoolScatter" ]
-    },
-    "Character.Creature.Fish.Piranha": {
-      "TemplateTag": "Character.Creature.Fish.Piranha",
-      "ParentTemplateTag": "Character.Creature.Fish",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Piranha.SK_Piranha",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Beast.Fish.Predator",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Piranha" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.4, "G": 0.2, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.3, "B": 0.2, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 40.0, "MaxValue": 60.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.4 } ],
-      "StartupAbilities": [ "Ability.Combat.AquaticBite" ]
-    },
-    "Character.Creature.Fish.Anglerfish": {
-      "TemplateTag": "Character.Creature.Fish.Anglerfish",
-      "ParentTemplateTag": "Character.Creature.Fish",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Anglerfish.SK_Anglerfish",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Monster.Fish.Abyssal",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Abyssal Anglerfish" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.12, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.2, "B": 0.25, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 180.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Bioluminescence", "Value": 0.9 } ],
-      "StartupAbilities": [ "Ability.Magic.BioluminescentLureCurse", "Ability.Combat.AquaticBite" ]
-    },
-    "Character.Creature.Fish.Shark": {
-      "TemplateTag": "Character.Creature.Fish.Shark",
-      "ParentTemplateTag": "Character.Creature.Fish",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Shark.SK_Shark",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Beast.Fish.Predator",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Great White Shark" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.4, "G": 0.45, "B": 0.5, "A": 1.0 }, "SecondaryColor": { "R": 0.9, "G": 0.9, "B": 0.9, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 250.0, "MaxValue": 350.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.8 } ],
-      "StartupAbilities": [ "Ability.Combat.AquaticBite" ]
-    },
-    "Character.Monster.Fish.Leviathan": {
-      "TemplateTag": "Character.Monster.Fish.Leviathan",
-      "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_Leviathan.SK_Leviathan",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Serpent.ABP_Serpent_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Monster.Fish.Abyssal",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Oceanic Leviathan (Fantasy)" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.1, "G": 0.2, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.0, "G": 0.8, "B": 0.9, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 3000.0, "MaxValue": 5000.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Bioluminescence", "Value": 1.0 } ],
-      "StartupAbilities": [ "Ability.Magic.TidalWave", "Ability.Combat.AquaticBite" ]
-    },
-    "Character.Monster.Fish.StormEel": {
-      "TemplateTag": "Character.Monster.Fish.StormEel",
-      "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_StormEel.SK_StormEel",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Serpent.ABP_Serpent_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Monster.Fish.Abyssal",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Storm Eel (Fantasy)" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.3, "B": 0.5, "A": 1.0 }, "SecondaryColor": { "R": 1.0, "G": 1.0, "B": 0.2, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 30.0, "MaxValue": 40.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.7 } ],
-      "StartupAbilities": [ "Ability.Magic.LightningBreath", "Ability.Combat.AquaticBite" ]
-    },
-    "Character.Monster.Fish.CrystalKoi": {
-      "TemplateTag": "Character.Monster.Fish.CrystalKoi",
-      "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_CrystalKoi.SK_CrystalKoi",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Beast.Fish.Schooling",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Crystal-Scaled Koi (Fantasy)" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.8, "G": 0.9, "B": 1.0, "A": 1.0 }, "SecondaryColor": { "R": 1.0, "G": 0.5, "B": 0.7, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 150.0, "MaxValue": 250.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.FinSpan", "Value": 0.9 } ],
-      "StartupAbilities": [ "Ability.Magic.PrismaticFlash", "Ability.Movement.SchoolScatter" ]
-    },
-    "Character.Monster.Fish.AbyssStalker": {
-      "TemplateTag": "Character.Monster.Fish.AbyssStalker",
-      "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Creatures/Aquatic/SK_AbyssStalker.SK_AbyssStalker",
-      "AnimationControllerClass": "/Game/Creatures/Aquatic/ABP_Fish.ABP_Fish_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Fish",
-      "DefaultAIAgentTag": "AI.Type.Monster.Fish.Abyssal",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Abyss Stalker (Fantasy)" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.05, "G": 0.05, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.1, "B": 0.9, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 400.0, "MaxValue": 650.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Bioluminescence", "Value": 0.95 } ],
-      "StartupAbilities": [ "Ability.Magic.ShadowStep", "Ability.Combat.AquaticBite" ]
-    },
-    "Character.Creature.Arthropod": {
-      "TemplateTag": "Character.Creature.Arthropod",
-      "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Arthropod.SK_Arthropod",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Default Arthropod" },
+          { "KeyTag": "Localization.Name", "Value": "Default Goblin" },
           { "KeyTag": "Localization.Description", "Value": "Base exoskeleton arthropod template." }
         ]
       },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.3, "G": 0.25, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.15, "B": 0.1, "A": 1.0 } } ],
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.3, "G": 0.5, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.3, "B": 0.1, "A": 1.0 } } ],
       "AllowedHairColors": [],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 40.0, "MaxValue": 70.0 } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 50.0, "MaxValue": 75.0 } ],
       "WeightedAttributes": [],
       "ProfessionRolls": [],
-      "PersonalityProfile": {
-        "PersonalityTraitTags": [ "Personality.Trait.Instinctual" ],
-        "FoodAndDrinkPreferences": { "ReplicatedEntries": [] },
-        "ActivityPreferences": { "ReplicatedEntries": [] }
-      },
+      "PersonalityProfile": { "PersonalityTraitTags": [ "Personality.Trait.Greedy" ], "FoodAndDrinkPreferences": { "ReplicatedEntries": [] }, "ActivityPreferences": { "ReplicatedEntries": [] } },
       "DefaultPlaceBindings": [],
       "GenderVariants": [],
       "RacialSliderClamps": [],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.5 } ],
-      "StartupAbilities": [],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.GoblinEars", "Value": 0.7 } ],
+      "AgingProfile": {
+        "ExpectedLifespanYears": 0.08,
+        "GrowthPhases": [
+          { "NormalizedAge": 0.0, "ScaleMultiplier": 0.4, "PhysicsMotorMultiplier": 0.2, "LocomotionAnimTag": "Anim.Locomotion.Crawl", "MorphTargetOffsets": [], "StatModifiers": [] },
+          { "NormalizedAge": 0.1, "ScaleMultiplier": 1.0, "PhysicsMotorMultiplier": 1.0, "LocomotionAnimTag": "Anim.Locomotion.Walk", "MorphTargetOffsets": [], "StatModifiers": [] }
+        ]
+      },
+      "StartupAbilities": [ "Ability.Combat.DirtyShiv" ],
       "StartupEquipmentArchetypes": []
     },
-    "Character.Creature.Arthropod.Spider.Tarantula": {
-      "TemplateTag": "Character.Creature.Arthropod.Spider.Tarantula",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Tarantula.SK_Tarantula",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Spider.ABP_Spider_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Goliath Tarantula" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.25, "G": 0.18, "B": 0.12, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.3, "B": 0.2, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 100.0, "MaxValue": 150.0 } ],
-      "DefaultBodyslideSliders": [
-        { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.8 },
-        { "KeyTag": "Slider.Appendage.Mandibles", "Value": 0.7 }
-      ],
-      "StartupAbilities": [ "Ability.Combat.VenomBite" ]
+    "Character.Monster.Goblin.Scavenger": {
+      "TemplateTag": "Character.Monster.Goblin.Scavenger",
+      "ParentTemplateTag": "Character.Monster.Goblin",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_GoblinScavenger.SK_GoblinScavenger",
+      "DefaultAIAgentTag": "AI.Type.Monster.Goblinoid",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Goblin Scavenger" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 15.0, "MaxValue": 22.0 } ],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.GoblinEars", "Value": 0.8 } ]
     },
-    "Character.Creature.Arthropod.Spider.Recluse": {
-      "TemplateTag": "Character.Creature.Arthropod.Spider.Recluse",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Recluse.SK_Recluse",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Spider.ABP_Spider_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Brown Recluse" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.5, "G": 0.4, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.2, "B": 0.15, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 22.0, "MaxValue": 30.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.3 } ],
-      "StartupAbilities": [ "Ability.Combat.NecroticBite" ]
+    "Character.Monster.Goblin.Hobgoblin": {
+      "TemplateTag": "Character.Monster.Goblin.Hobgoblin",
+      "ParentTemplateTag": "Character.Monster.Goblin",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Hobgoblin.SK_Hobgoblin",
+      "DefaultAIAgentTag": "AI.Type.Monster.Goblinoid",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Hobgoblin Berserker" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 160.0 } ],
+      "RacialSliderClamps": [ { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.6, "ClampedMax": 0.9 } ],
+      "StartupAbilities": [ "Ability.Combat.HeavySlash" ]
     },
-    "Character.Creature.Arthropod.Spider.Jumping": {
-      "TemplateTag": "Character.Creature.Arthropod.Spider.Jumping",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_JumpingSpider.SK_JumpingSpider",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Spider.ABP_Spider_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Jumping Spider" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.2, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.8, "B": 0.8, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 30.0, "MaxValue": 40.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.35 } ],
-      "StartupAbilities": [ "Ability.Movement.LeapAmbush", "Ability.Combat.VenomBite" ]
+    "Character.Monster.Goblin.Cave": {
+      "TemplateTag": "Character.Monster.Goblin.Cave",
+      "ParentTemplateTag": "Character.Monster.Goblin",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_CaveGoblin.SK_CaveGoblin",
+      "DefaultAIAgentTag": "AI.Type.Monster.Goblinoid",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Cave Skulker Goblin" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 18.0, "MaxValue": 26.0 } ]
     },
-    "Character.Monster.Arthropod.Spider.Phase": {
-      "TemplateTag": "Character.Monster.Arthropod.Spider.Phase",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_PhaseSpider.SK_PhaseSpider",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Spider.ABP_Spider_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Phase Spider (Fantasy)" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.1, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.3, "B": 0.9, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 35.0, "MaxValue": 48.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.6 } ],
-      "StartupAbilities": [ "Ability.Magic.ShadowStep", "Ability.Combat.VenomBite" ]
-    },
-    "Character.Creature.Arthropod.Insect.Beetle": {
-      "TemplateTag": "Character.Creature.Arthropod.Insect.Beetle",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Beetle.SK_Beetle",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Hercules Beetle" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.15, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.4, "B": 0.2, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 180.0 } ],
-      "DefaultBodyslideSliders": [
-        { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.9 },
-        { "KeyTag": "Slider.Appendage.Mandibles", "Value": 0.8 }
-      ],
-      "StartupAbilities": [ "Ability.Combat.MandibleStab" ]
-    },
-    "Character.Creature.Arthropod.Insect.Ant": {
-      "TemplateTag": "Character.Creature.Arthropod.Insect.Ant",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Ant.SK_Ant",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Soldier Ant" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.5, "G": 0.2, "B": 0.15, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.1, "B": 0.05, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 14.0, "MaxValue": 20.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Mandibles", "Value": 0.7 } ],
-      "StartupAbilities": [ "Ability.Combat.MandibleStab" ]
-    },
-    "Character.Creature.Arthropod.Insect.Mantis": {
-      "TemplateTag": "Character.Creature.Arthropod.Insect.Mantis",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Mantis.SK_Mantis",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Praying Mantis" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.3, "G": 0.6, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.4, "B": 0.1, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 25.0, "MaxValue": 35.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Pincers", "Value": 0.8 } ],
-      "StartupAbilities": [ "Ability.Combat.RaptorialStrike" ]
-    },
-    "Character.Creature.Arthropod.Insect.Bee": {
-      "TemplateTag": "Character.Creature.Arthropod.Insect.Bee",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Bee.SK_Bee",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Bumblebee" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.9, "G": 0.7, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 20.0, "MaxValue": 28.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.5 } ],
-      "StartupAbilities": [ "Ability.Combat.StingerStab" ]
-    },
-    "Character.Creature.Arthropod.Insect.Grasshopper": {
-      "TemplateTag": "Character.Creature.Arthropod.Insect.Grasshopper",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Grasshopper.SK_Grasshopper",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Grasshopper" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.4, "G": 0.7, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.5, "B": 0.2, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 28.0, "MaxValue": 38.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.4 } ],
-      "StartupAbilities": [ "Ability.Movement.LeapAmbush" ]
-    },
-    "Character.Creature.Arthropod.Crustacean.HermitCrab": {
-      "TemplateTag": "Character.Creature.Arthropod.Crustacean.HermitCrab",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_HermitCrab.SK_HermitCrab",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.Crustacean",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Hermit Crab" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.7, "G": 0.4, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.3, "B": 0.1, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 90.0, "MaxValue": 130.0 } ],
-      "DefaultBodyslideSliders": [
-        { "KeyTag": "Slider.Appendage.Pincers", "Value": 0.7 },
-        { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.7 }
-      ],
-      "StartupAbilities": [ "Ability.Combat.PincerSnap", "Ability.Defense.ShellRetract" ]
-    },
-    "Character.Creature.Arthropod.Crustacean.BlueLobster": {
-      "TemplateTag": "Character.Creature.Arthropod.Crustacean.BlueLobster",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_BlueLobster.SK_BlueLobster",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.Crustacean",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Blue Lobster" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.1, "G": 0.3, "B": 0.8, "A": 1.0 }, "SecondaryColor": { "R": 0.05, "G": 0.15, "B": 0.5, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 110.0, "MaxValue": 160.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.Pincers", "Value": 0.9 } ],
-      "StartupAbilities": [ "Ability.Combat.PincerSnap" ]
-    },
-    "Character.Creature.Arthropod.Other.Scorpion": {
-      "TemplateTag": "Character.Creature.Arthropod.Other.Scorpion",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Scorpion.SK_Scorpion",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Desert Scorpion" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.7, "G": 0.55, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.3, "B": 0.15, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 100.0, "MaxValue": 150.0 } ],
-      "DefaultBodyslideSliders": [
-        { "KeyTag": "Slider.Appendage.Pincers", "Value": 0.8 },
-        { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.6 }
-      ],
-      "StartupAbilities": [ "Ability.Combat.StingerStab", "Ability.Combat.PincerSnap" ]
-    },
-    "Character.Creature.Arthropod.Other.Centipede": {
-      "TemplateTag": "Character.Creature.Arthropod.Other.Centipede",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_Centipede.SK_Centipede",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Giant Centipede" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.6, "G": 0.2, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.1, "B": 0.05, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 24.0, "MaxValue": 34.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.5 } ],
-      "StartupAbilities": [ "Ability.Combat.VenomBite" ]
-    },
-    "Character.Monster.Arthropod.CrystalBeetle": {
-      "TemplateTag": "Character.Monster.Arthropod.CrystalBeetle",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_CrystalBeetle.SK_CrystalBeetle",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Beast.Arthropod.Crustacean",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Crystal-Shell Beetle (Fantasy)" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.6, "G": 0.8, "B": 1.0, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.4, "B": 1.0, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 250.0, "MaxValue": 400.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.95 } ],
-      "StartupAbilities": [ "Ability.Magic.CrystalShieldReflect", "Ability.Combat.MandibleStab" ]
-    },
-    "Character.Monster.Arthropod.VolcanicScuttler": {
-      "TemplateTag": "Character.Monster.Arthropod.VolcanicScuttler",
-      "ParentTemplateTag": "Character.Creature.Arthropod",
-      "SkeletalMeshAsset": "/Game/Creatures/Arthropod/SK_MagmaCrab.SK_MagmaCrab",
-      "AnimationControllerClass": "/Game/Creatures/Arthropod/ABP_Arthropod.ABP_Arthropod_C",
-      "SkeletonTypeTag": "Skeleton.Creature.Arthropod",
-      "DefaultAIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Volcanic Magma Scuttler (Fantasy)" } ] },
+    "Character.Monster.Goblin.Magma": {
+      "TemplateTag": "Character.Monster.Goblin.Magma",
+      "ParentTemplateTag": "Character.Monster.Goblin",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_MagmaGoblin.SK_MagmaGoblin",
+      "DefaultAIAgentTag": "AI.Type.Monster.Goblinoid",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Magma Goblin (Fantasy)" } ] },
       "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 1.0, "G": 0.4, "B": 0.0, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 300.0, "MaxValue": 450.0 } ],
-      "DefaultBodyslideSliders": [
-        { "KeyTag": "Slider.Appendage.Pincers", "Value": 0.95 },
-        { "KeyTag": "Slider.Body.CarapaceWidth", "Value": 0.85 }
-      ],
-      "StartupAbilities": [ "Ability.Magic.MagmaBurst", "Ability.Combat.PincerSnap" ]
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 90.0, "MaxValue": 130.0 } ],
+      "StartupAbilities": [ "Ability.Magic.Firebolt_1" ]
     },
-    "Character.Monster.Spectral": {
-      "TemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Gnome": {
+      "TemplateTag": "Character.Monster.Gnome",
       "ParentTemplateTag": "None",
-      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_SpectralBase.SK_SpectralBase",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Gnome.SK_Gnome",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Default Gnome" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.85, "G": 0.75, "B": 0.65, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.5, "B": 0.4, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 12.0, "MaxValue": 18.0 } ],
+      "RacialSliderClamps": [ { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.15, "ClampedMax": 0.35 } ],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.Height", "Value": 0.25 } ],
+      "StartupAbilities": []
+    },
+    "Character.Monster.Gnome.Tinker": {
+      "TemplateTag": "Character.Monster.Gnome.Tinker",
+      "ParentTemplateTag": "Character.Monster.Gnome",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_TinkerGnome.SK_TinkerGnome",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Tinker Gnome" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 16.0, "MaxValue": 22.0 } ]
+    },
+    "Character.Monster.Gnome.Forest": {
+      "TemplateTag": "Character.Monster.Gnome.Forest",
+      "ParentTemplateTag": "Character.Monster.Gnome",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_ForestGnome.SK_ForestGnome",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Forest Gnome" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 18.0, "MaxValue": 25.0 } ]
+    },
+    "Character.Monster.Gnome.Deep": {
+      "TemplateTag": "Character.Monster.Gnome.Deep",
+      "ParentTemplateTag": "Character.Monster.Gnome",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_DeepGnome.SK_DeepGnome",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Deep Gnome (Svirfneblin)" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 90.0, "MaxValue": 120.0 } ]
+    },
+    "Character.Monster.Gnome.Clockwork": {
+      "TemplateTag": "Character.Monster.Gnome.Clockwork",
+      "ParentTemplateTag": "Character.Monster.Gnome",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_ClockworkGnome.SK_ClockworkGnome",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Clockwork Gnome (Construct)" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.7, "G": 0.6, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.3, "B": 0.1, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 150.0, "MaxValue": 200.0 } ]
+    },
+    "Character.Monster.Troll": {
+      "TemplateTag": "Character.Monster.Troll",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Troll.SK_Troll",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Troll",
+      "DefaultAIAgentTag": "AI.Type.Monster.Troll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Default Troll" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.3, "G": 0.4, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.25, "B": 0.2, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 400.0, "MaxValue": 600.0 } ],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.TrollBulk", "Value": 0.8 } ],
+      "StartupAbilities": [ "Ability.Combat.BruteClubSmash", "Ability.Regeneration.FleshMend" ]
+    },
+    "Character.Monster.Troll.Mountain": {
+      "TemplateTag": "Character.Monster.Troll.Mountain",
+      "ParentTemplateTag": "Character.Monster.Troll",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_MountainTroll.SK_MountainTroll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Mountain Troll" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 600.0, "MaxValue": 850.0 } ]
+    },
+    "Character.Monster.Troll.Swamp": {
+      "TemplateTag": "Character.Monster.Troll.Swamp",
+      "ParentTemplateTag": "Character.Monster.Troll",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_SwampTroll.SK_SwampTroll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Swamp Troll" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 500.0, "MaxValue": 700.0 } ],
+      "StartupAbilities": [ "Ability.Combat.BruteClubSmash", "Ability.Regeneration.FleshMend" ]
+    },
+    "Character.Monster.Troll.Cave": {
+      "TemplateTag": "Character.Monster.Troll.Cave",
+      "ParentTemplateTag": "Character.Monster.Troll",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_CaveTroll.SK_CaveTroll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Cave Troll" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 700.0, "MaxValue": 1000.0 } ]
+    },
+    "Character.Monster.Troll.Iron": {
+      "TemplateTag": "Character.Monster.Troll.Iron",
+      "ParentTemplateTag": "Character.Monster.Troll",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_IronTroll.SK_IronTroll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Iron-Armored Troll (Fantasy)" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.4, "G": 0.4, "B": 0.45, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.2, "B": 0.25, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 900.0, "MaxValue": 1300.0 } ]
+    },
+    "Character.Monster.Fae": {
+      "TemplateTag": "Character.Monster.Fae",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Fae.SK_Fae",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Creature.Fae",
+      "DefaultAIAgentTag": "AI.Type.Monster.Fae",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Default Fae" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.9, "G": 1.0, "B": 0.9, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.8, "B": 0.6, "A": 1.0 } } ],
+      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.2, "G": 0.9, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 1.0, "G": 0.9, "B": 0.2, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 25.0, "MaxValue": 35.0 } ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.2 },
+        { "KeyTag": "Slider.Body.FaeWingspan", "Value": 0.7 }
+      ],
+      "StartupAbilities": [ "Ability.Magic.IllusionOrHex" ]
+    },
+    "Character.Monster.Fae.Pixie": {
+      "TemplateTag": "Character.Monster.Fae.Pixie",
+      "ParentTemplateTag": "Character.Monster.Fae",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Pixie.SK_Pixie",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Pixie" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 30.0, "MaxValue": 42.0 } ]
+    },
+    "Character.Monster.Fae.Dryad": {
+      "TemplateTag": "Character.Monster.Fae.Dryad",
+      "ParentTemplateTag": "Character.Monster.Fae",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Dryad.SK_Dryad",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Dryad (Tree Spirit)" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 150.0, "MaxValue": 220.0 } ]
+    },
+    "Character.Monster.Fae.Unseelie": {
+      "TemplateTag": "Character.Monster.Fae.Unseelie",
+      "ParentTemplateTag": "Character.Monster.Fae",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_UnseelieSidhe.SK_UnseelieSidhe",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Unseelie Sidhe (Dark Fae)" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 28.0, "MaxValue": 38.0 } ],
+      "StartupAbilities": [ "Ability.Magic.ShadowStep", "Ability.Magic.IllusionOrHex" ]
+    },
+    "Character.Monster.Fae.Sovereign": {
+      "TemplateTag": "Character.Monster.Fae.Sovereign",
+      "ParentTemplateTag": "Character.Monster.Fae",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_FaeSovereign.SK_FaeSovereign",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Fae Sovereign (Mythical)" } ] },
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 800.0, "MaxValue": 1200.0 } ],
+      "StartupAbilities": [ "Ability.Magic.NatureWrath", "Ability.Magic.IllusionOrHex" ]
+    },
+    "Character.Monster.Other.Minotaur": {
+      "TemplateTag": "Character.Monster.Other.Minotaur",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Minotaur.SK_Minotaur",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Troll",
+      "DefaultAIAgentTag": "AI.Type.Monster.Troll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Minotaur" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.4, "G": 0.3, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.15, "B": 0.1, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 450.0, "MaxValue": 650.0 } ],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.TrollBulk", "Value": 0.85 } ],
+      "StartupAbilities": [ "Ability.Combat.BruteClubSmash", "Ability.Combat.BoarCharge" ]
+    },
+    "Character.Monster.Other.Ogre": {
+      "TemplateTag": "Character.Monster.Other.Ogre",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Ogre.SK_Ogre",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Troll",
+      "DefaultAIAgentTag": "AI.Type.Monster.Troll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Ogre" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.45, "G": 0.5, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.35, "B": 0.25, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 500.0, "MaxValue": 750.0 } ],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.TrollBulk", "Value": 0.9 } ],
+      "StartupAbilities": [ "Ability.Combat.BruteClubSmash" ]
+    },
+    "Character.Monster.Other.Ent": {
+      "TemplateTag": "Character.Monster.Other.Ent",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Ent.SK_Ent",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Troll",
+      "DefaultAIAgentTag": "AI.Type.Monster.Cervidae.Guardian",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Ent (Living Tree)" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.25, "G": 0.18, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.15, "G": 0.1, "B": 0.05, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 1500.0, "MaxValue": 2500.0 } ],
+      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.TrollBulk", "Value": 1.0 } ],
+      "StartupAbilities": [ "Ability.Magic.NatureWrath", "Ability.Combat.BruteClubSmash" ]
+    },
+    "Character.Monster.Undead": {
+      "TemplateTag": "Character.Monster.Undead",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_UndeadBase.SK_UndeadBase",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Monster.Undead.Spectral",
       "DefaultAIAgentTag": "AI.Type.Monster.Undead.Spectral",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Default Spectral" },
+          { "KeyTag": "Localization.Name", "Value": "Default Undead" },
           { "KeyTag": "Localization.Description", "Value": "Base ethereal undead template." }
         ]
       },
@@ -1664,53 +1606,137 @@
       "StartupAbilities": [ "Ability.Magic.SoulDrain" ],
       "StartupEquipmentArchetypes": []
     },
-    "Character.Monster.Spectral.Ghost": {
-      "TemplateTag": "Character.Monster.Spectral.Ghost",
-      "ParentTemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Undead.Ghost": {
+      "TemplateTag": "Character.Monster.Undead.Ghost",
+      "ParentTemplateTag": "Character.Monster.Undead",
       "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Ghost.SK_Ghost",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Ghost" } ] },
       "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 15.0, "MaxValue": 22.0 } ],
       "StartupAbilities": [ "Ability.Magic.SoulDrain", "Ability.Movement.PhaseWalk" ]
     },
-    "Character.Monster.Spectral.Banshee": {
-      "TemplateTag": "Character.Monster.Spectral.Banshee",
-      "ParentTemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Undead.Banshee": {
+      "TemplateTag": "Character.Monster.Undead.Banshee",
+      "ParentTemplateTag": "Character.Monster.Undead",
       "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Banshee.SK_Banshee",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Banshee" } ] },
       "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 100.0, "MaxValue": 140.0 } ],
       "StartupAbilities": [ "Ability.Magic.TerrifyingWail", "Ability.Magic.SoulDrain" ]
     },
-    "Character.Monster.Spectral.Wraith": {
-      "TemplateTag": "Character.Monster.Spectral.Wraith",
-      "ParentTemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Undead.Wraith": {
+      "TemplateTag": "Character.Monster.Undead.Wraith",
+      "ParentTemplateTag": "Character.Monster.Undead",
       "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Wraith.SK_Wraith",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Wraith" } ] },
       "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 20.0, "MaxValue": 28.0 } ],
       "StartupAbilities": [ "Ability.Magic.LifeDrainTouch" ]
     },
-    "Character.Monster.Spectral.Spectre": {
-      "TemplateTag": "Character.Monster.Spectral.Spectre",
-      "ParentTemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Undead.Spectre": {
+      "TemplateTag": "Character.Monster.Undead.Spectre",
+      "ParentTemplateTag": "Character.Monster.Undead",
       "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Spectre.SK_Spectre",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Spectre" } ] },
       "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 25.0, "MaxValue": 35.0 } ],
       "StartupAbilities": [ "Ability.Magic.SoulDrain", "Ability.Movement.PhaseWalk" ]
     },
-    "Character.Monster.Spectral.Phantom": {
-      "TemplateTag": "Character.Monster.Spectral.Phantom",
-      "ParentTemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Undead.Phantom": {
+      "TemplateTag": "Character.Monster.Undead.Phantom",
+      "ParentTemplateTag": "Character.Monster.Undead",
       "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Phantom.SK_Phantom",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Phantom" } ] },
       "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 22.0, "MaxValue": 32.0 } ],
       "StartupAbilities": [ "Ability.Magic.IllusionOrHex" ]
     },
-    "Character.Monster.Spectral.Poltergeist": {
-      "TemplateTag": "Character.Monster.Spectral.Poltergeist",
-      "ParentTemplateTag": "Character.Monster.Spectral",
+    "Character.Monster.Undead.Poltergeist": {
+      "TemplateTag": "Character.Monster.Undead.Poltergeist",
+      "ParentTemplateTag": "Character.Monster.Undead",
       "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Poltergeist.SK_Poltergeist",
       "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Poltergeist" } ] },
       "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 25.0, "MaxValue": 35.0 } ],
       "StartupAbilities": [ "Ability.Magic.TelekineticThrow" ]
+    },
+    "Character.Monster.Undead.Lich": {
+      "TemplateTag": "Character.Monster.Undead.Lich",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Lich.SK_Lich",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Monster.Undead.Spectral",
+      "DefaultAIAgentTag": "AI.Type.Monster.Undead.Lich",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Lich (Undead Archmage)" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.2, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.1, "B": 0.7, "A": 1.0 } } ],
+      "AllowedHairColors": [],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 1000.0, "MaxValue": 1500.0 } ],
+      "WeightedAttributes": [],
+      "ProfessionRolls": [],
+      "PersonalityProfile": { "PersonalityTraitTags": [ "Personality.Trait.Megalomanic" ], "FoodAndDrinkPreferences": { "ReplicatedEntries": [] }, "ActivityPreferences": { "ReplicatedEntries": [] } },
+      "DefaultPlaceBindings": [],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [],
+      "StartupAbilities": [ "Ability.Magic.DeathBolt", "Ability.Magic.RaiseMinion" ],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Monster.Undead.Mummy": {
+      "TemplateTag": "Character.Monster.Undead.Mummy",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Mummy.SK_Mummy",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Monster.Troll",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Mummy" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.6, "G": 0.5, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.3, "B": 0.2, "A": 1.0 } } ],
+      "AllowedHairColors": [],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 300.0, "MaxValue": 450.0 } ],
+      "WeightedAttributes": [],
+      "ProfessionRolls": [],
+      "PersonalityProfile": { "PersonalityTraitTags": [ "Personality.Trait.Cursed" ], "FoodAndDrinkPreferences": { "ReplicatedEntries": [] }, "ActivityPreferences": { "ReplicatedEntries": [] } },
+      "DefaultPlaceBindings": [],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [],
+      "StartupAbilities": [ "Ability.Magic.MummyRotCurse", "Ability.Combat.UnarmedStrike" ],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Monster.Undead.Vampire": {
+      "TemplateTag": "Character.Monster.Undead.Vampire",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Vampire.SK_Vampire",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Monster.Undead.Spectral",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Vampire Lord" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.9, "G": 0.9, "B": 0.95, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.1, "B": 0.1, "A": 1.0 } } ],
+      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.1, "B": 0.1, "A": 1.0 } } ],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 600.0, "MaxValue": 900.0 }, { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 22.0, "MaxValue": 30.0 } ],
+      "WeightedAttributes": [],
+      "ProfessionRolls": [],
+      "PersonalityProfile": { "PersonalityTraitTags": [ "Personality.Trait.Arrogant", "Personality.Trait.Predatory" ], "FoodAndDrinkPreferences": { "ReplicatedEntries": [ { "KeyTag": "Item.Food.Blood", "Value": 3.0 } ] }, "ActivityPreferences": { "ReplicatedEntries": [] } },
+      "DefaultPlaceBindings": [],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [],
+      "StartupAbilities": [ "Ability.Magic.VampiricBite", "Ability.Movement.BatFormTransform" ],
+      "StartupEquipmentArchetypes": []
+    },
+    "Character.Monster.Undead.Wight": {
+      "TemplateTag": "Character.Monster.Undead.Wight",
+      "ParentTemplateTag": "None",
+      "SkeletalMeshAsset": "/Game/Characters/Monsters/SK_Wight.SK_Wight",
+      "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
+      "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
+      "DefaultAIAgentTag": "AI.Type.Monster.Undead.Spectral",
+      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Wight" } ] },
+      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.25, "G": 0.25, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.1, "G": 0.1, "B": 0.15, "A": 1.0 } } ],
+      "AllowedHairColors": [],
+      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 250.0, "MaxValue": 380.0 } ],
+      "WeightedAttributes": [],
+      "ProfessionRolls": [],
+      "PersonalityProfile": { "PersonalityTraitTags": [ "Personality.Trait.Hateful" ], "FoodAndDrinkPreferences": { "ReplicatedEntries": [] }, "ActivityPreferences": { "ReplicatedEntries": [] } },
+      "DefaultPlaceBindings": [],
+      "GenderVariants": [],
+      "RacialSliderClamps": [],
+      "DefaultBodyslideSliders": [],
+      "StartupAbilities": [ "Ability.Combat.EnergyDrainStrike" ],
+      "StartupEquipmentArchetypes": []
     }
   }
 }

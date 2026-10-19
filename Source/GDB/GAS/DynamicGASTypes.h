@@ -1292,6 +1292,221 @@ struct FDynamicThresholdContainer
     TArray<FDynamicThresholdRule> Rules;
 };
 
+// --- UNIFIED EVOLUTION & AGING SCHEMAS ---
+USTRUCT(BlueprintType)
+struct FEvolutionStageKeyframe
+{
+    GENERATED_BODY()
+
+    // Normalized progression through lifespan/durability/XP [0.0 = Birth/Raw, 1.0 = Max/Rotted/Mastered]
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float NormalizedProgress = 0.0f;
+
+    // Descriptive tag for this phase (e.g. Stage.Apple.Unripe, Stage.Apple.Ripe, Stage.Apple.Rotted; or Item.Rank.Heroic)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag StageTag;
+
+    // Mesh scale or asset transform adjustment over time
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float ScaleMultiplier = 1.0f;
+
+    // Additive attributes or stat bonuses granted by this evolution stage (e.g. +Damage on Heroic sword, or nutritional value on ripe apple)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    TArray<FTagFloatPair> StageAttributeModifiers;
+
+    // Dynamic tags added to the actor/item while in this stage (e.g. State.Item.Edible, State.Item.Decayed)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    TArray<FGameplayTag> TagsToApply;
+};
+
+USTRUCT(BlueprintType)
+struct FBiomeShiftRule
+{
+    GENERATED_BODY()
+
+    // The biome this cell will transition into if elemental conditions are held out of range
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FGameplayTag TargetBiomeTag;
+
+    // Flat condition tree name evaluated against the cell's current Elemental & Physical metrics
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FName ShiftConditionTreeName = NAME_None;
+
+    // How many in-game hours the condition must be sustained before the biome permanently shifts
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float RequiredSustainedGameHours = 48.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicBiomeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FGameplayTag BiomeTag; // e.g., Biome.Temperate.Forest, Biome.Arid.Desert, Biome.Arctic.Tundra
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FDynamicTagStringMapWrapper Localization;
+
+    // Baseline equilibrium values for the 6 elements (Fire, Water, Earth, Air, Light, Dark)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    TArray<FTagFloatPair> DefaultElementalEquilibrium;
+
+    // Rate per game-hour at which disturbed elemental levels pull back toward biome defaults
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float HomeostasisPullRate = 2.5f;
+
+    // Rules for permanent terraforming / biome shifting when elements are forced out of range
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    TArray<FBiomeShiftRule> BiomeShiftRules;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicWeatherPatternDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Weather")
+    FGameplayTag WeatherTag; // e.g., Weather.Storm.Rain, Weather.Heatwave, Weather.Blizzard
+
+    // Condition tree evaluated against cell elements (e.g., Air >= 60 && Water >= 70)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Weather")
+    FName SpawnConditionTreeName = NAME_None;
+
+    // How much Air Mana (Water vapor) is transferred to Ground/Earth per game-hour while active
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Weather")
+    TArray<FTagFloatPair> ElementalTransferRates;
+
+    // Direct modifiers to physical environment metrics (e.g., Wetness +50, Temperature -10)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Weather")
+    TArray<FTagFloatPair> EnvironmentMetricOffsets;
+
+    // Gameplay effects applied to characters/objects exposed to this weather
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Weather")
+    TArray<FGameplayTag> ExposedEffectsToApply;
+};
+
+// --- ENVIRONMENTAL EVOLUTION SCALING (REFRIGERATION / SPOILAGE / GROWTH) ---
+
+USTRUCT(BlueprintType)
+struct FEnvironmentalRateModifier
+{
+    GENERATED_BODY()
+
+    // e.g., Env.Metric.Temperature, Env.Metric.Wetness, Env.Metric.Sunlight, Element.Fire
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag EnvironmentMetricTag;
+
+    // Below MinThreshold, rate scales toward MinRateMultiplier (e.g. 0.0x spoilage at <= 2.0 Celsius)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float MinThreshold = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float MaxThreshold = 35.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float MinRateMultiplier = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float MaxRateMultiplier = 2.0f;
+
+    // If true, values outside [MinThreshold, MaxThreshold] halt evolution completely (e.g., frozen saplings)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    bool bPauseOutsideRange = false;
+};
+
+// --- FAST ARRAY: SPATIAL ENVIRONMENT CELLS & MOVING WEATHER FRONTS ---
+
+USTRUCT(BlueprintType)
+struct FEnvironmentGridCellItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    int32 CellIndex = 0; // Flattened 2D Grid Index: (Y * GridWidth) + X
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FGameplayTag CurrentBiomeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FGameplayTag TargetShiftBiomeTag;
+
+    // 0.0 = Pure CurrentBiome, 1.0 = Shifted to TargetShiftBiome
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float BiomeBlendAlpha = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FGameplayTag ActiveWeatherTag;
+
+    // 6 Elemental Mana Pools in this spatial cell:
+    // Index 0: Fire, 1: Water, 2: Earth, 3: Air, 4: Light, 5: Dark
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float ElementalDensities[6] = { 50.0f, 50.0f, 50.0f, 50.0f, 50.0f, 50.0f };
+
+    // Derived Physical Metrics:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float TemperatureCelsius = 20.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float Wetness = 20.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float WindSpeed = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    FVector2D WindDirection = FVector2D(1.0f, 0.0f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float GroundMoisture = 50.0f;
+
+    UPROPERTY(NotReplicated)
+    float SustainedOutOfRangeHours = 0.0f;
+
+    void PreReplicatedRemove(const struct FFastEnvironmentGridArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastEnvironmentGridArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastEnvironmentGridArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastEnvironmentGridArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FEnvironmentGridCellItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicEnvironmentSubsystem* OwningSubsystem = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FEnvironmentGridCellItem, FFastEnvironmentGridArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastEnvironmentGridArray> : public TStructOpsTypeTraitsBase2<FFastEnvironmentGridArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
+struct FEvolutionProfileDef
+{
+    GENERATED_BODY()
+
+    // Total time (in real-world seconds scaled by game time) required to complete the full 0.0 to 1.0 lifecycle
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    float TotalLifespanOrMaxXP = 100.0f;
+
+    // Time-series phases governing progression
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    TArray<FEvolutionStageKeyframe> ProgressionPhases;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    TArray<FEnvironmentalRateModifier> EnvironmentalModifiers;
+};
+
 
 // --- DYNAMIC SKELETAL TOPOLOGY & MULTI-JOINT LIMB CONFIG ---
 USTRUCT(BlueprintType)

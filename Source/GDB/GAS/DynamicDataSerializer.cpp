@@ -439,6 +439,34 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->GeneticsMasterRegistry.Add(KeyTag, Locus);
         }
     }
+    
+    // 1. Biomes Registry
+    if (RootObject->HasField(TEXT("BiomeMasterRegistry")))
+    {
+        for (const auto& Pair : RootObject->GetObjectField(TEXT("BiomeMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            FDynamicBiomeDef BiomeDef;
+            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &BiomeDef, 0, 0);
+            TargetGameState->BiomeMasterRegistry.Add(KeyTag, BiomeDef);
+        }
+    }
+
+    // 2. Weather Patterns Registry
+    if (RootObject->HasField(TEXT("WeatherMasterRegistry")))
+    {
+        for (const auto& Pair : RootObject->GetObjectField(TEXT("WeatherMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            FDynamicWeatherPatternDef WeatherDef;
+            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &WeatherDef, 0, 0);
+            TargetGameState->WeatherMasterRegistry.Add(KeyTag, WeatherDef);
+        }
+    }
 
     return true;
 }

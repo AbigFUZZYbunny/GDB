@@ -182,3 +182,11 @@ FGameplayTag UDynamicEquipmentComponent::GetEquippedItemInSlot(FGameplayTag Slot
     }
     return FGameplayTag::EmptyTag;
 }
+
+void UDynamicEquipmentComponent::ServerGrantItemXP(float XPGrantAmount)
+{
+    if (ItemEvolutionComponent && GetOwner() && GetOwner()->HasAuthority())
+    {
+        ItemEvolutionComponent->ServerAddProgress(XPGrantAmount);
+    }
+}

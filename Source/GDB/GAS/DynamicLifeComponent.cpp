@@ -44,7 +44,7 @@ void FDynamicGenePairItem::PostReplicatedChange(const FFastGenomeArray& InArrayO
 
 void UDynamicLifeComponent::HandleGeneReplicated(const FDynamicGenePairItem& Item)
 {
-    OnGeneExpressed.Broadcast(Item.LocusTag, Item.ExpressedAlleleTag);
+    OnGeneExpressed.Broadcast(Item.LocusTag, Item.ExpressedAllele);
 }
 
 void UDynamicLifeComponent::OnRep_AgeData()
@@ -67,13 +67,15 @@ float UDynamicLifeComponent::GetCurrentAgeYears() const
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return 0.0f;
 
-    const double Now = GetWorld()->GetTimeSeconds();
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     const double ElapsedRealSecs = FMath::Max(0.0, Now - BirthWorldTime);
     
-    const float GameSecs = ElapsedRealSecs * GS->CalculationSettings.TimeScalar; // Assumes TimeScalar added to settings
-    const float SecsPerYear = 24.0f * 3600.0f * 120.0f; // Simplified: 120 days per year
+    // Corrected to access CalendarConfig directly
+    const float GameSecs = ElapsedRealSecs * GS->CalendarConfig.TimeScalar; 
+    const float SecsPerDay = GS->CalendarConfig.HoursPerDay * 3600.0f;
+    const float DaysPerYear = GS->CalendarConfig.DaysPerSeason * GS->CalendarConfig.SeasonsPerYear;
     
-    return GameSecs / SecsPerYear;
+    return GameSecs / (SecsPerDay * DaysPerYear);
 }
 
 float UDynamicLifeComponent::GetNormalizedAge() const

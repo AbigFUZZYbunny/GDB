@@ -234,3 +234,212 @@ float ADynamicGameState::ExtractAbilityPropertyForScoring(const FDynamicAbilityD
     if (Rule.PropertyName == TEXT("BounceSearchRadius")) return AbilityDef.ChainConfig.BounceSearchRadius;
     return 0.0f;
 }
+
+int32 ADynamicGameState::ResolveElementArrayIndex(FGameplayTag ElementTag) const
+{
+    const FString TagStr = ElementTag.ToString();
+    if (TagStr.EndsWith(TEXT("Fire")))  return 0;
+    if (TagStr.EndsWith(TEXT("Water"))) return 1;
+    if (TagStr.EndsWith(TEXT("Earth"))) return 2;
+    if (TagStr.EndsWith(TEXT("Air")))   return 3;
+    if (TagStr.EndsWith(TEXT("Light"))) return 4;
+    if (TagStr.EndsWith(TEXT("Dark")))  return 5;
+    return -1;
+}
+
+int32 ADynamicGameState::GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const
+{
+    if (ReplicatedEnvironmentGrid.Items.Num() == 0 || CellSizeWorldUnits <= 0.0f) return 0;
+
+    const float HalfWorldW = (GridWidth * CellSizeWorldUnits) * 0.5f;
+    const float HalfWorldH = (GridHeight * CellSizeWorldUnits) * 0.5f;
+
+    const int32 X = FMath::Clamp(FMath::FloorToInt((WorldLocation.X + HalfWorldW) / CellSizeWorldUnits), 0, GridWidth - 1);
+    const int32 Y = FMath::Clamp(FMath::FloorToInt((WorldLocation.Y + HalfWorldH) / CellSizeWorldUnits), 0, GridHeight - 1);
+
+    return FMath::Clamp((Y * GridWidth) + X, 0, ReplicatedEnvironmentGrid.Items.Num() - 1);
+}
+
+float ADynamicGameState::GetEnvironmentMetricAtLocation(const FVector& WorldLocation, FGameplayTag MetricOrElementTag) const
+{
+    if (ReplicatedEnvironmentGrid.Items.Num() == 0) return 0.0f;
+
+    const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
+    const FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[CellIdx];
+
+    const int32 ElemIdx = ResolveElementArrayIndex(MetricOrElementTag);
+    if (ElemIdx != -1)
+    {
+        return Cell.ElementalDensities[ElemIdx];
+    }
+
+    const FString MetricName = MetricOrElementTag.ToString();
+    if (MetricName.EndsWith(TEXT("Temperature")))    return Cell.TemperatureCelsius;
+    if (MetricName.EndsWith(TEXT("Wetness")))        return Cell.Wetness;
+    if (MetricName.EndsWith(TEXT("WindSpeed")))      return Cell.WindSpeed;
+    if (MetricName.EndsWith(TEXT("GroundMoisture"))) return Cell.GroundMoisture;
+    if (MetricName.EndsWith(TEXT("Sunlight")))       return Cell.ElementalDensities[4]; // Light element
+
+    return 0.0f;
+}
+
+float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount)
+{
+    if (!HasAuthority() || ReplicatedEnvironmentGrid.Items.Num() == 0) return 0.0f;
+
+    const int32 ElemIdx = ResolveElementArrayIndex(ElementTag);
+    if (ElemIdx == -1) return 0.0f;
+
+    const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
+    FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[CellIdx];
+
+    const float OldValue = Cell.ElementalDensities[ElemIdx];
+    Cell.ElementalDensities[ElemIdx] = FMath::Clamp(OldValue + DeltaAmount, 0.0f, 200.0f);
+    const float ActualDelta = Cell.ElementalDensities[ElemIdx] - OldValue;
+
+    RecalculateCellPhysicalMetrics(Cell, 1.0f);
+    ReplicatedEnvironmentGrid.MarkItemDirty(Cell);
+
+    return ActualDelta;
+}
+
+void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell, float SunLightFactor)
+{
+    const float Fire  = Cell.ElementalDensities[0];
+    const float Water = Cell.ElementalDensities[1];
+    const float Earth = Cell.ElementalDensities[2];
+    const float Air   = Cell.ElementalDensities[3];
+    const float Light = Cell.ElementalDensities[4] * SunLightFactor;
+    const float Dark  = Cell.ElementalDensities[5];
+
+    // Temperature: Driven up by Fire & Light, cooled by Water, Air, and Dark
+    Cell.TemperatureCelsius = -15.0f + (Fire * 0.65f) + (Light * 0.25f) - (Water * 0.20f) - (Air * 0.15f) - (Dark * 0.20f);
+
+    // Wind Speed: Driven by Air density and thermal pressure gradients (Fire vs Water)
+    Cell.WindSpeed = (Air * 0.8f) + FMath::Abs(Fire - Water) * 0.25f;
+
+    // Atmospheric Wetness / Humidity: Driven by Water & Air interaction, evaporated by excessive Fire
+    Cell.Wetness = FMath::Clamp((Water * 0.85f) + (Cell.GroundMoisture * 0.25f) - (Fire * 0.35f), 0.0f, 100.0f);
+}
+
+void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
+{
+    if (!HasAuthority() || ReplicatedEnvironmentGrid.Items.Num() == 0) return;
+
+    const int32 TotalCells = ReplicatedEnvironmentGrid.Items.Num();
+
+    // Buffer to accumulate advected Air & Water moving across cells (so a storm sweeps across a city)
+    TArray<float> AdvectedWaterDelta;
+    TArray<float> AdvectedAirDelta;
+    AdvectedWaterDelta.Init(0.0f, TotalCells);
+    AdvectedAirDelta.Init(0.0f, TotalCells);
+
+    // 1. Advection Pass: Wind pushes atmospheric Water and Air into neighboring downwind cells
+    for (int32 i = 0; i < TotalCells; ++i)
+    {
+        const FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[i];
+        if (Cell.WindSpeed <= 5.0f || Cell.ElementalDensities[1] <= 10.0f) continue;
+
+        const int32 X = i % GridWidth;
+        const int32 Y = i / GridWidth;
+
+        const int32 StepX = FMath::RoundToInt(Cell.WindDirection.X);
+        const int32 StepY = FMath::RoundToInt(Cell.WindDirection.Y);
+
+        const int32 TargetX = FMath::Clamp(X + StepX, 0, GridWidth - 1);
+        const int32 TargetY = FMath::Clamp(Y + StepY, 0, GridHeight - 1);
+        const int32 TargetIdx = (TargetY * GridWidth) + TargetX;
+
+        if (TargetIdx != i)
+        {
+            // Transfer a fraction of atmospheric Water & Air downwind
+            const float TransferRatio = FMath::Clamp((Cell.WindSpeed / 100.0f) * 0.25f * ElapsedGameHours, 0.0f, 0.45f);
+            const float WaterMoved = Cell.ElementalDensities[1] * TransferRatio;
+            const float AirMoved   = Cell.ElementalDensities[3] * (TransferRatio * 0.5f);
+
+            AdvectedWaterDelta[i]         -= WaterMoved;
+            AdvectedWaterDelta[TargetIdx] += WaterMoved;
+            AdvectedAirDelta[i]           -= AirMoved;
+            AdvectedAirDelta[TargetIdx]   += AirMoved;
+        }
+    }
+
+    // 2. Cell Update Pass: Precipitation, Biome Homeostasis, and Biome Shifting
+    for (int32 i = 0; i < TotalCells; ++i)
+    {
+        FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[i];
+        bool bCellModified = false;
+
+        if (!FMath::IsNearlyZero(AdvectedWaterDelta[i]) || !FMath::IsNearlyZero(AdvectedAirDelta[i]))
+        {
+            Cell.ElementalDensities[1] = FMath::Clamp(Cell.ElementalDensities[1] + AdvectedWaterDelta[i], 0.0f, 200.0f);
+            Cell.ElementalDensities[3] = FMath::Clamp(Cell.ElementalDensities[3] + AdvectedAirDelta[i], 0.0f, 200.0f);
+            bCellModified = true;
+        }
+
+        // Precipitation: When Air & Water are high, rain/snow falls, transferring Water from Air to Ground/Earth
+        if (Cell.ElementalDensities[1] > 65.0f && Cell.ElementalDensities[3] > 50.0f)
+        {
+            const float RainRate = 8.0f * ElapsedGameHours;
+            Cell.ElementalDensities[1] = FMath::Max(0.0f, Cell.ElementalDensities[1] - RainRate); // Deplete atmospheric water
+            Cell.GroundMoisture = FMath::Clamp(Cell.GroundMoisture + RainRate, 0.0f, 150.0f);
+            Cell.ElementalDensities[2] = FMath::Clamp(Cell.ElementalDensities[2] + (RainRate * 0.2f), 0.0f, 200.0f); // Nourish Earth
+            bCellModified = true;
+        }
+
+        // Biome Homeostasis & Terraforming Shift Check
+        if (const FDynamicBiomeDef* BiomeDef = BiomeMasterRegistry.Find(Cell.CurrentBiomeTag))
+        {
+            float MaxDeviation = 0.0f;
+            for (const FTagFloatPair& Eq : BiomeDef->DefaultElementalEquilibrium)
+            {
+                const int32 ElemIdx = ResolveElementArrayIndex(Eq.KeyTag);
+                if (ElemIdx != -1)
+                {
+                    const float CurrentVal = Cell.ElementalDensities[ElemIdx];
+                    MaxDeviation = FMath::Max(MaxDeviation, FMath::Abs(CurrentVal - Eq.Value));
+
+                    // Pull toward Biome Equilibrium
+                    const float NewVal = FMath::FInterpConstantTo(CurrentVal, Eq.Value, ElapsedGameHours, BiomeDef->HomeostasisPullRate);
+                    if (!FMath::IsNearlyEqual(CurrentVal, NewVal, 0.1f))
+                    {
+                        Cell.ElementalDensities[ElemIdx] = NewVal;
+                        bCellModified = true;
+                    }
+                }
+            }
+
+            // If elements are forced far out of equilibrium for an extended period, shift the biome
+            if (MaxDeviation > 35.0f)
+            {
+                Cell.SustainedOutOfRangeHours += ElapsedGameHours;
+                for (const FBiomeShiftRule& ShiftRule : BiomeDef->BiomeShiftRules)
+                {
+                    if (Cell.SustainedOutOfRangeHours >= ShiftRule.RequiredSustainedGameHours)
+                    {
+                        Cell.TargetShiftBiomeTag = ShiftRule.TargetBiomeTag;
+                        Cell.BiomeBlendAlpha = FMath::Clamp(Cell.BiomeBlendAlpha + (ElapsedGameHours / ShiftRule.RequiredSustainedGameHours), 0.0f, 1.0f);
+                        if (Cell.BiomeBlendAlpha >= 1.0f)
+                        {
+                            Cell.CurrentBiomeTag = ShiftRule.TargetBiomeTag;
+                            Cell.BiomeBlendAlpha = 0.0f;
+                            Cell.SustainedOutOfRangeHours = 0.0f;
+                        }
+                        bCellModified = true;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                Cell.SustainedOutOfRangeHours = FMath::Max(0.0f, Cell.SustainedOutOfRangeHours - ElapsedGameHours);
+            }
+        }
+
+        if (bCellModified)
+        {
+            RecalculateCellPhysicalMetrics(Cell, 1.0f);
+            ReplicatedEnvironmentGrid.MarkItemDirty(Cell);
+        }
+    }
+}

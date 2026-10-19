@@ -35,10 +35,42 @@ public:
     TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
     TArray<FDynamicLifeStageDef> LifeStagesRegistry;
     TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
+    TMap<FGameplayTag, FDynamicBiomeDef> BiomeMasterRegistry;
+    TMap<FGameplayTag, FDynamicWeatherPatternDef> WeatherMasterRegistry;
     
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Calendar")
     FDynamicCalendarDef CalendarConfig;
 
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Environment")
+    FFastEnvironmentGridArray ReplicatedEnvironmentGrid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    int32 GridWidth = 32;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    int32 GridHeight = 32;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float CellSizeWorldUnits = 25000.0f; // 250m per cell
+
+    // Converts a World Location to a flat array index
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    int32 GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const;
+
+    // Queries Temperature, Wetness, Sunlight, or Elemental Mana at a world coordinate
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    float GetEnvironmentMetricAtLocation(const FVector& WorldLocation, FGameplayTag MetricOrElementTag) const;
+
+    // Consumes or generates Elemental Mana in the environment when a character casts abilities
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
+    float ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount);
+
+    // Simulates weather advection (clouds moving across cells), rain precipitation, homeostasis, and biome shifting
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
+    void ServerTickEnvironmentSimulation(float ElapsedGameHours);
+
+    int32 ResolveElementArrayIndex(FGameplayTag ElementTag) const;
+    void RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell, float SunLightFactor);
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;

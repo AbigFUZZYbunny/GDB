@@ -1,0 +1,153 @@
+﻿{
+  "_comment": "Master Environment, Biome, and Weather Registry: Drives the 6 Elemental Mana pools (Fire, Water, Earth, Air, Light, Dark), moving weather fronts, biome shifting, and thermodynamic item preservation.",
+  "BiomeMasterRegistry": {
+    "Biome.Temperate.Plains": {
+      "BiomeTag": "Biome.Temperate.Plains",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Temperate Plains" },
+          { "KeyTag": "Localization.Description", "Value": "Balanced grasslands with moderate wind and seasonal rainfall." }
+        ]
+      },
+      "HomeostasisPullRate": 2.0,
+      "DefaultElementalEquilibrium": [
+        { "KeyTag": "Element.Fire", "Value": 45.0 },
+        { "KeyTag": "Element.Water", "Value": 50.0 },
+        { "KeyTag": "Element.Earth", "Value": 55.0 },
+        { "KeyTag": "Element.Air", "Value": 60.0 },
+        { "KeyTag": "Element.Light", "Value": 55.0 },
+        { "KeyTag": "Element.Dark", "Value": 35.0 }
+      ],
+      "BiomeShiftRules": [
+        {
+          "TargetBiomeTag": "Biome.Arid.ScorchedDesert",
+          "ShiftConditionTreeName": "Trigger.Condition.Env.HighFireLowWater",
+          "RequiredSustainedGameHours": 72.0
+        },
+        {
+          "TargetBiomeTag": "Biome.Lush.Rainforest",
+          "ShiftConditionTreeName": "Trigger.Condition.Env.HighWaterHighEarth",
+          "RequiredSustainedGameHours": 72.0
+        },
+        {
+          "TargetBiomeTag": "Biome.Arctic.FrozenWastes",
+          "ShiftConditionTreeName": "Trigger.Condition.Env.DepletedFireHighWater",
+          "RequiredSustainedGameHours": 72.0
+        }
+      ]
+    },
+    "Biome.Arid.ScorchedDesert": {
+      "BiomeTag": "Biome.Arid.ScorchedDesert",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Scorched Desert" },
+          { "KeyTag": "Localization.Description", "Value": "Sweltering dunes saturated with Fire and Light mana." }
+        ]
+      },
+      "HomeostasisPullRate": 1.5,
+      "DefaultElementalEquilibrium": [
+        { "KeyTag": "Element.Fire", "Value": 90.0 },
+        { "KeyTag": "Element.Water", "Value": 10.0 },
+        { "KeyTag": "Element.Earth", "Value": 60.0 },
+        { "KeyTag": "Element.Air", "Value": 50.0 },
+        { "KeyTag": "Element.Light", "Value": 85.0 },
+        { "KeyTag": "Element.Dark", "Value": 20.0 }
+      ],
+      "BiomeShiftRules": [
+        {
+          "TargetBiomeTag": "Biome.Temperate.Plains",
+          "ShiftConditionTreeName": "Trigger.Condition.Env.RestoredWater",
+          "RequiredSustainedGameHours": 96.0
+        }
+      ]
+    },
+    "Biome.Lush.Rainforest": {
+      "BiomeTag": "Biome.Lush.Rainforest",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Lush Rainforest" },
+          { "KeyTag": "Localization.Description", "Value": "Dense, humid jungle teeming with Water and Earth mana." }
+        ]
+      },
+      "HomeostasisPullRate": 2.5,
+      "DefaultElementalEquilibrium": [
+        { "KeyTag": "Element.Fire", "Value": 55.0 },
+        { "KeyTag": "Element.Water", "Value": 95.0 },
+        { "KeyTag": "Element.Earth", "Value": 90.0 },
+        { "KeyTag": "Element.Air", "Value": 45.0 },
+        { "KeyTag": "Element.Light", "Value": 60.0 },
+        { "KeyTag": "Element.Dark", "Value": 45.0 }
+      ],
+      "BiomeShiftRules": []
+    },
+    "Biome.Arctic.FrozenWastes": {
+      "BiomeTag": "Biome.Arctic.FrozenWastes",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Frozen Wastes" },
+          { "KeyTag": "Localization.Description", "Value": "Sub-zero tundra where natural refrigeration preserves organic matter indefinitely." }
+        ]
+      },
+      "HomeostasisPullRate": 2.0,
+      "DefaultElementalEquilibrium": [
+        { "KeyTag": "Element.Fire", "Value": 5.0 },
+        { "KeyTag": "Element.Water", "Value": 80.0 },
+        { "KeyTag": "Element.Earth", "Value": 50.0 },
+        { "KeyTag": "Element.Air", "Value": 75.0 },
+        { "KeyTag": "Element.Light", "Value": 40.0 },
+        { "KeyTag": "Element.Dark", "Value": 60.0 }
+      ],
+      "BiomeShiftRules": []
+    }
+  },
+  "WeatherMasterRegistry": {
+    "Weather.Storm.Thunderstorm": {
+      "WeatherTag": "Weather.Storm.Thunderstorm",
+      "SpawnConditionTreeName": "Trigger.Condition.Weather.HighAirAndWater",
+      "ElementalTransferRates": [
+        { "KeyTag": "Element.Water", "Value": -12.0 },
+        { "KeyTag": "Element.Earth", "Value": 6.0 }
+      ],
+      "EnvironmentMetricOffsets": [
+        { "KeyTag": "Env.Metric.Wetness", "Value": 65.0 },
+        { "KeyTag": "Env.Metric.Temperature", "Value": -8.0 },
+        { "KeyTag": "Env.Metric.WindSpeed", "Value": 35.0 }
+      ],
+      "ExposedEffectsToApply": [
+        "Effect.Environment.Soaked",
+        "Effect.Environment.Chilled"
+      ]
+    },
+    "Weather.Clear.SwelteringHeatwave": {
+      "WeatherTag": "Weather.Clear.SwelteringHeatwave",
+      "SpawnConditionTreeName": "Trigger.Condition.Weather.ExtremeFireAndLight",
+      "ElementalTransferRates": [
+        { "KeyTag": "Element.Water", "Value": -8.0 }
+      ],
+      "EnvironmentMetricOffsets": [
+        { "KeyTag": "Env.Metric.Temperature", "Value": 18.0 },
+        { "KeyTag": "Env.Metric.Wetness", "Value": -40.0 }
+      ],
+      "ExposedEffectsToApply": [
+        "Effect.Environment.SwelteringHeat"
+      ]
+    },
+    "Weather.Storm.Blizzard": {
+      "WeatherTag": "Weather.Storm.Blizzard",
+      "SpawnConditionTreeName": "Trigger.Condition.Weather.HighWaterHighAirLowFire",
+      "ElementalTransferRates": [
+        { "KeyTag": "Element.Water", "Value": -6.0 },
+        { "KeyTag": "Element.Fire", "Value": -4.0 }
+      ],
+      "EnvironmentMetricOffsets": [
+        { "KeyTag": "Env.Metric.Temperature", "Value": -25.0 },
+        { "KeyTag": "Env.Metric.Wetness", "Value": 40.0 },
+        { "KeyTag": "Env.Metric.WindSpeed", "Value": 55.0 }
+      ],
+      "ExposedEffectsToApply": [
+        "Effect.Environment.Freezing",
+        "Effect.Environment.Wet"
+      ]
+    }
+  }
+}

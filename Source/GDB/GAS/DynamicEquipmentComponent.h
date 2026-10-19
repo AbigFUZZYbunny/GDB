@@ -50,6 +50,13 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Equipment")
     FGameplayTag GetEquippedItemInSlot(FGameplayTag SlotTag) const;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dynamic GAS|Equipment Evolution")
+    class UDynamicEvolutionComponent* ItemEvolutionComponent;
+
+    // Call this from ability pass-back rules when gear is used
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Equipment Evolution")
+    void ServerGrantItemXP(float XPGrantAmount);
 
 private:
     TMap<FGameplayTag, int32> SlotTagToArrayIndexMap;

@@ -1,0 +1,250 @@
+﻿{
+  "_comment": "Master Item and Physics Object Evolution Registry: Defines growth, ripening, decay, and environmental thermodynamics (refrigeration/spoilage/growth scaling) for flora and harvestables.",
+  "EvolutionProfilesRegistry": {
+    "Evolution.Profile.Flora.AppleTree": {
+      "TotalLifespanOrMaxXP": 1200.0,
+      "_comment": "Apple tree lifecycle: Sapling -> Growing -> Blooming -> Ripe Fruit -> Decayed. Requires above-freezing temperatures, ground moisture, and sunlight.",
+      "EnvironmentalModifiers": [
+        {
+          "EnvironmentMetricTag": "Env.Metric.Temperature",
+          "MinThreshold": 5.0,
+          "MaxThreshold": 38.0,
+          "MinRateMultiplier": 0.1,
+          "MaxRateMultiplier": 1.4,
+          "bPauseOutsideRange": true
+        },
+        {
+          "EnvironmentMetricTag": "Env.Metric.GroundMoisture",
+          "MinThreshold": 15.0,
+          "MaxThreshold": 100.0,
+          "MinRateMultiplier": 0.0,
+          "MaxRateMultiplier": 1.5,
+          "bPauseOutsideRange": false
+        },
+        {
+          "EnvironmentMetricTag": "Env.Metric.Sunlight",
+          "MinThreshold": 10.0,
+          "MaxThreshold": 90.0,
+          "MinRateMultiplier": 0.0,
+          "MaxRateMultiplier": 1.25,
+          "bPauseOutsideRange": false
+        }
+      ],
+      "ProgressionPhases": [
+        {
+          "NormalizedProgress": 0.0,
+          "StageTag": "Stage.Flora.Sapling",
+          "ScaleMultiplier": 0.25,
+          "TagsToApply": [ "State.Flora.Immature", "State.Interactable.Unharvestable" ],
+          "StageAttributeModifiers": []
+        },
+        {
+          "NormalizedProgress": 0.3,
+          "StageTag": "Stage.Flora.MatureTree",
+          "ScaleMultiplier": 1.0,
+          "TagsToApply": [ "State.Flora.Mature", "State.Interactable.Harvestable" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Yield.Max", "Value": 10.0 }
+          ]
+        },
+        {
+          "NormalizedProgress": 0.8,
+          "StageTag": "Stage.Flora.Overgrown",
+          "ScaleMultiplier": 1.1,
+          "TagsToApply": [ "State.Flora.Decaying", "State.Interactable.Harvestable" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Yield.Max", "Value": 4.0 }
+          ]
+        }
+      ]
+    },
+    "Evolution.Profile.Flora.PineTree": {
+      "TotalLifespanOrMaxXP": 3600.0,
+      "_comment": "Pine tree lifecycle: Slow growth from seedling to towering lumber timber.",
+      "EnvironmentalModifiers": [
+        {
+          "EnvironmentMetricTag": "Env.Metric.Temperature",
+          "MinThreshold": -5.0,
+          "MaxThreshold": 32.0,
+          "MinRateMultiplier": 0.2,
+          "MaxRateMultiplier": 1.2,
+          "bPauseOutsideRange": true
+        },
+        {
+          "EnvironmentMetricTag": "Env.Metric.GroundMoisture",
+          "MinThreshold": 10.0,
+          "MaxThreshold": 90.0,
+          "MinRateMultiplier": 0.1,
+          "MaxRateMultiplier": 1.3,
+          "bPauseOutsideRange": false
+        }
+      ],
+      "ProgressionPhases": [
+        {
+          "NormalizedProgress": 0.0,
+          "StageTag": "Stage.Flora.Seedling",
+          "ScaleMultiplier": 0.15,
+          "TagsToApply": [ "State.Flora.Immature", "State.Lumber.Unusable" ],
+          "StageAttributeModifiers": []
+        },
+        {
+          "NormalizedProgress": 0.25,
+          "StageTag": "Stage.Flora.Sapling",
+          "ScaleMultiplier": 0.45,
+          "TagsToApply": [ "State.Flora.Immature", "State.Lumber.Unusable" ],
+          "StageAttributeModifiers": []
+        },
+        {
+          "NormalizedProgress": 0.6,
+          "StageTag": "Stage.Flora.Timber",
+          "ScaleMultiplier": 1.0,
+          "TagsToApply": [ "State.Flora.Mature", "State.Lumber.Harvestable" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Lumber.Yield", "Value": 50.0 }
+          ]
+        }
+      ]
+    },
+    "Evolution.Profile.Flora.BlueberryBush": {
+      "TotalLifespanOrMaxXP": 400.0,
+      "_comment": "Blueberry bush crop cycle: Sprout -> Flowering -> Fruiting -> Barren.",
+      "EnvironmentalModifiers": [
+        {
+          "EnvironmentMetricTag": "Env.Metric.Temperature",
+          "MinThreshold": 8.0,
+          "MaxThreshold": 30.0,
+          "MinRateMultiplier": 0.0,
+          "MaxRateMultiplier": 1.5,
+          "bPauseOutsideRange": true
+        },
+        {
+          "EnvironmentMetricTag": "Env.Metric.GroundMoisture",
+          "MinThreshold": 30.0,
+          "MaxThreshold": 100.0,
+          "MinRateMultiplier": 0.2,
+          "MaxRateMultiplier": 1.4,
+          "bPauseOutsideRange": false
+        }
+      ],
+      "ProgressionPhases": [
+        {
+          "NormalizedProgress": 0.0,
+          "StageTag": "Stage.Crop.Sprout",
+          "ScaleMultiplier": 0.3,
+          "TagsToApply": [ "State.Crop.Immature", "State.Interactable.Unharvestable" ],
+          "StageAttributeModifiers": []
+        },
+        {
+          "NormalizedProgress": 0.4,
+          "StageTag": "Stage.Crop.Fruiting",
+          "ScaleMultiplier": 1.0,
+          "TagsToApply": [ "State.Crop.Mature", "State.Interactable.Harvestable" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Yield.Max", "Value": 6.0 }
+          ]
+        },
+        {
+          "NormalizedProgress": 0.9,
+          "StageTag": "Stage.Crop.Barren",
+          "ScaleMultiplier": 0.95,
+          "TagsToApply": [ "State.Crop.Spent", "State.Interactable.Unharvestable" ],
+          "StageAttributeModifiers": []
+        }
+      ]
+    },
+    "Evolution.Profile.Item.Carrot": {
+      "TotalLifespanOrMaxXP": 250.0,
+      "_comment": "Root vegetable growth & decay. Low temperature preserves subterranean crops.",
+      "EnvironmentalModifiers": [
+        {
+          "EnvironmentMetricTag": "Env.Metric.Temperature",
+          "MinThreshold": 0.0,
+          "MaxThreshold": 32.0,
+          "MinRateMultiplier": 0.0,
+          "MaxRateMultiplier": 2.0,
+          "bPauseOutsideRange": false
+        }
+      ],
+      "ProgressionPhases": [
+        {
+          "NormalizedProgress": 0.0,
+          "StageTag": "Stage.Crop.Seedling",
+          "ScaleMultiplier": 0.2,
+          "TagsToApply": [ "State.Crop.Unripe", "State.Item.Inedible" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Nutrition.Value", "Value": 1.0 }
+          ]
+        },
+        {
+          "NormalizedProgress": 0.5,
+          "StageTag": "Stage.Crop.Ripe",
+          "ScaleMultiplier": 1.0,
+          "TagsToApply": [ "State.Crop.Ripe", "State.Item.Edible" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Nutrition.Value", "Value": 10.0 }
+          ]
+        },
+        {
+          "NormalizedProgress": 0.85,
+          "StageTag": "Stage.Crop.Rotted",
+          "ScaleMultiplier": 0.9,
+          "TagsToApply": [ "State.Item.Rotted", "State.Item.Poisonous" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning", "Value": 15.0 }
+          ]
+        }
+      ]
+    },
+    "Evolution.Profile.Item.Blueberry": {
+      "TotalLifespanOrMaxXP": 180.0,
+      "_comment": "Harvested fruit ripening and spoilage cycle. Refrigeration at or below 2C halts spoilage completely (MinRateMultiplier: 0.0).",
+      "EnvironmentalModifiers": [
+        {
+          "EnvironmentMetricTag": "Env.Metric.Temperature",
+          "MinThreshold": 2.0,
+          "MaxThreshold": 35.0,
+          "MinRateMultiplier": 0.0,
+          "MaxRateMultiplier": 2.5,
+          "bPauseOutsideRange": false
+        },
+        {
+          "EnvironmentMetricTag": "Env.Metric.Wetness",
+          "MinThreshold": 0.0,
+          "MaxThreshold": 100.0,
+          "MinRateMultiplier": 0.8,
+          "MaxRateMultiplier": 1.5,
+          "bPauseOutsideRange": false
+        }
+      ],
+      "ProgressionPhases": [
+        {
+          "NormalizedProgress": 0.0,
+          "StageTag": "Stage.Item.Unripe",
+          "ScaleMultiplier": 0.8,
+          "TagsToApply": [ "State.Item.Unripe", "State.Item.Edible" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Nutrition.Value", "Value": 3.0 }
+          ]
+        },
+        {
+          "NormalizedProgress": 0.3,
+          "StageTag": "Stage.Item.Ripe",
+          "ScaleMultiplier": 1.0,
+          "TagsToApply": [ "State.Item.Ripe", "State.Item.Edible" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "Attribute.Nutrition.Value", "Value": 8.0 }
+          ]
+        },
+        {
+          "NormalizedProgress": 0.75,
+          "StageTag": "Stage.Item.Spoiled",
+          "ScaleMultiplier": 0.9,
+          "TagsToApply": [ "State.Item.Spoiled", "State.Item.Poisonous" ],
+          "StageAttributeModifiers": [
+            { "KeyTag": "GDBSurvival.Attribute.Resource.Sickness.FoodPoisoning", "Value": 10.0 }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,93 @@
+﻿{
+  "Version": 1,
+  "NameGenerationRules": [
+    {
+      "CultureOrTemplateTag": "Character.Humanoid.Elf",
+      "CulturalAdoptionWeights": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Character.Humanoid.Elf", "Value": 10.0 },
+          { "KeyTag": "Character.Humanoid.Human", "Value": 0.05 },
+          { "KeyTag": "Character.Monster.Orc", "Value": 0.0 }
+        ]
+      },
+      "StandaloneNames": [
+        {
+          "Token": "Aelion",
+          "GivenNameWeight": 10.0,
+          "SurnameWeight": 0.0,
+          "GenderRestriction": "Male",
+          "RacialPrevalenceWeights": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Character.Humanoid.Elf", "Value": 1.0 },
+              { "KeyTag": "Character.Humanoid.Human", "Value": 0.01 }
+            ]
+          }
+        },
+        {
+          "Token": "Elenwe",
+          "GivenNameWeight": 10.0,
+          "SurnameWeight": 0.0,
+          "GenderRestriction": "Female",
+          "RacialPrevalenceWeights": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Character.Humanoid.Elf", "Value": 1.0 },
+              { "KeyTag": "Character.Humanoid.Human", "Value": 0.005 }
+            ]
+          }
+        }
+      ],
+      "PrefixPool": [
+        {
+          "Token": "Moon",
+          "GivenNameWeight": 1.0,
+          "SurnameWeight": 9.0,
+          "GenderRestriction": "Neutral",
+          "RacialPrevalenceWeights": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Character.Humanoid.Elf", "Value": 1.0 },
+              { "KeyTag": "Character.Humanoid.Human", "Value": 0.02 }
+            ]
+          }
+        }
+      ],
+      "SuffixPool": [
+        {
+          "Token": "whisper",
+          "GivenNameWeight": 0.0,
+          "SurnameWeight": 8.0,
+          "GenderRestriction": "Neutral",
+          "RacialPrevalenceWeights": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Character.Humanoid.Elf", "Value": 1.0 },
+              { "KeyTag": "Character.Humanoid.Human", "Value": 0.01 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "CultureOrTemplateTag": "Character.Monster.Orc",
+      "CulturalAdoptionWeights": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Character.Monster.Orc", "Value": 10.0 },
+          { "KeyTag": "Character.Humanoid.Human", "Value": 0.0 }
+        ]
+      },
+      "StandaloneNames": [
+        {
+          "Token": "Grommash",
+          "GivenNameWeight": 10.0,
+          "SurnameWeight": 0.0,
+          "GenderRestriction": "Male",
+          "RacialPrevalenceWeights": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Character.Monster.Orc", "Value": 1.0 }
+            ]
+          }
+        }
+      ],
+      "PrefixPool": [],
+      "SuffixPool": []
+    }
+  ]
+}

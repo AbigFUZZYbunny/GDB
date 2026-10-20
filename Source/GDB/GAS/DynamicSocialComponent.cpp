@@ -3,6 +3,7 @@
 #include "DynamicGameState.h"
 #include "DynamicCharacter.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicLifeComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
@@ -586,4 +587,26 @@ bool UDynamicSocialComponent::ServerRemoveProfession(FGameplayTag ProfessionTag)
         return true;
     }
     return false;
+}
+
+bool UDynamicSocialComponent::CanInitiateSocialInteraction(FGameplayTag InteractionType, ADynamicCharacter* TargetCharacter) const
+{
+    if (!TargetCharacter) return false;
+
+    // Check if interaction requires adulthood
+    if (InteractionType.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Social.Romantic"))))
+    {
+        UDynamicLifeComponent* SourceLife = GetOwner()->FindComponentByClass<UDynamicLifeComponent>();
+        UDynamicLifeComponent* TargetLife = TargetCharacter->FindComponentByClass<UDynamicLifeComponent>();
+
+        if (SourceLife && TargetLife)
+        {
+            // Both parties must be legally/biologically categorized as adults according to their race's aging profile
+            if (!SourceLife->IsCharacterAdult() || !TargetLife->IsCharacterAdult())
+            {
+                return false; // Blocks interaction entirely if either is a child/infant
+            }
+        }
+    }
+    return true;
 }

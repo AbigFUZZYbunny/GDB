@@ -1,5 +1,6 @@
 ﻿// DynamicLifeComponent.h
 #pragma once
+
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "DynamicGASTypes.h"
@@ -15,6 +16,7 @@ class GDB_API UDynamicLifeComponent : public UActorComponent
 
 public:
     UDynamicLifeComponent();
+
     virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -45,12 +47,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Life")
     float GetNormalizedAge() const;
 
-    // Evaluates interpolation between growth keyframes. Called periodically (e.g. via Timer) by the server.
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Life")
     void ServerEvaluateContinuousGrowth();
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Life")
     void ServerInheritGenetics(const UDynamicLifeComponent* Mother, const UDynamicLifeComponent* Father);
+    
+    // Returns the active life stage tag (e.g. Age.Stage.Child vs Age.Stage.Adult) based on current age
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Life")
+    FGameplayTag GetCurrentLifeStageTag() const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Life")
+    bool IsCharacterAdult() const;
 
 private:
     void ApplyLerpedGrowthState(float NormalizedAge);
@@ -58,4 +66,8 @@ private:
     FGameplayTag ResolveDominance(FGameplayTag Locus, FGameplayTag AlleleA, FGameplayTag AlleleB) const;
 
     FTimerHandle TimerHandle_GrowthTick;
+
+    // Cache of authoring-time baseline morph values, preventing recursive drift during aging calculations
+    TMap<FGameplayTag, float> CachedBaseMorphSliders;
+    bool bBaseMorphsCached = false;
 };

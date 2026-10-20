@@ -4,6 +4,7 @@
 #include "DynamicCharacter.h"
 #include "DynamicCustomizationComponent.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicGASManagerComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicLifeComponent::UDynamicLifeComponent()
@@ -17,14 +18,14 @@ void UDynamicLifeComponent::BeginPlay()
 {
     Super::BeginPlay();
     ReplicatedGenome.OwningLifeComp = this;
+
     if (GetOwner() && GetOwner()->HasAuthority())
     {
         if (BirthWorldTime <= 0.0)
         {
             BirthWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
         }
-        
-        // Evaluate smooth growth once every in-game day (or an optimized interval)
+
         GetWorld()->GetTimerManager().SetTimer(TimerHandle_GrowthTick, this, &UDynamicLifeComponent::ServerEvaluateContinuousGrowth, 60.0f, true);
         ServerEvaluateContinuousGrowth();
     }
@@ -69,13 +70,12 @@ float UDynamicLifeComponent::GetCurrentAgeYears() const
 
     const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     const double ElapsedRealSecs = FMath::Max(0.0, Now - BirthWorldTime);
-    
-    // Corrected to access CalendarConfig directly
-    const float GameSecs = ElapsedRealSecs * GS->CalendarConfig.TimeScalar; 
+
+    const float GameSecs = ElapsedRealSecs * GS->CalendarConfig.TimeScalar;
     const float SecsPerDay = GS->CalendarConfig.HoursPerDay * 3600.0f;
     const float DaysPerYear = GS->CalendarConfig.DaysPerSeason * GS->CalendarConfig.SeasonsPerYear;
-    
-    return GameSecs / (SecsPerDay * DaysPerYear);
+
+    return (SecsPerDay > 0.0f && DaysPerYear > 0.0f) ? (GameSecs / (SecsPerDay * DaysPerYear)) : 0.0f;
 }
 
 float UDynamicLifeComponent::GetNormalizedAge() const
@@ -113,10 +113,21 @@ void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
 
     FCharacterTemplateDef Def;
     if (!GS->GetCharacterTemplate(CustComp->ActiveCharacterTemplateTag, Def)) return;
-
     if (Def.AgingProfile.GrowthPhases.Num() == 0) return;
 
-    // Find bounding keyframes
+    // Cache un-aged baseline slider values to stop drift
+    if (!bBaseMorphsCached)
+    {
+        for (const FTagFloatPair& SliderPair : Def.DefaultBodyslideSliders)
+        {
+            if (SliderPair.KeyTag.IsValid())
+            {
+                CachedBaseMorphSliders.Add(SliderPair.KeyTag, CustComp->GetMorphSliderValue(SliderPair.KeyTag));
+            }
+        }
+        bBaseMorphsCached = true;
+    }
+
     FContinuousGrowthKeyframe FrameA = Def.AgingProfile.GrowthPhases[0];
     FContinuousGrowthKeyframe FrameB = Def.AgingProfile.GrowthPhases.Last();
     float LerpAlpha = 0.0f;
@@ -127,45 +138,60 @@ void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
         {
             FrameA = Def.AgingProfile.GrowthPhases[i];
             FrameB = Def.AgingProfile.GrowthPhases[i+1];
-            float Range = FrameB.NormalizedAge - FrameA.NormalizedAge;
+            const float Range = FrameB.NormalizedAge - FrameA.NormalizedAge;
             LerpAlpha = (Range > 0.0f) ? (NormalizedAge - FrameA.NormalizedAge) / Range : 0.0f;
             break;
         }
     }
 
-    // 1. Lerp Physical Body Scale
-    float TargetScale = FMath::Lerp(FrameA.ScaleMultiplier, FrameB.ScaleMultiplier, LerpAlpha);
-    CharOwner->GetMeshComponent()->SetRelativeScale3D(FVector(TargetScale));
+    // 1. Lerp Physical Mesh Scale
+    const float TargetScale = FMath::Lerp(FrameA.ScaleMultiplier, FrameB.ScaleMultiplier, LerpAlpha);
+    if (CharOwner->GetMeshComponent())
+    {
+        CharOwner->GetMeshComponent()->SetRelativeScale3D(FVector(TargetScale));
+    }
 
-    // 2. Set Locomotion State (Assigned to the current FrameA threshold)
+    // 2. Authoritative Locomotion Tag Synchronization
     if (CharOwner->HasAuthority() && CurrentLocomotionAnimTag != FrameA.LocomotionAnimTag)
     {
         CurrentLocomotionAnimTag = FrameA.LocomotionAnimTag;
     }
 
-    // 3. Apply Morphs (Aging, Posture)
+    // 3. Morph Slider Evaluation without Drift Accumulation
     for (const FTagFloatPair& MorphA : FrameA.MorphTargetOffsets)
     {
         float ValB = MorphA.Value;
-        for (const FTagFloatPair& Mb : FrameB.MorphTargetOffsets) { if (Mb.KeyTag == MorphA.KeyTag) { ValB = Mb.Value; break; } }
-        float BlendedMorph = FMath::Lerp(MorphA.Value, ValB, LerpAlpha);
-        
-        // Additive offset combined with baseline Bodyslide value
-        float BaseSlide = CustComp->GetMorphSliderValue(MorphA.KeyTag);
-        CustComp->ServerSetMorphSliderValue(MorphA.KeyTag, BaseSlide + BlendedMorph);
+        for (const FTagFloatPair& Mb : FrameB.MorphTargetOffsets)
+        {
+            if (Mb.KeyTag == MorphA.KeyTag)
+            {
+                ValB = Mb.Value;
+                break;
+            }
+        }
+        const float BlendedMorphOffset = FMath::Lerp(MorphA.Value, ValB, LerpAlpha);
+
+        // Add offset strictly to pristine BaseSlide, avoiding compound accretion
+        const float BaseSlide = CachedBaseMorphSliders.FindRef(MorphA.KeyTag);
+        CustComp->ServerSetMorphSliderValue(MorphA.KeyTag, BaseSlide + BlendedMorphOffset);
     }
 
-    // 4. Lerp Physics Motors & Growth Attributes
-    float TargetMotorMulti = FMath::Lerp(FrameA.PhysicsMotorMultiplier, FrameB.PhysicsMotorMultiplier, LerpAlpha);
-    
+    // 4. Update Physics Motors & Attributes
+    const float TargetMotorMulti = FMath::Lerp(FrameA.PhysicsMotorMultiplier, FrameB.PhysicsMotorMultiplier, LerpAlpha);
+
     for (const FTagFloatPair& StatA : FrameA.StatModifiers)
     {
         float ValB = StatA.Value;
-        for (const FTagFloatPair& Sb : FrameB.StatModifiers) { if (Sb.KeyTag == StatA.KeyTag) { ValB = Sb.Value; break; } }
-        float BlendedStat = FMath::Lerp(StatA.Value, ValB, LerpAlpha);
-        
-        // Example: Base stat + Age modifier. (In a full system, you store Base vs AgeMod separately).
-        AttrSet->SetDynamicAttributeValue(StatA.KeyTag, BlendedStat, 0); 
+        for (const FTagFloatPair& Sb : FrameB.StatModifiers)
+        {
+            if (Sb.KeyTag == StatA.KeyTag)
+            {
+                ValB = Sb.Value;
+                break;
+            }
+        }
+        const float BlendedStat = FMath::Lerp(StatA.Value, ValB, LerpAlpha);
+        AttrSet->SetDynamicAttributeValue(StatA.KeyTag, BlendedStat, 0);
     }
 
     OnContinuousGrowthUpdated.Broadcast(TargetScale, TargetMotorMulti, CurrentLocomotionAnimTag);
@@ -182,7 +208,6 @@ FGameplayTag UDynamicLifeComponent::ResolveDominance(FGameplayTag Locus, FGamepl
 
     float WeightA = 0.0f, WeightB = 0.0f;
 
-    // Check Template Overrides first (e.g. Elf overrides blonde dominance)
     if (UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent())
     {
         FCharacterTemplateDef Def;
@@ -194,7 +219,6 @@ FGameplayTag UDynamicLifeComponent::ResolveDominance(FGameplayTag Locus, FGamepl
         }
     }
 
-    // Fallback to global defaults if no override
     for (const FDynamicAlleleDef& Allele : LocusDef->PossibleAlleles)
     {
         if (WeightA == 0.0f && Allele.AlleleTag == AlleleA) WeightA = Allele.DominanceWeight;
@@ -217,19 +241,29 @@ void UDynamicLifeComponent::ServerInheritGenetics(const UDynamicLifeComponent* M
     {
         const FGameplayTag TargetLocus = LocusPair.Key;
         const FDynamicGeneLocusDef& LocusDef = LocusPair.Value;
-
         FGameplayTag MomContributed, DadContributed;
-        
-        for (const FDynamicGenePairItem& MomGene : Mother->ReplicatedGenome.Items) {
-            if (MomGene.LocusTag == TargetLocus) { MomContributed = FMath::RandBool() ? MomGene.MaternalAllele : MomGene.PaternalAllele; break; }
+
+        for (const FDynamicGenePairItem& MomGene : Mother->ReplicatedGenome.Items)
+        {
+            if (MomGene.LocusTag == TargetLocus)
+            {
+                MomContributed = FMath::RandBool() ? MomGene.MaternalAllele : MomGene.PaternalAllele;
+                break;
+            }
         }
-        for (const FDynamicGenePairItem& DadGene : Father->ReplicatedGenome.Items) {
-            if (DadGene.LocusTag == TargetLocus) { DadContributed = FMath::RandBool() ? DadGene.MaternalAllele : DadGene.PaternalAllele; break; }
+
+        for (const FDynamicGenePairItem& DadGene : Father->ReplicatedGenome.Items)
+        {
+            if (DadGene.LocusTag == TargetLocus)
+            {
+                DadContributed = FMath::RandBool() ? DadGene.MaternalAllele : DadGene.PaternalAllele;
+                break;
+            }
         }
 
         if (FMath::FRand() <= LocusDef.MutationChance && LocusDef.PossibleAlleles.Num() > 0)
         {
-            int32 MutIdx = FMath::RandRange(0, LocusDef.PossibleAlleles.Num() - 1);
+            const int32 MutIdx = FMath::RandRange(0, LocusDef.PossibleAlleles.Num() - 1);
             MomContributed = LocusDef.PossibleAlleles[MutIdx].AlleleTag;
         }
 
@@ -238,7 +272,7 @@ void UDynamicLifeComponent::ServerInheritGenetics(const UDynamicLifeComponent* M
         ChildGene.MaternalAllele = MomContributed;
         ChildGene.PaternalAllele = DadContributed;
         ChildGene.ExpressedAllele = ResolveDominance(TargetLocus, MomContributed, DadContributed);
-        
+
         FDynamicGenePairItem& Added = ReplicatedGenome.Items.Add_GetRef(ChildGene);
         ReplicatedGenome.MarkItemDirty(Added);
     }
@@ -248,5 +282,72 @@ void UDynamicLifeComponent::ServerInheritGenetics(const UDynamicLifeComponent* M
 
 void UDynamicLifeComponent::ApplyGenePhenotypes()
 {
-    // Applies color overrides to CustComp and grants PhenotypeAbilities via ASC
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!CharOwner || !GS) return;
+
+    UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent();
+    UAbilitySystemComponent* ASC = CharOwner->GetAbilitySystemComponent();
+
+    for (const FDynamicGenePairItem& Gene : ReplicatedGenome.Items)
+    {
+        if (const FDynamicGeneLocusDef* Locus = GS->GeneticsMasterRegistry.Find(Gene.LocusTag))
+        {
+            for (const FDynamicAlleleDef& Allele : Locus->PossibleAlleles)
+            {
+                if (Allele.AlleleTag == Gene.ExpressedAllele)
+                {
+                    if (CustComp && (Allele.PhenotypeColor.PrimaryColor != FLinearColor::White || Allele.PhenotypeColor.SecondaryColor != FLinearColor::White))
+                    {
+                        CustComp->SkinColor = Allele.PhenotypeColor;
+                        CustComp->OnRep_AppearanceColors();
+                    }
+                    if (ASC && CharOwner->HasAuthority())
+                    {
+                        for (const FGameplayTag& AbilityTag : Allele.PhenotypeAbilities)
+                        {
+                            CharOwner->FindComponentByClass<UDynamicGASManagerComponent>()->TryLearnAndGrantAbility(ASC, AbilityTag, FGameplayTag::EmptyTag);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
+
+FGameplayTag UDynamicLifeComponent::GetCurrentLifeStageTag() const
+{
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!CharOwner || !GS) return FGameplayTag::EmptyTag;
+
+    UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent();
+    if (!CustComp) return FGameplayTag::EmptyTag;
+
+    FCharacterTemplateDef Def;
+    if (GS->GetCharacterTemplate(CustComp->ActiveCharacterTemplateTag, Def) && Def.AgingProfile.GrowthPhases.Num() > 0)
+    {
+        const float NormAge = GetNormalizedAge();
+        FGameplayTag CurrentStage = Def.AgingProfile.GrowthPhases[0].LifeStageTag;
+
+        for (const FContinuousGrowthKeyframe& Frame : Def.AgingProfile.GrowthPhases)
+        {
+            if (NormAge >= Frame.NormalizedAge && Frame.LifeStageTag.IsValid())
+            {
+                CurrentStage = Frame.LifeStageTag;
+            }
+        }
+        return CurrentStage;
+    }
+    return FGameplayTag::EmptyTag;
+}
+
+bool UDynamicLifeComponent::IsCharacterAdult() const
+{
+    // Evaluates against a general adult tag or checks if the tag matches adult hierarchies
+    FGameplayTag StageTag = GetCurrentLifeStageTag();
+    static const FGameplayTag AdultRootTag = FGameplayTag::RequestGameplayTag(TEXT("Age.Stage.Adult"), false);
+    
+    return StageTag.IsValid() && (StageTag == AdultRootTag || StageTag.MatchesTag(AdultRootTag));
 }

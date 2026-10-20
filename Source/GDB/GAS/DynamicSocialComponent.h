@@ -110,6 +110,9 @@ public:
     // Serializes a compact, self-contained JSON telemetry packet for P2P Miner AI Compute Nodes
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|P2P Telemetry")
     bool ExportComputeNodePayloadJson(FString& OutTelemetryJson) const;
+    
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Blocks")
+    bool CanInitiateSocialInteraction(FGameplayTag InteractionType, ADynamicCharacter* TargetCharacter) const;
 
 private:
     void RebuildRelationshipCache();

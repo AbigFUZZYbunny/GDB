@@ -5,7 +5,6 @@
 #include "DynamicAttributeSet.h"
 #include "DynamicInteractableComponent.h"
 #include "DynamicGameState.h"
-#include "DynamicDataSerializer.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicContainerComponent::UDynamicContainerComponent()
@@ -24,7 +23,7 @@ void UDynamicContainerComponent::BeginPlay()
 void UDynamicContainerComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME(UDynamicContainerComponent, ContainerConfig);
+    DOREPLIFETIME_CONDITION(UDynamicContainerComponent, ContainerConfig, COND_InitialOnly);
     DOREPLIFETIME(UDynamicContainerComponent, ReplicatedSlots);
 }
 
@@ -32,10 +31,12 @@ void FDynamicContainerSlotItem::PreReplicatedRemove(const FFastContainerSlotArra
 {
     if (InArrayOwner.OwningContainer) InArrayOwner.OwningContainer->HandleSingleSlotReplicated(*this, true);
 }
+
 void FDynamicContainerSlotItem::PostReplicatedAdd(const FFastContainerSlotArray& InArrayOwner)
 {
     if (InArrayOwner.OwningContainer) InArrayOwner.OwningContainer->HandleSingleSlotReplicated(*this, false);
 }
+
 void FDynamicContainerSlotItem::PostReplicatedChange(const FFastContainerSlotArray& InArrayOwner)
 {
     if (InArrayOwner.OwningContainer) InArrayOwner.OwningContainer->HandleSingleSlotReplicated(*this, false);
@@ -66,10 +67,18 @@ void UDynamicContainerComponent::RebuildLocalSlotCache()
         const FDynamicContainerSlotItem& Item = ReplicatedSlots.Items[i];
         if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid()) continue;
 
-        int32 FlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
+        const int32 FlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
         FlatKeyToArrayIndexMap.Add(FlatKey, i);
         CachedTotalWeight += ResolveArchetypeUnitWeight(Item.StoredActorArchetypeTag, Item.SavedAttributeState) * static_cast<float>(Item.StackCount);
     }
+}
+
+void UDynamicContainerComponent::ClearContainerForPooling()
+{
+    ReplicatedSlots.Items.Empty();
+    ReplicatedSlots.MarkArrayDirty();
+    FlatKeyToArrayIndexMap.Empty();
+    CachedTotalWeight = 0.0f;
 }
 
 void UDynamicContainerComponent::InitializeContainerFromDef(const FDynamicContainerDef& InDef)
@@ -136,14 +145,14 @@ bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32
     for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
     {
         if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid()) continue;
-        int32 ItemFlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
+        const int32 ItemFlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
         if (ItemFlatKey == IgnoreFlatKey) continue;
 
         const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(Item.StoredActorArchetypeTag);
         if (!Def) continue;
 
-        int32 ItemW = Item.bIsRotated ? Def->ItemConfig.GridSizeY : Def->ItemConfig.GridSizeX;
-        int32 ItemH = Item.bIsRotated ? Def->ItemConfig.GridSizeX : Def->ItemConfig.GridSizeY;
+        const int32 ItemW = Item.bIsRotated ? Def->ItemConfig.GridSizeY : Def->ItemConfig.GridSizeX;
+        const int32 ItemH = Item.bIsRotated ? Def->ItemConfig.GridSizeX : Def->ItemConfig.GridSizeY;
 
         if (GridX < (Item.GridX + ItemW) && (GridX + SizeX) > Item.GridX &&
             GridY < (Item.GridY + ItemH) && (GridY + SizeY) > Item.GridY)
@@ -222,6 +231,7 @@ bool UDynamicContainerComponent::ServerStorePhysicalActor(ADynamicPhysicsActor* 
     FDynamicContainerSlotItem& Added = ReplicatedSlots.Items.Add_GetRef(NewSlot);
     ReplicatedSlots.MarkItemDirty(Added);
     RebuildLocalSlotCache();
+
     ActorToStore->DeactivateAndReturnToPool();
     return true;
 }
@@ -266,14 +276,21 @@ bool UDynamicContainerComponent::ServerRemoveStoredActorByTag(FGameplayTag Arche
             const int32 GridY = ReplicatedSlots.Items[i].GridY;
             const int32 NewCount = ReplicatedSlots.Items[i].StackCount;
 
+            // Tombstone Prevention: Eradicate dead struct from the replicated array entirely
             if (NewCount <= 0)
             {
-                ReplicatedSlots.Items[i].StoredActorArchetypeTag = FGameplayTag::EmptyTag;
+                ReplicatedSlots.Items.RemoveAtSwap(i);
+                ReplicatedSlots.MarkArrayDirty();
+                OnContainerSlotChanged.Broadcast(GridX, GridY, ArchetypeTag, 0);
             }
-            ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[i]);
-            OnContainerSlotChanged.Broadcast(GridX, GridY, ArchetypeTag, NewCount);
+            else
+            {
+                ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[i]);
+                OnContainerSlotChanged.Broadcast(GridX, GridY, ArchetypeTag, NewCount);
+            }
         }
     }
+
     RebuildLocalSlotCache();
     return true;
 }
@@ -282,20 +299,27 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToWorld(int3
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || QuantityToExtract <= 0) return nullptr;
 
-    int32 TargetFlatKey = GridY * ContainerConfig.GridWidth + GridX;
+    const int32 TargetFlatKey = GridY * ContainerConfig.GridWidth + GridX;
     const int32* FoundIdxPtr = FlatKeyToArrayIndexMap.Find(TargetFlatKey);
     if (!FoundIdxPtr || !ReplicatedSlots.Items.IsValidIndex(*FoundIdxPtr)) return nullptr;
 
-    int32 FoundIndex = *FoundIdxPtr;
+    const int32 FoundIndex = *FoundIdxPtr;
     FDynamicContainerSlotItem Snapshot = ReplicatedSlots.Items[FoundIndex];
     if (Snapshot.StackCount < QuantityToExtract) return nullptr;
 
     ReplicatedSlots.Items[FoundIndex].StackCount -= QuantityToExtract;
+
+    // Tombstone Prevention: Purge slot completely on zero count
     if (ReplicatedSlots.Items[FoundIndex].StackCount <= 0)
     {
-        ReplicatedSlots.Items[FoundIndex].StoredActorArchetypeTag = FGameplayTag::EmptyTag;
+        ReplicatedSlots.Items.RemoveAtSwap(FoundIndex);
+        ReplicatedSlots.MarkArrayDirty();
     }
-    ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[FoundIndex]);
+    else
+    {
+        ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[FoundIndex]);
+    }
+
     RebuildLocalSlotCache();
 
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
@@ -311,9 +335,9 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToWorld(int3
 
 ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToHands(int32 GridX, int32 GridY, ADynamicCharacter* Looter, FName HandBone)
 {
-    if (!GetOwner() || !GetOwner()->HasAuthority() || !Looter) return nullptr;
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !Looter || !Looter->GetMeshComponent()) return nullptr;
 
-    FTransform HandTransform = Looter->GetMeshComponent()->GetSocketTransform(HandBone);
+    const FTransform HandTransform = Looter->GetMeshComponent()->GetSocketTransform(HandBone);
     ADynamicPhysicsActor* Extracted = ServerExtractActorToWorld(GridX, GridY, 1, HandTransform, Looter);
     if (Extracted)
     {
@@ -324,8 +348,8 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToHands(int3
         }
         if (UDynamicInteractableComponent* Interactable = Extracted->GetInteractableComponent())
         {
-            Interactable->RemoveStateTag(FGameplayTag::RequestGameplayTag("State.Interactable.Moveable"));
-            Interactable->AddStateTag(FGameplayTag::RequestGameplayTag("State.Interactable.Carried"));
+            Interactable->RemoveStateTag(FGameplayTag::RequestGameplayTag(TEXT("State.Interactable.Moveable")));
+            Interactable->AddStateTag(FGameplayTag::RequestGameplayTag(TEXT("State.Interactable.Carried")));
         }
     }
     return Extracted;

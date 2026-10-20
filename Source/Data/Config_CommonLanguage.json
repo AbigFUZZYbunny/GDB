@@ -1,0 +1,1220 @@
+﻿{
+  "Version": 1,
+  "Languages": [
+    {
+      "LanguageTag": "Language.Common",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "DisplayValue": "Common Tongue" }
+        ]
+      },
+      "PhoneticPhonemes": ["a", "er", "on", "in", "is", "th", "an"],
+      "Vocabulary": []
+    },
+    {
+      "LanguageTag": "Language.Elvish",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "DisplayValue": "Elvish" }
+        ]
+      },
+      "ComprehensionAttributeTag": "Attribute.Language.Elvish",
+      "PhoneticPhonemes": ["ae", "la", "thir", "ion", "sil", "van", "dor", "iel", "wen"],
+      "Vocabulary": [
+        {
+          "NativeWord": "Mae",
+          "DifficultyRating": 10.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Well" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Bien" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Poor", "Bad", "Fierce"]
+        },
+        {
+          "NativeWord": "govannen",
+          "DifficultyRating": 25.0,
+          "ComprehensionXPGranted": 5.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "met" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "hallado" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["departed", "slain", "betrayed"]
+        },
+        {
+          "NativeWord": "Edhel",
+          "DifficultyRating": 5.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Elf" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Elfo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Beast", "Shadow", "Orc"]
+        }
+      ]
+    },
+    {
+      "LanguageTag": "Language.Orcish",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name.en", "DisplayValue": "Orcish" },
+          { "KeyTag": "Localization.Name.es", "DisplayValue": "Orco" }
+        ]
+      },
+      "ComprehensionAttributeTag": "Attribute.Language.Orcish",
+      "PhoneticPhonemes": [
+        "lok", "tar", "drak", "grak", "zug", "ogar", "burz", "krag",
+        "ghâsh", "nazg", "uruk", "hai", "thrak", "mog", "gol", "mok",
+        "skat", "ishi", "kaza", "durb", "lug", "bag", "snaga", "snik"
+      ],
+      "Vocabulary": [
+        {
+          "NativeWord": "Lok'tar",
+          "DifficultyRating": 5.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Victory" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Victoria" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Defeat", "Retreat", "Surrender"]
+        },
+        {
+          "NativeWord": "Ogar",
+          "DifficultyRating": 5.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Death" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Muerte" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Life", "Health", "Mercy"]
+        },
+        {
+          "NativeWord": "Zug-zug",
+          "DifficultyRating": 2.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Understood" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Entendido" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Refused", "Never", "Attack"]
+        },
+        {
+          "NativeWord": "Dabu",
+          "DifficultyRating": 3.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Obey" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Obedecer" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Defy", "Ignore", "Flee"]
+        },
+        {
+          "NativeWord": "Aka'Magosh",
+          "DifficultyRating": 25.0,
+          "ComprehensionXPGranted": 5.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Blessings be upon you" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Bendiciones sobre ti" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Curse your family", "Die a coward", "Leave our sight"]
+        },
+        {
+          "NativeWord": "Mok'ra",
+          "DifficultyRating": 4.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Greetings" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Saludos" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Farewell", "Enemy", "Silence"]
+        },
+        {
+          "NativeWord": "Gol'kosh",
+          "DifficultyRating": 15.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "By this axe" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Por esta hacha" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Drop your weapon", "Run away", "Behind the shield"]
+        },
+        {
+          "NativeWord": "Ghâsh",
+          "DifficultyRating": 8.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Fire" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Fuego" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Water", "Earth", "Frost"]
+        },
+        {
+          "NativeWord": "Burz",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Dark" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Oscuro" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Bright", "Sunlight", "Golden"]
+        },
+        {
+          "NativeWord": "Snaga",
+          "DifficultyRating": 6.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Slave" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Esclavo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Chieftain", "Noble", "Warrior"]
+        },
+        {
+          "NativeWord": "Nazg",
+          "DifficultyRating": 14.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Ring" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Anillo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Crown", "Necklace", "Sword"]
+        },
+        {
+          "NativeWord": "Lug",
+          "DifficultyRating": 10.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Tower" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Torre" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Cave", "Bridge", "Dungeon"]
+        },
+        {
+          "NativeWord": "Durb",
+          "DifficultyRating": 22.0,
+          "ComprehensionXPGranted": 4.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Rule" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Gobernar" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Serve", "Follow", "Break"]
+        },
+        {
+          "NativeWord": "Gimb",
+          "DifficultyRating": 20.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Find" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Encontrar" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Hide", "Lose", "Bury"]
+        },
+        {
+          "NativeWord": "Thrak",
+          "DifficultyRating": 18.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Bring" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Traer" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Throw", "Destroy", "Leave"]
+        },
+        {
+          "NativeWord": "Uruk",
+          "DifficultyRating": 8.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Orc soldier" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Guerrero orco" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Goblin runt", "Human civilian", "Beast"]
+        },
+        {
+          "NativeWord": "Hai",
+          "DifficultyRating": 10.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Folk / People" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Gente / Pueblo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Monster", "Enemy", "Beast"]
+        },
+        {
+          "NativeWord": "Olog",
+          "DifficultyRating": 14.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Troll" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Trol" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Ogre", "Giant", "Dwarf"]
+        },
+        {
+          "NativeWord": "Grak",
+          "DifficultyRating": 6.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Kill" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Matar" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Protect", "Heal", "Feed"]
+        },
+        {
+          "NativeWord": "Krag",
+          "DifficultyRating": 7.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Stone / Cliff" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Piedra / Risco" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Water", "Forest", "Sky"]
+        },
+        {
+          "NativeWord": "Drak",
+          "DifficultyRating": 9.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Dragon" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Dragón" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Wolf", "Wyrm", "Lizard"]
+        },
+        {
+          "NativeWord": "Garash",
+          "DifficultyRating": 11.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Axe" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hacha" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Bow", "Shield", "Spear"]
+        },
+        {
+          "NativeWord": "Krom",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Iron" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hierro" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Wood", "Gold", "Clay"]
+        },
+        {
+          "NativeWord": "Vrosh",
+          "DifficultyRating": 13.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Blood" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Sangre" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Water", "Sweat", "Poison"]
+        },
+        {
+          "NativeWord": "Skarn",
+          "DifficultyRating": 16.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Scar / Wound" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Cicatriz / Herida" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Trophy", "Armor", "Emblem"]
+        },
+        {
+          "NativeWord": "Nar",
+          "DifficultyRating": 3.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "No / Not" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "No / Negativo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Yes", "Always", "Here"]
+        },
+        {
+          "NativeWord": "Kaza",
+          "DifficultyRating": 15.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Shield" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Escudo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Helmet", "Gauntlet", "Boot"]
+        },
+        {
+          "NativeWord": "Mor",
+          "DifficultyRating": 6.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Black" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Negro" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["White", "Red", "Blue"]
+        },
+        {
+          "NativeWord": "Grish",
+          "DifficultyRating": 17.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Flesh / Meat" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Carne" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Bone", "Bread", "Fruit"]
+        },
+        {
+          "NativeWord": "Hont",
+          "DifficultyRating": 19.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Eye" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Ojo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Hand", "Tooth", "Ear"]
+        },
+        {
+          "NativeWord": "Kulk",
+          "DifficultyRating": 21.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Heart / Core" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Corazón" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Limb", "Spine", "Skull"]
+        },
+        {
+          "NativeWord": "Sha",
+          "DifficultyRating": 4.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Together / With" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Juntos / Con" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Alone", "Apart", "Against"]
+        },
+        {
+          "NativeWord": "Zul",
+          "DifficultyRating": 18.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Voodoo / Dark Magic" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Magia oscura" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Holy light", "Alchemy", "Song"]
+        },
+        {
+          "NativeWord": "Mog",
+          "DifficultyRating": 11.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Voice / Command" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Voz / Orden" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Whisper", "Plea", "Laughter"]
+        },
+        {
+          "NativeWord": "Gorg",
+          "DifficultyRating": 14.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Enemy / Foe" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Enemigo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Ally", "Brother", "Chieftain"]
+        },
+        {
+          "NativeWord": "Rot",
+          "DifficultyRating": 8.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Bone" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hueso" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Hide", "Sinew", "Blood"]
+        },
+        {
+          "NativeWord": "Kren",
+          "DifficultyRating": 16.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "War / Battle" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Guerra / Batalla" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Truce", "Market", "Feast"]
+        },
+        {
+          "NativeWord": "Tash",
+          "DifficultyRating": 9.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Fast / Quick" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Rápido" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Slow", "Halt", "Creeping"]
+        },
+        {
+          "NativeWord": "Durn",
+          "DifficultyRating": 23.0,
+          "ComprehensionXPGranted": 4.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Stronghold / Fortress" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Fortaleza" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Tent", "Ruin", "Open field"]
+        },
+        {
+          "NativeWord": "Gash'kna",
+          "DifficultyRating": 24.0,
+          "ComprehensionXPGranted": 5.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Campfire" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hoguera" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["River", "Cold wind", "Shadow"]
+        },
+        {
+          "NativeWord": "Thraka",
+          "DifficultyRating": 10.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Bloodhound / Tracker" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Rastreador" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Scout", "Coward", "Hunter"]
+        },
+        {
+          "NativeWord": "Bûrzum",
+          "DifficultyRating": 18.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Darkness" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Oscuridad" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Shadow", "Midnight", "Blindness"]
+        },
+        {
+          "NativeWord": "Golok",
+          "DifficultyRating": 11.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Cleaver / Machete" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Machete" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Dagger", "Hammer", "Shield"]
+        },
+        {
+          "NativeWord": "Zug",
+          "DifficultyRating": 4.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Do / Make" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hacer" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Break", "Take", "Leave"]
+        },
+        {
+          "NativeWord": "Uglúk",
+          "DifficultyRating": 15.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Captain / Leader" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Capitán" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Private", "Scum", "Outcast"]
+        },
+        {
+          "NativeWord": "Shar",
+          "DifficultyRating": 7.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Blade / Edge" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hoja / Filo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Hilt", "Point", "Handle"]
+        },
+        {
+          "NativeWord": "Grosh",
+          "DifficultyRating": 13.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Gut / Stomach" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Estómago" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Chest", "Throat", "Heart"]
+        },
+        {
+          "NativeWord": "Mub",
+          "DifficultyRating": 5.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Mud / Dirt" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Lodo / Tierra" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Sand", "Ash", "Snow"]
+        },
+        {
+          "NativeWord": "Tharg",
+          "DifficultyRating": 16.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Shield-wall" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Muro de escudos" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Broken line", "Ambush", "Charge"]
+        },
+        {
+          "NativeWord": "Rad",
+          "DifficultyRating": 9.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Track / Trail" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Rastro" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Road", "River", "Wall"]
+        },
+        {
+          "NativeWord": "Brak",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Break / Smash" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Romper" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Repair", "Hold", "Tie"]
+        },
+        {
+          "NativeWord": "Kark",
+          "DifficultyRating": 8.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Raven / Crow" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Cuervo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Wolf", "Vulture", "Rat"]
+        },
+        {
+          "NativeWord": "Golm",
+          "DifficultyRating": 20.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Treasure / Loot" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Botín" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Trash", "Tribute", "Debt"]
+        },
+        {
+          "NativeWord": "Pug",
+          "DifficultyRating": 10.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Stab / Thrust" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Estocada" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Slash", "Block", "Throw"]
+        },
+        {
+          "NativeWord": "Zaug",
+          "DifficultyRating": 17.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Trophy / Ears" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Trofeo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Ration", "Weapon", "Pelt"]
+        },
+        {
+          "NativeWord": "Morgul",
+          "DifficultyRating": 22.0,
+          "ComprehensionXPGranted": 4.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Black magic / Sorcery" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Magia negra" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Shamanism", "Natural cure", "Plain steel"]
+        },
+        {
+          "NativeWord": "Skog",
+          "DifficultyRating": 13.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Ambush / Trap" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Emboscada" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Honorable duel", "Open charge", "Retreat"]
+        },
+        {
+          "NativeWord": "Drakar",
+          "DifficultyRating": 16.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Drake scale" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Escama de draco" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Cloth tunic", "Leather strap", "Iron chain"]
+        },
+        {
+          "NativeWord": "Grom",
+          "DifficultyRating": 7.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Axe / Giant" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hacha / Gigante" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Dagger", "Wand", "Sling"]
+        },
+        {
+          "NativeWord": "Throm",
+          "DifficultyRating": 9.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Well met / Honor" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Bien hallado" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Despised", "Treachery", "Coward"]
+        },
+        {
+          "NativeWord": "Karkosh",
+          "DifficultyRating": 19.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Dungeon / Pit" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Calabozo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["High tower", "Throne room", "Garden"]
+        },
+        {
+          "NativeWord": "Zug-krag",
+          "DifficultyRating": 14.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Stone-mason / Builder" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Constructor" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Destroyer", "Demolisher", "Scout"]
+        },
+        {
+          "NativeWord": "Bram",
+          "DifficultyRating": 11.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Rampart / Wall" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Muralla" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Open gate", "Trench", "Bridge"]
+        },
+        {
+          "NativeWord": "Snik",
+          "DifficultyRating": 6.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Sneak / Cut throat" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Sigilo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["March openly", "Shout", "Stand tall"]
+        },
+        {
+          "NativeWord": "Uzg",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Land / Territory" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Territorio" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Open ocean", "Sky", "Void"]
+        },
+        {
+          "NativeWord": "Zog",
+          "DifficultyRating": 5.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Trouble / Mess" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Problema / Lío" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Order", "Peace", "Cleanliness"]
+        },
+        {
+          "NativeWord": "Durbatulûk",
+          "DifficultyRating": 30.0,
+          "ComprehensionXPGranted": 6.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "To rule them all" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Para gobernarlos a todos" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["To serve them all", "To bind them fast", "To destroy them all"]
+        },
+        {
+          "NativeWord": "Gimbatul",
+          "DifficultyRating": 25.0,
+          "ComprehensionXPGranted": 5.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "To find them" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Para encontrarlos" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["To hunt them", "To hide them", "To slay them"]
+        },
+        {
+          "NativeWord": "Thrakatulûk",
+          "DifficultyRating": 28.0,
+          "ComprehensionXPGranted": 5.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "To bring them all" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Para traerlos a todos" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["To scatter them all", "To bind them all", "To chain them all"]
+        },
+        {
+          "NativeWord": "Krud",
+          "DifficultyRating": 7.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Rot / Decay" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Podredumbre" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Freshness", "Purity", "Strength"]
+        },
+        {
+          "NativeWord": "Vrog",
+          "DifficultyRating": 15.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Brute / Ogre" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Bruto / Ogro" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Weakling", "Scholar", "Child"]
+        },
+        {
+          "NativeWord": "Ghash-hai",
+          "DifficultyRating": 17.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Fire-folk / Pyromancer" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Pueblo del fuego" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Water-bearers", "Stone-cutters", "Cowards"]
+        },
+        {
+          "NativeWord": "Karn",
+          "DifficultyRating": 11.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Horns / Helmet" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Cuernos / Yelmo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Bare head", "Hood", "Circlet"]
+        },
+        {
+          "NativeWord": "Zug-grak",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Executioner" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Verdugo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Healer", "Farmer", "Messenger"]
+        },
+        {
+          "NativeWord": "Mub-uzg",
+          "DifficultyRating": 14.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Swamp / Marshland" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Pantano" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Mountain peak", "Desert", "Glacier"]
+        },
+        {
+          "NativeWord": "Ash",
+          "DifficultyRating": 2.0,
+          "ComprehensionXPGranted": 0.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "One" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Uno" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Two", "None", "All"]
+        },
+        {
+          "NativeWord": "Pugn",
+          "DifficultyRating": 4.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Two" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Dos" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["One", "Three", "Ten"]
+        },
+        {
+          "NativeWord": "Goth",
+          "DifficultyRating": 10.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Lord / Master" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Señor / Amo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Servant", "Beggar", "Fool"]
+        },
+        {
+          "NativeWord": "Ush",
+          "DifficultyRating": 6.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Wolf / Warg" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Lobo / Wargo" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Sheep", "Horse", "Hound"]
+        },
+        {
+          "NativeWord": "Kark-hont",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Vulture" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Buitre" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Sparrow", "Hawk", "Dove"]
+        },
+        {
+          "NativeWord": "Rad-ug",
+          "DifficultyRating": 11.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Boar / Pig" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Jabalí / Puerco" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Deer", "Rabbit", "Ox"]
+        },
+        {
+          "NativeWord": "Zok",
+          "DifficultyRating": 5.0,
+          "ComprehensionXPGranted": 1.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Meat / Food" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Carne / Comida" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Stone", "Water", "Sand"]
+        },
+        {
+          "NativeWord": "Brod",
+          "DifficultyRating": 7.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Ale / Beer" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Cerveza" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Milk", "Vinegar", "Poison"]
+        },
+        {
+          "NativeWord": "Hark",
+          "DifficultyRating": 8.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Tent / Hut" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Tienda / Cabaña" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Palace", "Bridge", "Cage"]
+        },
+        {
+          "NativeWord": "Skar",
+          "DifficultyRating": 9.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Leather / Hide" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Cuero / Piel" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Silk", "Cotton", "Glass"]
+        },
+        {
+          "NativeWord": "Dron",
+          "DifficultyRating": 13.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Heavy / Burden" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Pesado / Carga" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Light", "Empty", "Swift"]
+        },
+        {
+          "NativeWord": "Tark",
+          "DifficultyRating": 15.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Man / Human" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Humano" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Elf", "Dwarf", "Orc"]
+        },
+        {
+          "NativeWord": "Hith",
+          "DifficultyRating": 14.0,
+          "ComprehensionXPGranted": 3.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Fog / Mist" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Niebla" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Blazing sun", "Clear sky", "Rainstorm"]
+        },
+        {
+          "NativeWord": "Maug",
+          "DifficultyRating": 16.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Law / Decree" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Ley / Decreto" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Chaos", "Suggestion", "Whisper"]
+        },
+        {
+          "NativeWord": "Prak",
+          "DifficultyRating": 6.0,
+          "ComprehensionXPGranted": 1.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Speak / Shout" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Hablar / Gritar" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Silence", "Listen", "Hide"]
+        },
+        {
+          "NativeWord": "Gimb-tark",
+          "DifficultyRating": 19.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Spy / Scout" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Espía" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Chieftain", "Merchant", "Prisoner"]
+        },
+        {
+          "NativeWord": "Zug-mor",
+          "DifficultyRating": 12.0,
+          "ComprehensionXPGranted": 2.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Forge / Blacksmith" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Forja" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Kitchen", "Tomb", "Garden"]
+        },
+        {
+          "NativeWord": "Kroth",
+          "DifficultyRating": 17.0,
+          "ComprehensionXPGranted": 3.5,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Mountain" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Montaña" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Valley", "Plain", "Ocean"]
+        },
+        {
+          "NativeWord": "Brug",
+          "DifficultyRating": 8.0,
+          "ComprehensionXPGranted": 2.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Bridge" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Puente" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Abyss", "Wall", "Tunnel"]
+        },
+        {
+          "NativeWord": "Guld",
+          "DifficultyRating": 20.0,
+          "ComprehensionXPGranted": 4.0,
+          "LocalizedTranslations": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Text.en", "DisplayValue": "Gold / Wealth" },
+              { "KeyTag": "Localization.Text.es", "DisplayValue": "Oro / Riqueza" }
+            ]
+          },
+          "MiniGameDecoyOptions": ["Trash", "Iron", "Dirt"]
+        }
+      ]
+    }
+  ]
+}

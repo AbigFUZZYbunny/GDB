@@ -68,10 +68,12 @@ public:
     FFastContainerSlotArray& GetMutableReplicatedSlots() { return ReplicatedSlots; }
     const FFastContainerSlotArray& GetReplicatedSlots() const { return ReplicatedSlots; }
 
+    void ClearContainerForPooling();
+
 private:
     void RebuildLocalSlotCache();
     float ResolveArchetypeUnitWeight(FGameplayTag ArchetypeTag, const TArray<FDynamicAttributeItem>& AttributeOverrides) const;
 
-    TMap<int32, int32> FlatKeyToArrayIndexMap; 
+    TMap<int32, int32> FlatKeyToArrayIndexMap;
     float CachedTotalWeight = 0.0f;
 };

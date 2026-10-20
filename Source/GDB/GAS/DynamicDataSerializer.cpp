@@ -414,18 +414,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalendarConfig")).ToSharedRef(), &TargetGameState->CalendarConfig, 0, 0);
     }
 
-    // 2. Aging
-    if (RootObject->HasField(TEXT("LifeStagesRegistry")))
-    {
-        const TArray<TSharedPtr<FJsonValue>>& Array = RootObject->GetArrayField(TEXT("LifeStagesRegistry"));
-        for (const auto& Val : Array)
-        {
-            FDynamicLifeStageDef Stage;
-            FJsonObjectConverter::JsonObjectToUStruct(Val->AsObject().ToSharedRef(), &Stage, 0, 0);
-            TargetGameState->LifeStagesRegistry.Add(Stage);
-        }
-    }
-
     // 3. Genetics
     if (RootObject->HasField(TEXT("GeneticsMasterRegistry")))
     {
@@ -522,6 +510,98 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->QuestGeneratorRules.Add(KeyTag, Rule);
         }
     }
+    
+    if (RootObject->HasField(TEXT("EnvironmentConfig")))
+    {
+        TSharedPtr<FJsonObject> EnvConfigObj = RootObject->GetObjectField(TEXT("EnvironmentConfig"));
+        FDynamicEnvironmentSystemConfig Config;
+
+        if (EnvConfigObj->HasField(TEXT("TrackedElementalTags")))
+        {
+            for (const auto& TagVal : EnvConfigObj->GetArrayField(TEXT("TrackedElementalTags")))
+            {
+                FGameplayTag ElemTag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                if (ElemTag.IsValid())
+                {
+                    Config.TrackedElementalTags.Add(ElemTag);
+                }
+            }
+        }
+
+        Config.MaxElementDensityCap = EnvConfigObj->HasField(TEXT("MaxElementDensityCap")) 
+            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("MaxElementDensityCap"))) 
+            : 200.0f;
+
+        Config.DefaultCellDensity = EnvConfigObj->HasField(TEXT("DefaultCellDensity")) 
+            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("DefaultCellDensity"))) 
+            : 50.0f;
+
+        if (EnvConfigObj->HasField(TEXT("MetricFormulas")))
+        {
+            for (const auto& FormVal : EnvConfigObj->GetArrayField(TEXT("MetricFormulas")))
+            {
+                TSharedPtr<FJsonObject> FormObj = FormVal->AsObject();
+                FDynamicEnvironmentPhysicalMetricFormula Formula;
+                Formula.MetricTag = FGameplayTag::RequestGameplayTag(FName(*FormObj->GetStringField(TEXT("MetricTag"))), false);
+                Formula.BaseConstant = static_cast<float>(FormObj->GetNumberField(TEXT("BaseConstant")));
+                Formula.MinClamp = static_cast<float>(FormObj->GetNumberField(TEXT("MinClamp")));
+                Formula.MaxClamp = static_cast<float>(FormObj->GetNumberField(TEXT("MaxClamp")));
+                DeserializeMapWrapper(FormObj, TEXT("ElementWeights"), Formula.ElementWeights);
+                Config.MetricFormulas.Add(Formula);
+            }
+        }
+
+        TargetGameState->SetupDynamicEnvironment(Config);
+    }
+    
+    if (RootObject->HasField(TEXT("Languages")))
+    {
+        for (const auto& LangVal : RootObject->GetArrayField(TEXT("Languages")))
+        {
+            TSharedPtr<FJsonObject> LangObj = LangVal->AsObject();
+            FGameplayTag LangTag = FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("LanguageTag"))), false);
+            if (!LangTag.IsValid()) continue;
+
+            FDynamicLanguageDef LangDef;
+            LangDef.LanguageTag = LangTag;
+            LangDef.ComprehensionAttributeTag = FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("ComprehensionAttributeTag"))), false);
+
+            DeserializeLocalizationMap(LangObj, TEXT("Localization"), LangDef.Localization);
+
+            if (LangObj->HasField(TEXT("PhoneticPhonemes")))
+            {
+                for (const auto& PhVal : LangObj->GetArrayField(TEXT("PhoneticPhonemes")))
+                {
+                    LangDef.PhoneticPhonemes.Add(PhVal->AsString());
+                }
+            }
+
+            if (LangObj->HasField(TEXT("Vocabulary")))
+            {
+                for (const auto& VocVal : LangObj->GetArrayField(TEXT("Vocabulary")))
+                {
+                    TSharedPtr<FJsonObject> VocObj = VocVal->AsObject();
+                    FDynamicVocabularyWordDef WordDef;
+                    WordDef.NativeWord = VocObj->GetStringField(TEXT("NativeWord"));
+                    WordDef.DifficultyRating = static_cast<float>(VocObj->GetNumberField(TEXT("DifficultyRating")));
+                    WordDef.ComprehensionXPGranted = static_cast<float>(VocObj->GetNumberField(TEXT("ComprehensionXPGranted")));
+
+                    DeserializeLocalizationMap(VocObj, TEXT("LocalizedTranslations"), WordDef.LocalizedTranslations);
+
+                    if (VocObj->HasField(TEXT("MiniGameDecoyOptions")))
+                    {
+                        for (const auto& Decoy : VocObj->GetArrayField(TEXT("MiniGameDecoyOptions")))
+                        {
+                            WordDef.MiniGameDecoyOptions.Add(Decoy->AsString());
+                        }
+                    }
+                    LangDef.Vocabulary.Add(WordDef);
+                }
+            }
+
+            TargetGameState->LanguageMasterRegistry.Add(LangTag, LangDef);
+        }
+    }   
 
     return true;
 }

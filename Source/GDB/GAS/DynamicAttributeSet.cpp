@@ -144,13 +144,21 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
 {
     if (!AttributeTag.IsValid()) return;
 
+    // Enforce thread-local recursion depth guards to block infinite cascading threshold loops
+    static thread_local int32 ThresholdEvaluationDepth = 0;
+    if (ThresholdEvaluationDepth > 4)
+    {
+        UE_LOG(LogTemp, Error, TEXT("DynamicAttributeSet: Aborted recursive threshold escalation for Tag %s on Limb %d"), *AttributeTag.ToString(), LimbId);
+        return;
+    }
+
     AActor* OwningActor = GetOwningActor();
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
 
     const uint64 CompositeKey = MakeCompositeKey(LimbId, AttributeTag);
     const bool bIsNewAttribute = !FastCompositeLookupMap.Contains(CompositeKey);
-    float OldVal = FastCompositeLookupMap.FindRef(CompositeKey);
+    const float OldVal = FastCompositeLookupMap.FindRef(CompositeKey);
     float Delta = NewVal - OldVal;
 
     if (GS && !FMath::IsNearlyZero(Delta))
@@ -228,12 +236,16 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
         {
             for (const FDynamicThresholdRule& Rule : Container->Rules)
             {
-                float MaxCapValue = GetDynamicAttributeValue(Rule.MaxThresholdAttributeTag, LimbId);
+                const float MaxCapValue = GetDynamicAttributeValue(Rule.MaxThresholdAttributeTag, LimbId);
                 if (NewVal >= MaxCapValue && MaxCapValue > 0.0f)
                 {
                     if (Rule.TriggerBehavior == EThresholdTriggerType::LevelUpAttribute)
                     {
-                        SetDynamicAttributeValue(Rule.MonitoredAttributeTag, 0.0f, LimbId);
+                        ++ThresholdEvaluationDepth;
+
+                        // Carry over overflow progress rather than discarding progression
+                        const float RemainingProgress = NewVal - MaxCapValue;
+                        SetDynamicAttributeValue(Rule.MonitoredAttributeTag, RemainingProgress, LimbId);
                         SetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, GetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, LimbId) + 1.0f, LimbId);
 
                         if (Rule.BroadcastEventTag.IsValid())
@@ -246,6 +258,8 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
                                 ASC->HandleGameplayEvent(Rule.BroadcastEventTag, &Payload);
                             }
                         }
+
+                        --ThresholdEvaluationDepth;
                     }
                 }
             }

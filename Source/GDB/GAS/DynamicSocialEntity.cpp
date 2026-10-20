@@ -4,7 +4,7 @@
 
 ADynamicSocialEntity::ADynamicSocialEntity()
 {
-    PrimaryActorTick.bCanEverTick = false; // Fixed: AActor uses PrimaryActorTick instead of PrimaryComponentTick
+    PrimaryActorTick.bCanEverTick = false; // Fixed: Uses PrimaryActorTick for AActor
     bReplicates = true;
     SetReplicateMovement(false);
 

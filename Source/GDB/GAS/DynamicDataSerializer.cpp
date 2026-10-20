@@ -602,6 +602,49 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->LanguageMasterRegistry.Add(LangTag, LangDef);
         }
     }   
+    
+    if (RootObject->HasField(TEXT("NameGenerationRules")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>& RulesArr = RootObject->GetArrayField(TEXT("NameGenerationRules"));
+        for (const auto& Val : RulesArr)
+        {
+            TSharedPtr<FJsonObject> RuleObj = Val->AsObject();
+            if (!RuleObj.IsValid()) continue;
+
+            FNameGenerationRuleConfig RuleConfig;
+            RuleConfig.CultureOrTemplateTag = FGameplayTag::RequestGameplayTag(FName(*RuleObj->GetStringField(TEXT("CultureOrTemplateTag"))), false);
+            if (!RuleConfig.CultureOrTemplateTag.IsValid()) continue;
+
+            RuleConfig.GenerationMode = StringToEnum<ENameGenerationMode>(RuleObj->GetStringField(TEXT("GenerationMode")));
+            DeserializeMapWrapper(RuleObj, TEXT("CulturalAdoptionWeights"), RuleConfig.CulturalAdoptionWeights);
+
+            auto ParseLexiconArray = [](const TSharedPtr<FJsonObject>& ParentObj, const FString& ArrayFieldName, TArray<FNameLexiconEntry>& OutPool)
+            {
+                if (ParentObj->HasField(ArrayFieldName))
+                {
+                    for (const auto& EntryVal : ParentObj->GetArrayField(ArrayFieldName))
+                    {
+                        TSharedPtr<FJsonObject> EntryObj = EntryVal->AsObject();
+                        if (!EntryObj.IsValid()) continue;
+
+                        FNameLexiconEntry LexEntry;
+                        LexEntry.Token = EntryObj->GetStringField(TEXT("Token"));
+                        LexEntry.GivenNameWeight = EntryObj->HasField(TEXT("GivenNameWeight")) ? static_cast<float>(EntryObj->GetNumberField(TEXT("GivenNameWeight"))) : 1.0f;
+                        LexEntry.SurnameWeight = EntryObj->HasField(TEXT("SurnameWeight")) ? static_cast<float>(EntryObj->GetNumberField(TEXT("SurnameWeight"))) : 0.0f;
+                        LexEntry.GenderRestriction = EntryObj->HasField(TEXT("GenderRestriction")) ? StringToEnum<ECharacterGender>(EntryObj->GetStringField(TEXT("GenderRestriction"))) : ECharacterGender::Neutral;
+                        DeserializeMapWrapper(EntryObj, TEXT("RacialPrevalenceWeights"), LexEntry.RacialPrevalenceWeights);
+                        OutPool.Add(LexEntry);
+                    }
+                }
+            };
+
+            ParseLexiconArray(RuleObj, TEXT("StandaloneNames"), RuleConfig.StandaloneNames);
+            ParseLexiconArray(RuleObj, TEXT("PrefixPool"), RuleConfig.PrefixPool);
+            ParseLexiconArray(RuleObj, TEXT("SuffixPool"), RuleConfig.SuffixPool);
+
+            TargetGameState->NameGenerationRulesRegistry.Add(RuleConfig.CultureOrTemplateTag, RuleConfig);
+        }
+    }
 
     return true;
 }

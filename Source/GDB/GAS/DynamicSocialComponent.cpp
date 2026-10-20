@@ -567,10 +567,12 @@ void FDynamicAssignedProfessionItem::PostReplicatedChange(const FFastAssignedPro
 
 void UDynamicSocialComponent::HandleProfessionReplicated(const FDynamicAssignedProfessionItem& Item, bool bRemoved)
 {
+    // Client-side assigned profession cache sync
 }
 
 void UDynamicSocialComponent::OnRep_Professions()
 {
+    // Client-side assigned professions update hook
 }
 
 bool UDynamicSocialComponent::ServerRemoveProfession(FGameplayTag ProfessionTag)

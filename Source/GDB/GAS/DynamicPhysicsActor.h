@@ -25,7 +25,6 @@ class GDB_API ADynamicPhysicsActor : public AActor, public IAbilitySystemInterfa
 
 public:
     ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer);
-
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -43,7 +42,6 @@ public:
 
     void RestoreFromContainerSnapshot(const FDynamicContainerSlotItem& Snapshot);
     void DeactivateAndReturnToPool();
-
     void ServerProcessAuthoritativeLimbHit(const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor);
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
@@ -91,7 +89,6 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
     TObjectPtr<UDynamicInteractableComponent> InteractableComponent;
 
-    // Primary container (default root container)
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Container")
     TObjectPtr<UDynamicContainerComponent> ContainerComponent;
 

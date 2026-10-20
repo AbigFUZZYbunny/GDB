@@ -3290,6 +3290,7 @@ struct FSurnameGeneratorRule
     TArray<FString> ClanAffixes;
 };
 
+// --- SURNAMES & NAME LEXICON STRUCTS ---
 USTRUCT(BlueprintType)
 struct FNameLexiconEntry
 {
@@ -3320,7 +3321,7 @@ struct FNameGenerationRuleConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Naming")
     FGameplayTag CultureOrTemplateTag;
 
-    // Maps Character Template Tags -> Probability weight of this entire culture table being selected for a given race
+    // Maps Character Template Tags -> Probability weight of this culture table being selected for a given race
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Naming")
     FDynamicTagFloatMapWrapper CulturalAdoptionWeights;
 

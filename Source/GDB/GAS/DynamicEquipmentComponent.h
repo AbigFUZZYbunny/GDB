@@ -8,6 +8,7 @@
 #include "DynamicEquipmentComponent.generated.h"
 
 class ADynamicPhysicsActor;
+class UDynamicEvolutionComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FDynamicEquipmentChangedSignature, FGameplayTag, SlotTag, FGameplayTag, ItemArchetypeTag, bool, bIsEquipped);
 
@@ -18,7 +19,6 @@ class GDB_API UDynamicEquipmentComponent : public UActorComponent
 
 public:
     UDynamicEquipmentComponent();
-
     virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -34,9 +34,7 @@ public:
     UFUNCTION()
     void OnRep_ReplicatedEquipmentSlots();
 
-    // MUST be public so FDynamicEquipmentSlotItem callbacks can invoke it
     void HandleSingleSlotReplicated(const FDynamicEquipmentSlotItem& Item, bool bIsUnequipped);
-
     void InitializeEquipmentSlots(const TArray<FDynamicEquipmentSlotProfile>& InSlots);
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Equipment")
@@ -50,11 +48,10 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Equipment")
     FGameplayTag GetEquippedItemInSlot(FGameplayTag SlotTag) const;
-    
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dynamic GAS|Equipment Evolution")
-    class UDynamicEvolutionComponent* ItemEvolutionComponent;
 
-    // Call this from ability pass-back rules when gear is used
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dynamic GAS|Equipment Evolution")
+    TObjectPtr<UDynamicEvolutionComponent> ItemEvolutionComponent;
+
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Equipment Evolution")
     void ServerGrantItemXP(float XPGrantAmount);
 

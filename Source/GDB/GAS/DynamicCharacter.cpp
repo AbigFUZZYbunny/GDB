@@ -270,8 +270,10 @@ void ADynamicCharacter::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascade
 
 void ADynamicCharacter::ApplyJointMotorMultipliers_Implementation(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier)
 {
+    // Native hook for physics motor adjustment
 }
 
 void ADynamicCharacter::AlignLimbToInteractionTarget_Implementation(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent)
 {
+    // Native hook for IK / Physics effector alignment
 }

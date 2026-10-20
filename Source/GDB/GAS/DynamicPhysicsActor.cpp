@@ -177,8 +177,6 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
     LocalLimbLookupMap.Empty(Def.CustomLimbs.Num());
     LocalBoneToLimbMap.Empty();
 
-    // The Archetype lives in GameState permanently. 
-    // It's safe to store a memory reference to it to save massive overhead per spawned instance.
     for (const FPhysicsLimbConfig& Limb : Def.CustomLimbs)
     {
         LocalLimbLookupMap.Add(Limb.LimbId, &Limb);
@@ -192,12 +190,23 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
     {
         if (USkeletalMesh* SkelMesh = Def.SkeletalMeshAsset.LoadSynchronous())
         {
+            // Detach and set active primitive as root
+            if (RootComponent != SkeletalMeshComponent)
+            {
+                StaticMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+                SkeletalMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+                SetRootComponent(SkeletalMeshComponent);
+                StaticMeshComponent->SetupAttachment(RootComponent);
+            }
+
             SkeletalMeshComponent->SetSkeletalMeshAsset(SkelMesh);
             SkeletalMeshComponent->SetHiddenInGame(false);
             SkeletalMeshComponent->SetCollisionProfileName(Def.CollisionProfileName);
+            SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
             SkeletalMeshComponent->SetSimulatePhysics(Def.bSimulatePhysicsOnSpawn);
             if (Def.MassOverride > 0.0f) SkeletalMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
         }
+        StaticMeshComponent->SetSimulatePhysics(false);
         StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         StaticMeshComponent->SetHiddenInGame(true);
     }
@@ -205,9 +214,19 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
     {
         if (UStaticMesh* StatMesh = Def.StaticMeshAsset.LoadSynchronous())
         {
+            // Detach and set active primitive as root
+            if (RootComponent != StaticMeshComponent)
+            {
+                SkeletalMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+                StaticMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+                SetRootComponent(StaticMeshComponent);
+                SkeletalMeshComponent->SetupAttachment(RootComponent);
+            }
+
             StaticMeshComponent->SetStaticMesh(StatMesh);
             StaticMeshComponent->SetHiddenInGame(false);
             StaticMeshComponent->SetCollisionProfileName(Def.CollisionProfileName);
+            StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
             StaticMeshComponent->SetNotifyRigidBodyCollision(true);
             StaticMeshComponent->SetSimulatePhysics(Def.bSimulatePhysicsOnSpawn);
             if (Def.MassOverride > 0.0f) StaticMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
@@ -232,8 +251,16 @@ void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerS
 
     if (InteractableComponent && Snapshot.SavedInteractableStates.Num() > 0)
     {
-        for (const FGameplayTag& OldTag : InteractableComponent->GetCurrentStateTags()) InteractableComponent->RemoveStateTag(OldTag);
-        for (const FGameplayTag& SavedTag : Snapshot.SavedInteractableStates) InteractableComponent->AddStateTag(SavedTag);
+        // Copy to avoid iterator invalidation during mutation
+        const FGameplayTagContainer OldTags = InteractableComponent->GetCurrentStateTags();
+        for (const FGameplayTag& OldTag : OldTags)
+        {
+            InteractableComponent->RemoveStateTag(OldTag);
+        }
+        for (const FGameplayTag& SavedTag : Snapshot.SavedInteractableStates)
+        {
+            InteractableComponent->AddStateTag(SavedTag);
+        }
     }
 }
 
@@ -244,6 +271,43 @@ void ADynamicPhysicsActor::DeactivateAndReturnToPool()
     StaticMeshComponent->SetSimulatePhysics(false);
     SetActorEnableCollision(false);
     SetActorHiddenInGame(true);
+
+    // 1. Destroy dynamic instance components (extra container components)
+    TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
+    for (UActorComponent* Comp : InstanceComps)
+    {
+        if (UDynamicContainerComponent* DynamicContainer = Cast<UDynamicContainerComponent>(Comp))
+        {
+            RemoveInstanceComponent(DynamicContainer);
+            DynamicContainer->DestroyComponent();
+        }
+    }
+
+    // 2. Clear root container
+    if (ContainerComponent)
+    {
+        ContainerComponent->ClearContainerForPooling();
+    }
+
+    // 3. Clear attributes
+    if (UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get()))
+    {
+        MutableAttr->FastAttributes.Items.Empty();
+        MutableAttr->FastAttributes.MarkArrayDirty();
+    }
+
+    // 4. Clear interactable state tags
+    if (InteractableComponent)
+    {
+        InteractableComponent->StartupStateTags.Reset();
+        InteractableComponent->ReplicatedStateTags.Items.Empty();
+        InteractableComponent->ReplicatedStateTags.MarkArrayDirty();
+        InteractableComponent->OnRep_ReplicatedStateTags();
+    }
+
+    bAttributesInitializedOnServer = false;
+    LocalLimbLookupMap.Empty();
+    LocalBoneToLimbMap.Empty();
 
     if (HasAuthority())
     {
@@ -309,9 +373,10 @@ void ADynamicPhysicsActor::ServerProcessAuthoritativeLimbHit(const FName& HitBon
 
 void ADynamicPhysicsActor::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren)
 {
-    // Evaluates limb physics joint springs and multipliers
+    // Native hook for physics motor recalculation
 }
 
 void ADynamicPhysicsActor::ApplyJointMotorMultipliers_Implementation(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier)
 {
+    // Native hook for joint motor multipliers
 }

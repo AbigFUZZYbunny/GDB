@@ -27,8 +27,23 @@ UDynamicGameplayAbility::UDynamicGameplayAbility()
 void UDynamicGameplayAbility::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME(UDynamicGameplayAbility, AbilityConfig);
+    // OPTIMIZATION: Only replicate the lightweight tag! Hydrate AbilityConfig locally on client.
     DOREPLIFETIME(UDynamicGameplayAbility, ActiveAbilityRegistryTag);
+}
+
+void UDynamicGameplayAbility::OnRep_ActiveAbilityRegistryTag()
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
+        {
+            if (const FDynamicAbilityDef* Def = GS->AbilityMasterRegistry.Find(ActiveAbilityRegistryTag))
+            {
+                AbilityConfig = *Def;
+                OnAbilityConfigChanged.Broadcast(AbilityConfig);
+            }
+        }
+    }
 }
 
 bool UDynamicGameplayAbility::CanBypassComboGate(const FDynamicAbilityDef& DefToCheck, const UAbilitySystemComponent* CasterASC)
@@ -316,6 +331,13 @@ bool UDynamicGameplayAbility::TransitionIntoComboAbilityInternal(FGameplayTag Ne
         }
     }
 
+    // Clean up active charge task and timers before transitioning
+    if (ActiveChargeTask)
+    {
+        ActiveChargeTask->EndTask();
+        ActiveChargeTask = nullptr;
+    }
+
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(TimerHandle_RecoveryWindow);
@@ -326,7 +348,6 @@ bool UDynamicGameplayAbility::TransitionIntoComboAbilityInternal(FGameplayTag Ne
     AbilityConfig = *NextDef;
     CurrentlyOpenComboTags.Reset();
     OnAbilityConfigChanged.Broadcast(AbilityConfig);
-
     ActivateAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, nullptr);
     return true;
 }
@@ -359,12 +380,12 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
             PlayStagePresentation(AbilityConfig.StageVisuals.ChargingStage);
             RefreshOpenComboWindows(0.0f, 0.0f);
 
-            UAT_WaitChargeTime* ChargeTask = UAT_WaitChargeTime::WaitChargeTime(this, AbilityConfig.ChargeProfile.MaxChargeTime);
-            if (ChargeTask)
+            ActiveChargeTask = UAT_WaitChargeTime::WaitChargeTime(this, AbilityConfig.ChargeProfile.MaxChargeTime);
+            if (ActiveChargeTask)
             {
-                ChargeTask->OnChargeTick.AddDynamic(this, &UDynamicGameplayAbility::HandleTickDrain);
-                ChargeTask->OnMaxChargeReached.AddDynamic(this, &UDynamicGameplayAbility::HandleMaxChargeReached);
-                ChargeTask->ReadyForActivation();
+                ActiveChargeTask->OnChargeTick.AddDynamic(this, &UDynamicGameplayAbility::HandleTickDrain);
+                ActiveChargeTask->OnMaxChargeReached.AddDynamic(this, &UDynamicGameplayAbility::HandleMaxChargeReached);
+                ActiveChargeTask->ReadyForActivation();
             }
             break;
         }
@@ -378,9 +399,11 @@ void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
             break;
         case EAbilityExecutionType::Chain:
             ExecuteChainBehavior(TriggerEventData);
+            EnterRecoveryPhase();
             break;
         case EAbilityExecutionType::Movement:
             ExecuteMovementBehavior();
+            EnterRecoveryPhase();
             break;
         default:
             EnterRecoveryPhase();
@@ -410,7 +433,6 @@ void UDynamicGameplayAbility::HandleMaxChargeReached()
 {
     RuntimeTrackedChargeTime = AbilityConfig.ChargeProfile.MaxChargeTime;
     RefreshOpenComboWindows(RuntimeTrackedChargeTime, 1.0f);
-
     if (!AbilityConfig.ChargeProfile.bHoldAtMaxCharge)
     {
         FinalizeRelease(1.0f);
@@ -429,6 +451,12 @@ void UDynamicGameplayAbility::InputReleased(const FGameplayAbilitySpecHandle Han
 
 void UDynamicGameplayAbility::FinalizeRelease(float FinalChargeAlpha)
 {
+    if (ActiveChargeTask)
+    {
+        ActiveChargeTask->EndTask();
+        ActiveChargeTask = nullptr;
+    }
+
     CurrentPhase = EValidationPhase::Release;
     PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     RefreshOpenComboWindows(0.0f, FinalChargeAlpha);
@@ -673,39 +701,43 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
 
 void UDynamicGameplayAbility::ExecuteChainBehavior(const FGameplayEventData* TriggerEventData)
 {
-    if (HasAuthority(&CurrentActivationInfo))
+    if (!HasAuthority(&CurrentActivationInfo)) return;
+
+    AActor* CurrentTarget = (TriggerEventData && TriggerEventData->Target.Get()) ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
+    if (!CurrentTarget) return;
+
+    const int32 MaxBounces = AbilityConfig.ChainConfig.MaxBounces;
+    const float Falloff = AbilityConfig.ChainConfig.DamageFalloffPerBounce;
+    const float Radius = AbilityConfig.ChainConfig.BounceSearchRadius;
+    const float BaseDamage = AbilityConfig.ChainConfig.DamageParamTag.IsValid()
+        ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
+        : 50.0f;
+
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChainAbility), false);
+    QueryParams.AddIgnoredActor(GetAvatarActorFromActorInfo());
+
+    for (int32 CurrentBounce = 0; CurrentBounce < MaxBounces && CurrentTarget; ++CurrentBounce)
     {
-        AActor* CurrentTarget = (TriggerEventData && TriggerEventData->Target.Get()) ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
-        if (CurrentTarget)
+        const float ModdedDamage = BaseDamage * FMath::Pow(Falloff, CurrentBounce);
+
+        if (ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(CurrentTarget))
         {
-            int32 MaxBounces = AbilityConfig.ChainConfig.MaxBounces;
-            float Falloff = AbilityConfig.ChainConfig.DamageFalloffPerBounce;
-            float Radius = AbilityConfig.ChainConfig.BounceSearchRadius;
-            float BaseDamage = AbilityConfig.ChainConfig.DamageParamTag.IsValid()
-                ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
-                : 0.0f;
-
-            FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChainAbility), false);
-            QueryParams.AddIgnoredActor(GetAvatarActorFromActorInfo());
-
-            for (int32 CurrentBounce = 0; CurrentBounce < MaxBounces && CurrentTarget; ++CurrentBounce)
-            {
-                float ModdedDamage = BaseDamage * FMath::Pow(Falloff, CurrentBounce);
-                QueryParams.AddIgnoredActor(CurrentTarget);
-
-                TArray<FOverlapResult> Overlaps;
-                bool bFound = GetWorld()->OverlapMultiByChannel(
-                    Overlaps, 
-                    CurrentTarget->GetActorLocation(), 
-                    FQuat::Identity, 
-                    ECC_Pawn, 
-                    FCollisionShape::MakeSphere(Radius), 
-                    QueryParams
-                );
-
-                CurrentTarget = bFound && Overlaps.Num() > 0 ? Overlaps[0].GetActor() : nullptr;
-            }
+            HitChar->ServerProcessAuthoritativeLimbHit(HitChar, FName("pelvis"), ModdedDamage, 1.0f, HitChar->GetActorLocation(), FVector::UpVector, GetAvatarActorFromActorInfo());
+            GrantSourcePassBack(EPassBackTriggerEvent::OnDamageDealt, ModdedDamage);
         }
+
+        QueryParams.AddIgnoredActor(CurrentTarget);
+        TArray<FOverlapResult> Overlaps;
+        const bool bFound = GetWorld()->OverlapMultiByChannel(
+            Overlaps,
+            CurrentTarget->GetActorLocation(),
+            FQuat::Identity,
+            ECC_Pawn,
+            FCollisionShape::MakeSphere(Radius),
+            QueryParams
+        );
+
+        CurrentTarget = (bFound && Overlaps.Num() > 0) ? Overlaps[0].GetActor() : nullptr;
     }
 }
 
@@ -728,10 +760,5 @@ void UDynamicGameplayAbility::ExecuteMovementBehavior()
 void UDynamicGameplayAbility::UpdateConfigAtRuntime_Implementation(FDynamicAbilityDef NewConfigLayout)
 {
     AbilityConfig = NewConfigLayout;
-    OnAbilityConfigChanged.Broadcast(AbilityConfig);
-}
-
-void UDynamicGameplayAbility::OnRep_AbilityConfig()
-{
     OnAbilityConfigChanged.Broadcast(AbilityConfig);
 }

@@ -3,6 +3,9 @@
 #include "DynamicPhysicsActor.h"
 #include "DynamicGameState.h"
 #include "DynamicCharacter.h"
+#include "DynamicAttributeSet.h"
+#include "DynamicInteractableComponent.h"
+#include "DynamicEvolutionComponent.h"
 #include "DynamicCustomizationComponent.h"
 #include "Net/UnrealNetwork.h"
 
@@ -155,6 +158,17 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
             if (SlotItem.SlotTag == ReqSlot)
             {
                 SlotItem.EquippedItemArchetypeTag = ActorToEquip->GetActorArchetypeTag();
+
+                // Save item state snapshots
+                if (const UDynamicAttributeSet* ItemAttr = ActorToEquip->GetDynamicAttributeSet())
+                {
+                    SlotItem.SavedItemAttributeState = ItemAttr->FastAttributes.Items;
+                }
+                if (const UDynamicInteractableComponent* ItemInteractable = ActorToEquip->GetInteractableComponent())
+                {
+                    SlotItem.SavedItemInteractableStates = ItemInteractable->GetCurrentStateTags();
+                }
+
                 ReplicatedEquipmentSlots.MarkItemDirty(SlotItem);
                 break;
             }
@@ -162,13 +176,43 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
     }
 
     RebuildLocalCache();
+    ActorToEquip->DeactivateAndReturnToPool();
     return true;
 }
 
 ADynamicPhysicsActor* UDynamicEquipmentComponent::ServerUnequipSlot(FGameplayTag SlotTag, const FTransform& SpawnTransform)
 {
-    if (!GetOwner() || !GetOwner()->HasAuthority()) return nullptr;
-    return nullptr;
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !SlotTag.IsValid()) return nullptr;
+
+    const int32* FoundIdx = SlotTagToArrayIndexMap.Find(SlotTag);
+    if (!FoundIdx || !ReplicatedEquipmentSlots.Items.IsValidIndex(*FoundIdx)) return nullptr;
+
+    FDynamicEquipmentSlotItem& SlotItem = ReplicatedEquipmentSlots.Items[*FoundIdx];
+    if (!SlotItem.EquippedItemArchetypeTag.IsValid()) return nullptr;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return nullptr;
+
+    ADynamicPhysicsActor* Spawned = GS->AcquirePhysicsActor(SlotItem.EquippedItemArchetypeTag, SpawnTransform, GetOwner(), Cast<APawn>(GetOwner()));
+    if (Spawned)
+    {
+        FDynamicContainerSlotItem Snapshot;
+        Snapshot.StoredActorArchetypeTag = SlotItem.EquippedItemArchetypeTag;
+        Snapshot.SavedAttributeState = SlotItem.SavedItemAttributeState;
+        Snapshot.SavedInteractableStates = SlotItem.SavedItemInteractableStates;
+        Spawned->RestoreFromContainerSnapshot(Snapshot);
+    }
+
+    const FGameplayTag ClearedTag = SlotItem.EquippedItemArchetypeTag;
+    SlotItem.EquippedItemArchetypeTag = FGameplayTag::EmptyTag;
+    SlotItem.SavedItemAttributeState.Empty();
+    SlotItem.SavedItemInteractableStates.Reset();
+
+    ReplicatedEquipmentSlots.MarkItemDirty(SlotItem);
+    RebuildLocalCache();
+
+    OnEquipmentChanged.Broadcast(SlotTag, ClearedTag, false);
+    return Spawned;
 }
 
 FGameplayTag UDynamicEquipmentComponent::GetEquippedItemInSlot(FGameplayTag SlotTag) const

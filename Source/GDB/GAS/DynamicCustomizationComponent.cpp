@@ -243,6 +243,7 @@ void UDynamicCustomizationComponent::OnRep_AppearanceColors()
 
 void UDynamicCustomizationComponent::OnRep_HairStyle()
 {
+    // Client-side hair mesh synchronization hook
 }
 
 void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag TransformationTag)

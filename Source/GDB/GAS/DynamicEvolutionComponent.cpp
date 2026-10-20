@@ -1,5 +1,8 @@
 ﻿#include "DynamicEvolutionComponent.h"
 #include "DynamicGameState.h"
+#include "DynamicInteractableComponent.h"
+#include "DynamicPhysicsActor.h"
+#include "DynamicAttributeSet.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicEvolutionComponent::UDynamicEvolutionComponent()
@@ -12,6 +15,18 @@ UDynamicEvolutionComponent::UDynamicEvolutionComponent()
 void UDynamicEvolutionComponent::BeginPlay()
 {
     Super::BeginPlay();
+}
+
+void UDynamicEvolutionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    const float EnvMultiplier = CalculateEnvironmentalProgressMultiplier();
+    if (EnvMultiplier > 0.0f)
+    {
+        ServerAddProgress(DeltaTime * EnvMultiplier);
+    }
 }
 
 void UDynamicEvolutionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -44,11 +59,9 @@ void UDynamicEvolutionComponent::EvaluateEvolution(float NormalizedProgress)
 {
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
-
     const FEvolutionProfileDef* Profile = GS->EvolutionProfilesRegistry.Find(EvolutionProfileTag);
     if (!Profile || Profile->ProgressionPhases.Num() == 0) return;
 
-    // Find current keyframe phase
     FEvolutionStageKeyframe ActiveFrame = Profile->ProgressionPhases[0];
     for (const FEvolutionStageKeyframe& Frame : Profile->ProgressionPhases)
     {
@@ -62,10 +75,34 @@ void UDynamicEvolutionComponent::EvaluateEvolution(float NormalizedProgress)
     {
         CurrentStageTag = ActiveFrame.StageTag;
 
-        // Apply Scale to Physics Actor Mesh
+        // 1. Apply physical mesh scale
         if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent()))
         {
             RootPrim->SetWorldScale3D(FVector(ActiveFrame.ScaleMultiplier));
+        }
+
+        // 2. Apply Stage Tags to Interactable Component if present
+        if (UDynamicInteractableComponent* Interactable = GetOwner()->FindComponentByClass<UDynamicInteractableComponent>())
+        {
+            for (const FGameplayTag& Tag : ActiveFrame.TagsToApply)
+            {
+                Interactable->AddStateTag(Tag);
+            }
+        }
+
+        // 3. Apply Stage Attribute Modifiers
+        if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(GetOwner()))
+        {
+            if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(PhysActor->GetDynamicAttributeSet()))
+            {
+                for (const FTagFloatPair& Pair : ActiveFrame.StageAttributeModifiers)
+                {
+                    if (Pair.KeyTag.IsValid())
+                    {
+                        AttrSet->SetDynamicAttributeValue(Pair.KeyTag, Pair.Value, 0);
+                    }
+                }
+            }
         }
 
         OnEvolutionStageAdvanced.Broadcast(CurrentStageTag, NormalizedProgress, ActiveFrame.ScaleMultiplier);

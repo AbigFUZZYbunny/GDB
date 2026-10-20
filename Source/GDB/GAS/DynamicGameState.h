@@ -42,14 +42,12 @@ public:
     TMap<FGameplayTag, FEvolutionProfileDef> EvolutionProfilesRegistry;
     TMap<FGameplayTag, FQuestDef> QuestMasterRegistry;
     TMap<FGameplayTag, FDynamicQuestGeneratorRule> QuestGeneratorRules;
-    
-    // --- Language Registry ---
     TMap<FGameplayTag, FDynamicLanguageDef> LanguageMasterRegistry;
+    TMap<FGameplayTag, FNameGenerationRuleConfig> NameGenerationRulesRegistry;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Calendar")
     FDynamicCalendarDef CalendarConfig;
 
-    // Fully dynamic environment configuration
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Environment")
     FDynamicEnvironmentSystemConfig EnvironmentConfig;
 
@@ -65,7 +63,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     float CellSizeWorldUnits = 25000.0f;
 
-    // Configures the dynamic element indices and metric formulas from loaded JSON
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
@@ -80,7 +77,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
     void ServerTickEnvironmentSimulation(float ElapsedGameHours);
 
-    // Dynamic O(1) tag-to-index resolution
     FORCEINLINE int32 ResolveElementArrayIndex(const FGameplayTag& ElementTag) const
     {
         if (const int32* FoundIdx = TrackedElementsMap.Find(ElementTag))
@@ -92,7 +88,6 @@ public:
 
     void RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell);
 
-    // --- UGameplayEffect Instance Cache ---
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
 
@@ -131,8 +126,6 @@ public:
 
 private:
     void RebuildLimbMapsFromTransport();
-
-    // Universal Property Reflection and Dynamic Tag Resolver: zero hardcoded names
     float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;
     static float ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath);
 
@@ -147,6 +140,5 @@ private:
     UPROPERTY() TArray<TObjectPtr<ADynamicSpatialActor>> InactiveSpatialActorPool;
     UPROPERTY() TArray<TObjectPtr<ADynamicPhysicsActor>> InactivePhysicsActorPool;
 
-    // Runtime data-driven element tag index map built from EnvironmentConfig
     TMap<FGameplayTag, int32> TrackedElementsMap;
 };

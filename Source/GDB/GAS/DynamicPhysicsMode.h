@@ -4,15 +4,15 @@
 #include "CoreMinimal.h"
 #include "MovementMode.h" // Resolves cleanly via Mover module dependency
 #include "DynamicGASTypes.h"
-#include "PhysicsMode_DynamicGAS.generated.h"
+#include "DynamicPhysicsMode.generated.h"
 
 UCLASS(BlueprintType)
-class GDB_API UPhysicsMode_DynamicGAS : public UBaseMovementMode
+class GDB_API UDynamicPhysicsMode : public UBaseMovementMode
 {
 	GENERATED_BODY()
 
 public:
-	UPhysicsMode_DynamicGAS();
+	UDynamicPhysicsMode();
 
 	// Cache assigned by the launching GAS ability during initialization
 	UPROPERTY(BlueprintReadOnly, Category = "Dynamic Movement")

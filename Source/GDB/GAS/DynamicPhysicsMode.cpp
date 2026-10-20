@@ -1,11 +1,11 @@
 ﻿// PhysicsMode_DynamicGAS.cpp
-#include "PhysicsMode_DynamicGAS.h"
+#include "DynamicPhysicsMode.h"
 #include "MoverComponent.h"
 #include "MoveLibrary/MovementUtils.h"
 
-UPhysicsMode_DynamicGAS::UPhysicsMode_DynamicGAS() {}
+UDynamicPhysicsMode::UDynamicPhysicsMode() {}
 
-void UPhysicsMode_DynamicGAS::GenerateMove_Implementation(const FMoverSimContext& SimContext, const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, FProposedMove& OutProposedMove) const
+void UDynamicPhysicsMode::GenerateMove_Implementation(const FMoverSimContext& SimContext, const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, FProposedMove& OutProposedMove) const
 {
     Super::GenerateMove_Implementation(SimContext, StartState, TimeStep, OutProposedMove);
 
@@ -27,6 +27,7 @@ void UPhysicsMode_DynamicGAS::GenerateMove_Implementation(const FMoverSimContext
     }
 }
 
-void UPhysicsMode_DynamicGAS::SimulationTick_Implementation(const FSimulationTickParams& Params, FMoverTickEndData& OutputState)
+void UDynamicPhysicsMode::SimulationTick_Implementation(const FSimulationTickParams& Params, FMoverTickEndData& OutputState)
 {
+    // Native mover simulation tick
 }

@@ -2,6 +2,7 @@
 #include "DynamicGameState.h"
 #include "DynamicSpatialActor.h"
 #include "DynamicPhysicsActor.h"
+#include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 
 ADynamicGameState::ADynamicGameState()
@@ -305,6 +306,11 @@ float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocat
 
 void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell, float SunLightFactor)
 {
+    if (Cell.ElementalDensities.Num() < 6)
+    {
+        Cell.ElementalDensities.Init(50.0f, 6);
+    }
+
     const float Fire  = Cell.ElementalDensities[0];
     const float Water = Cell.ElementalDensities[1];
     const float Earth = Cell.ElementalDensities[2];
@@ -312,13 +318,8 @@ void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem&
     const float Light = Cell.ElementalDensities[4] * SunLightFactor;
     const float Dark  = Cell.ElementalDensities[5];
 
-    // Temperature: Driven up by Fire & Light, cooled by Water, Air, and Dark
     Cell.TemperatureCelsius = -15.0f + (Fire * 0.65f) + (Light * 0.25f) - (Water * 0.20f) - (Air * 0.15f) - (Dark * 0.20f);
-
-    // Wind Speed: Driven by Air density and thermal pressure gradients (Fire vs Water)
     Cell.WindSpeed = (Air * 0.8f) + FMath::Abs(Fire - Water) * 0.25f;
-
-    // Atmospheric Wetness / Humidity: Driven by Water & Air interaction, evaporated by excessive Fire
     Cell.Wetness = FMath::Clamp((Water * 0.85f) + (Cell.GroundMoisture * 0.25f) - (Fire * 0.35f), 0.0f, 100.0f);
 }
 
@@ -442,4 +443,25 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             ReplicatedEnvironmentGrid.MarkItemDirty(Cell);
         }
     }
+}
+
+// --- Fast Array Callbacks for FEnvironmentGridCellItem ---
+void FEnvironmentGridCellItem::PreReplicatedRemove(const FFastEnvironmentGridArray& InArrayOwner)
+{
+}
+
+void FEnvironmentGridCellItem::PostReplicatedAdd(const FFastEnvironmentGridArray& InArrayOwner)
+{
+}
+
+void FEnvironmentGridCellItem::PostReplicatedChange(const FFastEnvironmentGridArray& InArrayOwner)
+{
+}
+
+// --- ADynamicGameState Replication Setup ---
+void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME(ADynamicGameState, ReplicatedEnvironmentGrid);
 }

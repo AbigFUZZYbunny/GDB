@@ -1,0 +1,330 @@
+﻿{
+  "_comment": "Master Quest Registry: Covers economic shortages, wildlife bounties, urban pest cleanups, and multi-branch story arcs with alternate outcomes and social consequences.",
+  "QuestMasterRegistry": {
+    "Quest.Economic.Woodworker.LumberShortage": {
+      "QuestTag": "Quest.Economic.Woodworker.LumberShortage",
+      "Category": "DynamicEconomic",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Title", "Value": "Supplies for the Workshop" },
+          { "KeyTag": "Localization.Description", "Value": "The village woodworker has received an influx of furniture orders and is running critically low on timber logs." }
+        ]
+      },
+      "PrerequisiteConditionTreeName": "None",
+      "MinAffinityRequired": -0.2,
+      "MinTrustRequired": -0.2,
+      "InitialStepTag": "QuestStep.GatherPineTimber",
+      "Steps": [
+        {
+          "StepTag": "QuestStep.GatherPineTimber",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Deliver Timber to Sawmill" },
+              { "KeyTag": "Localization.Description", "Value": "Chop down mature pine trees or buy timber logs and deliver them to the woodworker's workshop storage." }
+            ]
+          },
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.DeliverPineLogs",
+              "ObjectiveType": "FetchAndDeliver",
+              "TargetEntityOrArchetypeTag": "Actor.Material.PineLog",
+              "TargetLocationOrLandmarkTag": "Landmark.Village.Woodshop",
+              "RequiredCount": 10
+            }
+          ],
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.DeliveredTimber",
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "BranchConsequences": {
+                "CurrencyReward": 85.0,
+                "AffinityDelta": 0.20,
+                "TrustDelta": 0.25,
+                "DebtDelta": 0.0,
+                "ItemRewards": [
+                  { "ArchetypeTag": "Actor.Tool.WoodPlane", "RequiredQuantity": 1, "bConsume": false }
+                ],
+                "AttributeModifiers": [
+                  { "TargetAttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry", "ModifierOp": "Additive", "Magnitude": 2.0 }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "Quest.Bounty.WolvesAtTheLoggingCamp": {
+      "QuestTag": "Quest.Bounty.WolvesAtTheLoggingCamp",
+      "Category": "DynamicBounty",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Title", "Value": "Jaws in the Timberland" },
+          { "KeyTag": "Localization.Description", "Value": "A pack of feral grey wolves has encroached upon the timber felling perimeter, injuring loggers and halting lumber operations." }
+        ]
+      },
+      "InitialStepTag": "QuestStep.CullWolfPack",
+      "Steps": [
+        {
+          "StepTag": "QuestStep.CullWolfPack",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Cull the Forest Pack" },
+              { "KeyTag": "Localization.Description", "Value": "Hunt down and eliminate the wolves preying on the logging trails." }
+            ]
+          },
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.SlayGreyWolves",
+              "ObjectiveType": "CullTargets",
+              "TargetEntityOrArchetypeTag": "Character.Creature.Canine.GreyWolf",
+              "TargetLocationOrLandmarkTag": "Landmark.Wilderness.LoggingTrail",
+              "RequiredCount": 5
+            }
+          ],
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.PackEliminated",
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "BranchConsequences": {
+                "CurrencyReward": 120.0,
+                "AffinityDelta": 0.30,
+                "TrustDelta": 0.35,
+                "AttributeModifiers": [
+                  { "TargetAttributeTag": "Attribute.Resource.Experience", "ModifierOp": "Additive", "Magnitude": 150.0 },
+                  { "TargetAttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting", "ModifierOp": "Additive", "Magnitude": 5.0 }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "Quest.Bounty.TownRatInfestation": {
+      "QuestTag": "Quest.Bounty.TownRatInfestation",
+      "Category": "DynamicBounty",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Title", "Value": "The Cellar Scourge" },
+          { "KeyTag": "Localization.Description", "Value": "Grain storage cellars have been overrun by burrowing rodents contaminating vital food provisions." }
+        ]
+      },
+      "InitialStepTag": "QuestStep.ClearGranaryPests",
+      "Steps": [
+        {
+          "StepTag": "QuestStep.ClearGranaryPests",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Exterminate Granary Rodents" },
+              { "KeyTag": "Localization.Description", "Value": "Enter the town cellars and destroy the pest swarm." }
+            ]
+          },
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.SlayRats",
+              "ObjectiveType": "CullTargets",
+              "TargetEntityOrArchetypeTag": "AI.Type.Beast.Arthropod.InsectSwarm",
+              "TargetLocationOrLandmarkTag": "Landmark.Village.Granary",
+              "RequiredCount": 8
+            }
+          ],
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.CellarsCleared",
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "BranchConsequences": {
+                "CurrencyReward": 50.0,
+                "AffinityDelta": 0.20,
+                "TrustDelta": 0.15,
+                "ItemRewards": [
+                  { "ArchetypeTag": "Item.Food.Bread", "RequiredQuantity": 4, "bConsume": false }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "Quest.Story.BanditsOfRavenRidge": {
+      "QuestTag": "Quest.Story.BanditsOfRavenRidge",
+      "Category": "Story",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Title", "Value": "The Shadow Over Raven Ridge" },
+          { "KeyTag": "Localization.Description", "Value": "An organized bandit syndicate has blockaded the mountain pass, demanding tribute from the village magistrate or threatening to raze the settlement." }
+        ]
+      },
+      "RequiredPlayerTags": [],
+      "ExcludedPlayerTags": [ "State.Wanted.OutlawLeader" ],
+      "MinAffinityRequired": 0.0,
+      "MinTrustRequired": 0.0,
+      "InitialStepTag": "QuestStep.InvestigatePass",
+      "Steps": [
+        {
+          "StepTag": "QuestStep.InvestigatePass",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Scout the Ridge Outpost" },
+              { "KeyTag": "Localization.Description", "Value": "Travel to Raven Ridge Pass and assess the bandit warlord's strength." }
+            ]
+          },
+          "bAutoAdvanceOnObjectivesCompleted": false,
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.ScoutBanditCamp",
+              "ObjectiveType": "InvestigateArea",
+              "TargetEntityOrArchetypeTag": "Landmark.Mountain.BanditOutpost",
+              "TargetLocationOrLandmarkTag": "Landmark.Mountain.BanditOutpost",
+              "RequiredCount": 1
+            }
+          ],
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.ChooseAssault",
+              "NextStepTag": "QuestStep.AssaultBanditCamp",
+              "Localization": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Localization.Name", "Value": "Assault the Stronghold" },
+                  { "KeyTag": "Localization.Description", "Value": "Refuse all parley and wipe out the bandit leadership with armed force." }
+                ]
+              },
+              "BranchConsequences": {}
+            },
+            {
+              "BranchTag": "Branch.ChooseParley",
+              "NextStepTag": "QuestStep.NegotiateTribute",
+              "Localization": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Localization.Name", "Value": "Parley with the Warlord" },
+                  { "KeyTag": "Localization.Description", "Value": "Approach the warlord to negotiate a trade tribute or alternative pact." }
+                ]
+              },
+              "BranchConsequences": {}
+            }
+          ]
+        },
+        {
+          "StepTag": "QuestStep.AssaultBanditCamp",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Slay the Outlaw Warlord" },
+              { "KeyTag": "Localization.Description", "Value": "Eliminate the bandit warlord and his elite brigands to secure the village." }
+            ]
+          },
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.SlayBrigands",
+              "ObjectiveType": "CullTargets",
+              "TargetEntityOrArchetypeTag": "Character.Humanoid.Human",
+              "TargetLocationOrLandmarkTag": "Landmark.Mountain.BanditOutpost",
+              "RequiredCount": 6
+            }
+          ],
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.HeroicVictory",
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "BranchConsequences": {
+                "CurrencyReward": 500.0,
+                "AffinityDelta": 0.50,
+                "TrustDelta": 0.60,
+                "GrantedTags": [ "Title.DefenderOfRavenRidge" ],
+                "ItemRewards": [
+                  { "ArchetypeTag": "Actor.Combat.Weapon.Sword.SteelClaymore", "RequiredQuantity": 1, "bConsume": false }
+                ],
+                "AttributeModifiers": [
+                  { "TargetAttributeTag": "Attribute.Resource.Experience", "ModifierOp": "Additive", "Magnitude": 450.0 }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "StepTag": "QuestStep.NegotiateTribute",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Confront the Bandit Warlord" },
+              { "KeyTag": "Localization.Description", "Value": "Speak with Warlord Douglas. Decide whether to pay them off, intimidate them, or betray the town." }
+            ]
+          },
+          "bAutoAdvanceOnObjectivesCompleted": false,
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.SpeakWithWarlord",
+              "ObjectiveType": "InteractWithActor",
+              "TargetEntityOrArchetypeTag": "AI.Type.Humanoid.Standard",
+              "TargetLocationOrLandmarkTag": "Landmark.Mountain.BanditOutpost",
+              "RequiredCount": 1
+            }
+          ],
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.PayOffBandits",
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "Localization": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Localization.Name", "Value": "Pay Mountain Tribute" },
+                  { "KeyTag": "Localization.Description", "Value": "Pay 200 gold from village coffer reserves to secure peace." }
+                ]
+              },
+              "BranchConsequences": {
+                "CurrencyReward": -200.0,
+                "AffinityDelta": 0.15,
+                "TrustDelta": 0.10,
+                "GrantedTags": [ "State.Faction.BanditNonAggression" ]
+              }
+            },
+            {
+              "BranchTag": "Branch.BetrayTownToBandits",
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "Localization": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Localization.Name", "Value": "Betray the Town" },
+                  { "KeyTag": "Localization.Description", "Value": "Provide the bandits with the backdoor armory keys to pillage the town." }
+                ]
+              },
+              "BranchConsequences": {
+                "CurrencyReward": 800.0,
+                "AffinityDelta": -0.80,
+                "TrustDelta": -1.0,
+                "GrantedTags": [ "State.Wanted.OutlawSyndicate", "Title.TheBetrayer" ],
+                "RemovedTags": [ "State.Civilization.CitizenInGoodStanding" ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "QuestGeneratorRules": {
+    "QuestRule.Economic.TimberShortage": {
+      "RuleTag": "QuestRule.Economic.TimberShortage",
+      "ContextProfessionOrFactionTag": "Profession.Labor.Woodcutter",
+      "TriggerConditionTreeName": "Trigger.Condition.LowTimberStock",
+      "QuestTemplateTag": "Quest.Economic.Woodworker.LumberShortage",
+      "UrgencyMultiplier": 1.5
+    },
+    "QuestRule.Bounty.WolfInfestation": {
+      "RuleTag": "QuestRule.Bounty.WolfInfestation",
+      "ContextProfessionOrFactionTag": "Faction.Beast.GreyWolfPack",
+      "TriggerConditionTreeName": "Trigger.Condition.WolfThreatHigh",
+      "QuestTemplateTag": "Quest.Bounty.WolvesAtTheLoggingCamp",
+      "UrgencyMultiplier": 1.25
+    }
+  }
+}

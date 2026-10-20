@@ -2,7 +2,6 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "DynamicGASTypes.h"
-#include "DynamicEvolutionTypes.h"
 #include "DynamicEvolutionComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnEvolutionStageAdvancedSignature, FGameplayTag, NewStageTag, float, CurrentProgress, float, CurrentScale);

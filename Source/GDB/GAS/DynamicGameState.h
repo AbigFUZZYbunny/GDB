@@ -37,6 +37,9 @@ public:
     TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
     TMap<FGameplayTag, FDynamicBiomeDef> BiomeMasterRegistry;
     TMap<FGameplayTag, FDynamicWeatherPatternDef> WeatherMasterRegistry;
+    TMap<FGameplayTag, FEvolutionProfileDef> EvolutionProfilesRegistry;
+    TMap<FGameplayTag, FQuestDef> QuestMasterRegistry;
+    TMap<FGameplayTag, FDynamicQuestGeneratorRule> QuestGeneratorRules;
     
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Calendar")
     FDynamicCalendarDef CalendarConfig;

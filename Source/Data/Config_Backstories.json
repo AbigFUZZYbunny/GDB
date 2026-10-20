@@ -1,0 +1,89 @@
+﻿{
+  "_comment": "Master Backstory and Timeline Registry: CK3-style developmental event popups categorized into pre-birth, childhood, and adulthood with template restrictions and attribute outcomes.",
+  "BackstoryMasterRegistry": {
+    "Event.PreBirth.NobleLineage": {
+      "EventNodeTag": "Event.PreBirth.NobleLineage",
+      "TimelinePhaseTag": "Phase.PreBirth",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Title", "Value": "Lineage and Heritage" },
+          { "KeyTag": "Localization.Description", "Value": "Select your parentage to establish your congenital baseline and genetic traits." }
+        ]
+      },
+      "AvailableChoices": [
+        {
+          "ChoiceTag": "Choice.PreBirth.ElvenAristocracy",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Elven Aristocratic Bloodline" },
+              { "KeyTag": "Localization.Description", "Value": "Born to high-elven nobility, granting innate arcane affinity." }
+            ]
+          },
+          "AllowedTemplateTags": [ "Character.Humanoid.Elf.High", "Character.Humanoid.Elf.Forest" ],
+          "BlockedTemplateTags": [],
+          "ChoiceOutcome": {
+            "OutcomeTag": "Outcome.Trait.ElvenBloodline",
+            "AttributeModifiers": [
+              { "TargetAttributeTag": "GDBMagic.Attribute.Stat.Intelligence", "ModifierOp": "Additive", "Magnitude": 3.0 },
+              { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Additive", "Magnitude": 2.0 }
+            ],
+            "TraitsUnlocked": [ "Trait.Congenital.ArcaneBlood" ],
+            "EquipmentArchetypesGranted": [ "Equipment.Archetype.NobleSignet" ]
+          }
+        },
+        {
+          "ChoiceTag": "Choice.PreBirth.OrcishWarlord",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Warlord Clan Heritage" },
+              { "KeyTag": "Localization.Description", "Value": "Spawned from ruthless marauder stock, toughened by harsh steppes." }
+            ]
+          },
+          "AllowedTemplateTags": [ "Character.Humanoid.Orc.Blood", "Character.Humanoid.Orc.Snow" ],
+          "BlockedTemplateTags": [],
+          "ChoiceOutcome": {
+            "OutcomeTag": "Outcome.Trait.BrutishStrength",
+            "AttributeModifiers": [
+              { "TargetAttributeTag": "Attribute.Stat.Strength", "ModifierOp": "Additive", "Magnitude": 4.0 },
+              { "TargetAttributeTag": "Attribute.Resource.Health.Max", "ModifierOp": "Additive", "Magnitude": 25.0 }
+            ],
+            "TraitsUnlocked": [ "Trait.Congenital.Strong" ],
+            "EquipmentArchetypesGranted": [ "Equipment.Archetype.ClanDagger" ]
+          }
+        }
+      ]
+    },
+    "Event.Childhood.FeralUpbringing": {
+      "EventNodeTag": "Event.Childhood.FeralUpbringing",
+      "TimelinePhaseTag": "Phase.Childhood",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Title", "Value": "Formative Years: The Wild" },
+          { "KeyTag": "Localization.Description", "Value": "How did you spend your early childhood before joining civilization?" }
+        ]
+      },
+      "AvailableChoices": [
+        {
+          "ChoiceTag": "Choice.Childhood.RaisedByWolves",
+          "Localization": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Localization.Name", "Value": "Raised by Forest Predators" },
+              { "KeyTag": "Localization.Description", "Value": "You survived running with wolf packs, sharpening your reflexes." }
+            ]
+          },
+          "AllowedTemplateTags": [],
+          "BlockedTemplateTags": [ "Character.Monster.Dragon" ],
+          "ChoiceOutcome": {
+            "OutcomeTag": "Outcome.Trait.FeralInstincts",
+            "AttributeModifiers": [
+              { "TargetAttributeTag": "Attribute.Stat.Agility", "ModifierOp": "Additive", "Magnitude": 3.0 },
+              { "TargetAttributeTag": "Attribute.Mastery.Movement", "ModifierOp": "Additive", "Magnitude": 5.0 }
+            ],
+            "TraitsUnlocked": [ "Trait.Survival.Feral" ],
+            "EquipmentArchetypesGranted": []
+          }
+        }
+      ]
+    }
+  }
+}

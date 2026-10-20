@@ -467,6 +467,61 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TargetGameState->WeatherMasterRegistry.Add(KeyTag, WeatherDef);
         }
     }
+    
+    if (RootObject->HasField(TEXT("EvolutionProfilesRegistry")))
+    {
+        for (const auto& Pair : RootObject->GetObjectField(TEXT("EvolutionProfilesRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            FEvolutionProfileDef ProfileDef;
+            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &ProfileDef, 0, 0);
+            TargetGameState->EvolutionProfilesRegistry.Add(KeyTag, ProfileDef);
+        }
+    }
+    
+    // 1. Quests Master Registry
+    if (RootObject->HasField(TEXT("QuestMasterRegistry")))
+    {
+        for (const auto& Pair : RootObject->GetObjectField(TEXT("QuestMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> QuestObj = Pair.Value->AsObject();
+            FQuestDef Quest;
+            FJsonObjectConverter::JsonObjectToUStruct(QuestObj.ToSharedRef(), &Quest, 0, 0);
+            DeserializeLocalizationMap(QuestObj, TEXT("Localization"), Quest.Localization);
+
+            // Deserialize Step localizations
+            if (QuestObj->HasField(TEXT("Steps")))
+            {
+                const TArray<TSharedPtr<FJsonValue>>& StepsArr = QuestObj->GetArrayField(TEXT("Steps"));
+                for (int32 i = 0; i < StepsArr.Num() && Quest.Steps.IsValidIndex(i); ++i)
+                {
+                    TSharedPtr<FJsonObject> StepObj = StepsArr[i]->AsObject();
+                    DeserializeLocalizationMap(StepObj, TEXT("Localization"), Quest.Steps[i].Localization);
+                }
+            }
+
+            TargetGameState->QuestMasterRegistry.Add(KeyTag, Quest);
+        }
+    }
+
+    // 2. Dynamic Quest Generator Rules
+    if (RootObject->HasField(TEXT("QuestGeneratorRules")))
+    {
+        for (const auto& Pair : RootObject->GetObjectField(TEXT("QuestGeneratorRules"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            FDynamicQuestGeneratorRule Rule;
+            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Rule, 0, 0);
+            TargetGameState->QuestGeneratorRules.Add(KeyTag, Rule);
+        }
+    }
 
     return true;
 }

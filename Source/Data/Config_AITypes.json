@@ -1,5 +1,5 @@
 ﻿{
-  "_comment": "Master AI Agent Registry: Controls autonomous behavior, pack hunting, web spinning, grazing, and territorial aggression.",
+  "_comment": "Master AI Agent Registry: Controls autonomous behavior, pack hunting, web spinning, grazing, territorial aggression, aimless skeletons, hungry zombies, enslaved minions, and intelligent undead.",
   "MasterAIAgentRegistry": {
     "AI.Type.Humanoid.Standard": {
       "AIAgentTag": "AI.Type.Humanoid.Standard",
@@ -48,13 +48,7 @@
     "AI.Type.Beast.Canine.GreyWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.GreyWolf",
       "AIControllerClass": "/Game/AI/BP_PackHunterAIController.BP_PackHunterAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Beast.GreyWolfPack",
-        "bFormsPacks": true,
-        "MaxGroupSize": 8,
-        "CohesionRadius": 4000.0,
-        "bDefendsPackMembers": true
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.GreyWolfPack", "bFormsPacks": true, "MaxGroupSize": 8, "CohesionRadius": 4000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Cervidae" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.20,
@@ -67,13 +61,7 @@
     "AI.Type.Beast.Canine.WhiteWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.WhiteWolf",
       "AIControllerClass": "/Game/AI/BP_PackHunterAIController.BP_PackHunterAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Beast.TundraPack",
-        "bFormsPacks": true,
-        "MaxGroupSize": 6,
-        "CohesionRadius": 3500.0,
-        "bDefendsPackMembers": true
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.TundraPack", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 3500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.15,
@@ -86,13 +74,7 @@
     "AI.Type.Beast.Canine.RedWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.RedWolf",
       "AIControllerClass": "/Game/AI/BP_StealthHunterAIController.BP_StealthHunterAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Beast.ForestFamily",
-        "bFormsPacks": true,
-        "MaxGroupSize": 4,
-        "CohesionRadius": 2500.0,
-        "bDefendsPackMembers": true
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.ForestFamily", "bFormsPacks": true, "MaxGroupSize": 4, "CohesionRadius": 2500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.30,
@@ -104,13 +86,7 @@
     "AI.Type.Beast.Canine.DireWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.DireWolf",
       "AIControllerClass": "/Game/AI/BP_ApexPredatorAIController.BP_ApexPredatorAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Beast.DirePack",
-        "bFormsPacks": true,
-        "MaxGroupSize": 5,
-        "CohesionRadius": 5000.0,
-        "bDefendsPackMembers": true
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.DirePack", "bFormsPacks": true, "MaxGroupSize": 5, "CohesionRadius": 5000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.05,
@@ -356,97 +332,33 @@
     "AI.Type.Monster.Arthropod.Spider.Hunter": {
       "AIAgentTag": "AI.Type.Monster.Arthropod.Spider.Hunter",
       "AIControllerClass": "/Game/AI/BP_AggressiveHunterAIController.BP_AggressiveHunterAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Monster.Arachnid",
-        "bFormsPacks": false,
-        "MaxGroupSize": 1,
-        "CohesionRadius": 0.0,
-        "bDefendsPackMembers": false
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Insect" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.10,
       "AbilityUsageRules": [
-        {
-          "AbilityTag": "Ability.Movement.LeapAmbush",
-          "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange",
-          "PriorityWeight": 90.0,
-          "MinRange": 300.0,
-          "MaxRange": 800.0
-        },
-        {
-          "AbilityTag": "Ability.Combat.VenomBite",
-          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
-          "PriorityWeight": 100.0,
-          "MinRange": 0.0,
-          "MaxRange": 160.0
-        }
+        { "AbilityTag": "Ability.Movement.LeapAmbush", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 300.0, "MaxRange": 800.0 },
+        { "AbilityTag": "Ability.Combat.VenomBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 160.0 }
       ],
       "IdleTasks": [
-        {
-          "TaskTag": "Task.Monster.ProwlForPrey",
-          "BasePriorityWeight": 85.0,
-          "LinkedAbilityOrRecipeTag": "None",
-          "RequiredItemTags": [],
-          "ProducedOutputTags": [],
-          "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible"
-        },
-        {
-          "TaskTag": "Task.Monster.StalkPrey",
-          "BasePriorityWeight": 95.0,
-          "LinkedAbilityOrRecipeTag": "None",
-          "RequiredItemTags": [],
-          "ProducedOutputTags": [],
-          "TaskConditionTreeName": "Trigger.Condition.TargetDetected"
-        }
+        { "TaskTag": "Task.Monster.ProwlForPrey", "BasePriorityWeight": 85.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible" },
+        { "TaskTag": "Task.Monster.StalkPrey", "BasePriorityWeight": 95.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Trigger.Condition.TargetDetected" }
       ]
     },
     "AI.Type.Monster.Arthropod.Spider.Trapper": {
       "AIAgentTag": "AI.Type.Monster.Arthropod.Spider.Trapper",
       "AIControllerClass": "/Game/AI/BP_AmbushTrapperAIController.BP_AmbushTrapperAIController_C",
-      "GroupDynamics": {
-        "GroupArchetypeTag": "Faction.Monster.Arachnid",
-        "bFormsPacks": false,
-        "MaxGroupSize": 1,
-        "CohesionRadius": 0.0,
-        "bDefendsPackMembers": false
-      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "State.Status.Webbed" ],
       "bHuntsForFood": false,
       "FleeHealthThreshold": 0.05,
       "AbilityUsageRules": [
-        {
-          "AbilityTag": "Ability.Monster.SpinWeb",
-          "RequiredConditionTreeName": "Trigger.Condition.NeedsWebTrap",
-          "PriorityWeight": 90.0,
-          "MinRange": 0.0,
-          "MaxRange": 500.0
-        },
-        {
-          "AbilityTag": "Ability.Combat.VenomBite",
-          "RequiredConditionTreeName": "Trigger.Condition.TargetIsWebbed",
-          "PriorityWeight": 100.0,
-          "MinRange": 0.0,
-          "MaxRange": 180.0
-        }
+        { "AbilityTag": "Ability.Monster.SpinWeb", "RequiredConditionTreeName": "Trigger.Condition.NeedsWebTrap", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 500.0 },
+        { "AbilityTag": "Ability.Combat.VenomBite", "RequiredConditionTreeName": "Trigger.Condition.TargetIsWebbed", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 180.0 }
       ],
       "IdleTasks": [
-        {
-          "TaskTag": "Task.Monster.ConstructWebNode",
-          "BasePriorityWeight": 70.0,
-          "LinkedAbilityOrRecipeTag": "Ability.Monster.SpinWeb",
-          "RequiredItemTags": [],
-          "ProducedOutputTags": [ "Actor.Hazard.SpiderWeb" ],
-          "TaskConditionTreeName": "Trigger.Condition.NoWebsNearby"
-        },
-        {
-          "TaskTag": "Task.Monster.WaitInWebAmbush",
-          "BasePriorityWeight": 95.0,
-          "LinkedAbilityOrRecipeTag": "None",
-          "RequiredItemTags": [],
-          "ProducedOutputTags": [],
-          "TaskConditionTreeName": "Trigger.Condition.IsInsideWebArea"
-        }
+        { "TaskTag": "Task.Monster.ConstructWebNode", "BasePriorityWeight": 70.0, "LinkedAbilityOrRecipeTag": "Ability.Monster.SpinWeb", "RequiredItemTags": [], "ProducedOutputTags": [ "Actor.Hazard.SpiderWeb" ], "TaskConditionTreeName": "Trigger.Condition.NoWebsNearby" },
+        { "TaskTag": "Task.Monster.WaitInWebAmbush", "BasePriorityWeight": 95.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Trigger.Condition.IsInsideWebArea" }
       ]
     },
     "AI.Type.Beast.Arthropod.InsectSwarm": {
@@ -486,18 +398,184 @@
       ],
       "IdleTasks": []
     },
-    "AI.Type.Monster.Undead.Lich": {
-      "AIAgentTag": "AI.Type.Monster.Undead.Lich",
+    "AI.Type.Monster.Undead.Skeleton.Aimless": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Skeleton.Aimless",
+      "AIControllerClass": "/Game/AI/BP_AimlessWandererAIController.BP_AimlessWandererAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Monster.UndeadHorde",
+        "bFormsPacks": false,
+        "MaxGroupSize": 1,
+        "CohesionRadius": 0.0,
+        "bDefendsPackMembers": false
+      },
+      "DietaryTags": [],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        {
+          "AbilityTag": "Ability.Combat.UnarmedStrike",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
+          "PriorityWeight": 70.0,
+          "MinRange": 0.0,
+          "MaxRange": 160.0
+        }
+      ],
+      "IdleTasks": [
+        {
+          "TaskTag": "Task.AI.AimlessWander",
+          "BasePriorityWeight": 100.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible"
+        }
+      ]
+    },
+    "AI.Type.Monster.Undead.Zombie.Hungry": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Zombie.Hungry",
+      "AIControllerClass": "/Game/AI/BP_HungryHordeAIController.BP_HungryHordeAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Monster.UndeadHorde",
+        "bFormsPacks": true,
+        "MaxGroupSize": 15,
+        "CohesionRadius": 2500.0,
+        "bDefendsPackMembers": false
+      },
+      "DietaryTags": [ "State.Status.LifeForce", "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        {
+          "AbilityTag": "Ability.Combat.ZombieBite",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
+          "PriorityWeight": 100.0,
+          "MinRange": 0.0,
+          "MaxRange": 140.0
+        }
+      ],
+      "IdleTasks": [
+        {
+          "TaskTag": "Task.AI.ProwlForLiving",
+          "BasePriorityWeight": 90.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible"
+        }
+      ]
+    },
+    "AI.Type.Monster.Undead.Enslaved": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Enslaved",
+      "AIControllerClass": "/Game/AI/BP_MasterBoundAIController.BP_MasterBoundAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Monster.BoundMinion",
+        "bFormsPacks": false,
+        "MaxGroupSize": 1,
+        "CohesionRadius": 1000.0,
+        "bDefendsPackMembers": true
+      },
+      "DietaryTags": [],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        {
+          "AbilityTag": "Ability.Combat.MinionStrike",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
+          "PriorityWeight": 90.0,
+          "MinRange": 0.0,
+          "MaxRange": 180.0
+        },
+        {
+          "AbilityTag": "Ability.Movement.GuardMaster",
+          "RequiredConditionTreeName": "Trigger.Condition.MasterUnderAttack",
+          "PriorityWeight": 100.0,
+          "MinRange": 0.0,
+          "MaxRange": 1500.0
+        }
+      ],
+      "IdleTasks": [
+        {
+          "TaskTag": "Task.AI.FollowMaster",
+          "BasePriorityWeight": 100.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "Trigger.Condition.MasterInRange"
+        }
+      ]
+    },
+    "AI.Type.Monster.Undead.Intelligent.Lich": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Intelligent.Lich",
       "AIControllerClass": "/Game/AI/BP_NecromancerAIController.BP_NecromancerAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.DarkCoven", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Monster.DarkCoven",
+        "bFormsPacks": true,
+        "MaxGroupSize": 10,
+        "CohesionRadius": 5000.0,
+        "bDefendsPackMembers": true
+      },
+      "DietaryTags": [ "State.Status.LifeForce" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.05,
+      "AbilityUsageRules": [
+        {
+          "AbilityTag": "Ability.Magic.DeathBolt",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange",
+          "PriorityWeight": 95.0,
+          "MinRange": 200.0,
+          "MaxRange": 2200.0
+        },
+        {
+          "AbilityTag": "Ability.Magic.RaiseMinion",
+          "RequiredConditionTreeName": "Trigger.Condition.CorpsesNearby",
+          "PriorityWeight": 100.0,
+          "MinRange": 0.0,
+          "MaxRange": 1500.0
+        }
+      ],
+      "IdleTasks": [
+        {
+          "TaskTag": "Task.AI.ResearchDarkArts",
+          "BasePriorityWeight": 80.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible"
+        }
+      ]
+    },
+    "AI.Type.Monster.Undead.Intelligent.Wight": {
+      "AIAgentTag": "AI.Type.Monster.Undead.Intelligent.Wight",
+      "AIControllerClass": "/Game/AI/BP_UndeadCommanderAIController.BP_UndeadCommanderAIController_C",
+      "GroupDynamics": {
+        "GroupArchetypeTag": "Faction.Monster.UndeadHorde",
+        "bFormsPacks": true,
+        "MaxGroupSize": 8,
+        "CohesionRadius": 3000.0,
+        "bDefendsPackMembers": true
+      },
       "DietaryTags": [ "State.Status.LifeForce" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.0,
       "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Magic.DeathBolt", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 2000.0 },
-        { "AbilityTag": "Ability.Magic.RaiseMinion", "RequiredConditionTreeName": "Trigger.Condition.CorpsesNearby", "PriorityWeight": 95.0, "MinRange": 0.0, "MaxRange": 1500.0 }
+        {
+          "AbilityTag": "Ability.Combat.EnergyDrainStrike",
+          "RequiredConditionTreeName": "Trigger.Condition.TargetInRange",
+          "PriorityWeight": 90.0,
+          "MinRange": 0.0,
+          "MaxRange": 200.0
+        }
       ],
-      "IdleTasks": []
+      "IdleTasks": [
+        {
+          "TaskTag": "Task.AI.PatrolCrypt",
+          "BasePriorityWeight": 80.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible"
+        }
+      ]
     }
   }
 }

@@ -539,7 +539,7 @@ bool UDynamicSocialComponent::ExportComputeNodePayloadJson(FString& OutTelemetry
     return FJsonSerializer::Serialize(RootObj, Writer);
 }
 
-// --- Fast-Array Item Callback Implementations ---
+// --- Fast-Array Item Callback Implementations for Multiple Professions ---
 void FDynamicAssignedProfessionItem::PreReplicatedRemove(const FFastAssignedProfessionArray& InArrayOwner)
 {
     if (InArrayOwner.OwningSocialComp)
@@ -566,12 +566,10 @@ void FDynamicAssignedProfessionItem::PostReplicatedChange(const FFastAssignedPro
 
 void UDynamicSocialComponent::HandleProfessionReplicated(const FDynamicAssignedProfessionItem& Item, bool bRemoved)
 {
-    // Handle replication updates or broadcast changes if required
 }
 
 void UDynamicSocialComponent::OnRep_Professions()
 {
-    // Rebuild local indexes or handle replication sync if required
 }
 
 bool UDynamicSocialComponent::ServerRemoveProfession(FGameplayTag ProfessionTag)
@@ -589,4 +587,3 @@ bool UDynamicSocialComponent::ServerRemoveProfession(FGameplayTag ProfessionTag)
     }
     return false;
 }
-

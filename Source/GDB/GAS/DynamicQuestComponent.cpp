@@ -1,6 +1,5 @@
 ﻿#include "DynamicQuestComponent.h"
 #include "DynamicGameState.h"
-#include "DynamicCharacter.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicSocialComponent.h"
 #include "DynamicContainerComponent.h"
@@ -104,22 +103,18 @@ bool UDynamicQuestComponent::CanAcceptQuest(FGameplayTag QuestDefTag, const AAct
     // 3. Social Relationship gating
     if (GiverActor)
     {
-        if (const UDynamicSocialComponent* SocialComp = GetOwner()->FindComponentByClass<UDynamicSocialComponent>())
+        const UDynamicSocialComponent* SocialComp = GetOwner()->FindComponentByClass<UDynamicSocialComponent>();
+        if (SocialComp && GiverActor->GetActorGuid().IsValid())
         {
-            if (const UDynamicSocialComponent* GiverSocial = GiverActor->FindComponentByClass<UDynamicSocialComponent>())
+            // Evaluate all dynamic relationship metric requirements specified in the quest JSON schema
+            for (const FTagFloatPair& ReqMetric : QuestDef->MinimumRelationshipMetricRequirements)
             {
-                float Affinity = 0.0f, Trust = 0.0f, Fam = 0.0f, Debt = 0.0f;
-                if (GiverSocial && SocialComp->GetDecayedRelationship(GiverSocial->CharacterPersistentGuid, Affinity, Trust, Fam, Debt))
+                if (!ReqMetric.KeyTag.IsValid()) continue;
+
+                const float CurrentVal = SocialComp->GetDecayedRelationshipMetric(GiverActor->GetActorGuid(), ReqMetric.KeyTag);
+                if (CurrentVal < ReqMetric.Value)
                 {
-                    if (Affinity < QuestDef->MinAffinityRequired || Trust < QuestDef->MinTrustRequired)
-                    {
-                        return false;
-                    }
-                }
-                else if (QuestDef->MinAffinityRequired > 0.0f || QuestDef->MinTrustRequired > 0.0f)
-                {
-                    // If no relationship exists yet, only neutral/open quests can be taken
-                    return false;
+                    return false; // Failed one of the dynamic JSON-defined relationship requirements
                 }
             }
         }
@@ -365,7 +360,9 @@ void UDynamicQuestComponent::CompleteQuestInternal(int32 ItemIndex, bool bSucces
     }
 
     OnQuestStateChanged.Broadcast(CompletedItem.QuestInstanceGuid, CompletedItem.QuestDefTag, CompletedItem.StepState);
-    ReplicatedActiveQuests.Items.RemoveAt(ItemIndex);
+
+    // Strict Tombstone Elimination: Purge finished quests with Swap removal rather than shifting
+    ReplicatedActiveQuests.Items.RemoveAtSwap(ItemIndex);
     ReplicatedActiveQuests.MarkArrayDirty();
 }
 
@@ -404,21 +401,40 @@ void UDynamicQuestComponent::ApplyRewardConsequences(const FQuestRewardConsequen
     }
 
     // 3. Social Relationship Updates with Quest Giver
-    if (GiverGuid.IsValid() && (!FMath::IsNearlyZero(Consequences.AffinityDelta) || !FMath::IsNearlyZero(Consequences.TrustDelta) || !FMath::IsNearlyZero(Consequences.DebtDelta)))
+    if (UDynamicSocialComponent* SocialComp = OwnerActor->FindComponentByClass<UDynamicSocialComponent>())
     {
-        if (UDynamicSocialComponent* SocialComp = OwnerActor->FindComponentByClass<UDynamicSocialComponent>())
+        if (GiverGuid.IsValid())
         {
-            SocialComp->ServerRecordSocialInteraction(
-                GiverGuid,
-                nullptr,
-                ERelationshipTargetKind::Character,
-                FGameplayTag::RequestGameplayTag(TEXT("Relation.Social.QuestCompletion")),
-                Consequences.AffinityDelta,
-                Consequences.TrustDelta,
-                0.15f,
-                Consequences.DebtDelta,
-                {}
-            );
+            TArray<FTagFloatPair> MetricDeltas;
+
+            if (!FMath::IsNearlyZero(Consequences.AffinityDelta))
+            {
+                FTagFloatPair AffDelta;
+                AffDelta.KeyTag = FGameplayTag::RequestGameplayTag(TEXT("Relationship.Metric.Affinity"), false);
+                AffDelta.Value = Consequences.AffinityDelta;
+                MetricDeltas.Add(AffDelta);
+            }
+
+            if (!FMath::IsNearlyZero(Consequences.TrustDelta))
+            {
+                FTagFloatPair TrustDelta;
+                TrustDelta.KeyTag = FGameplayTag::RequestGameplayTag(TEXT("Relationship.Metric.Trust"), false);
+                TrustDelta.Value = Consequences.TrustDelta;
+                MetricDeltas.Add(TrustDelta);
+            }
+
+            if (MetricDeltas.Num() > 0)
+            {
+                // Invokes the new data-driven ServerRecordSocialInteraction signature
+                SocialComp->ServerRecordSocialInteraction(
+                    GiverGuid,
+                    nullptr,
+                    ERelationshipTargetKind::Character,
+                    FGameplayTag::RequestGameplayTag(TEXT("Relationship.Type.Friendship"), false),
+                    MetricDeltas,
+                    FGameplayTagContainer()
+                );
+            }
         }
     }
 

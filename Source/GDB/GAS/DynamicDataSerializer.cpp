@@ -246,11 +246,14 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
+            TSharedPtr<FJsonObject> EffectObj = Pair.Value->AsObject();
             FDynamicEffectDef EffectDef;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &EffectDef, 0, 0);
             TargetGameState->MasterEffectRegistry.Add(KeyTag, EffectDef);
         }
+
+        // Pre-warm the UGameplayEffect cache immediately upon registry hydration
+        TargetGameState->WarmGameplayEffectCache();
     }
 
     if (RootObject->HasField(TEXT("CalculationSettings")) && RootObject->HasField(TEXT("Limbs")))
@@ -296,11 +299,40 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> RelObj = Pair.Value->AsObject();
+            if (!RelObj.IsValid()) continue;
+
             FDynamicRelationshipTypeDef RelDef;
-            FJsonObjectConverter::JsonObjectToUStruct(RelObj.ToSharedRef(), &RelDef, 0, 0);
+            RelDef.RelationshipTag = KeyTag;
             DeserializeLocalizationMap(RelObj, TEXT("Localization"), RelDef.Localization);
+            RelDef.bPruneWhenAllAtFloor = RelObj->HasField(TEXT("bPruneWhenAllAtFloor")) ? RelObj->GetBoolField(TEXT("bPruneWhenAllAtFloor")) : true;
+            RelDef.PruneTolerance = RelObj->HasField(TEXT("PruneTolerance")) ? static_cast<float>(RelObj->GetNumberField(TEXT("PruneTolerance"))) : 0.05f;
+
+            if (RelObj->HasField(TEXT("SupportedMetrics")))
+            {
+                for (const auto& MetricVal : RelObj->GetArrayField(TEXT("SupportedMetrics")))
+                {
+                    TSharedPtr<FJsonObject> MetricObj = MetricVal->AsObject();
+                    if (!MetricObj.IsValid()) continue;
+
+                    FRelationshipMetricRule Rule;
+                    Rule.MetricTag = FGameplayTag::RequestGameplayTag(FName(*MetricObj->GetStringField(TEXT("MetricTag"))), false);
+                    if (!Rule.MetricTag.IsValid()) continue;
+
+                    DeserializeLocalizationMap(MetricObj, TEXT("Localization"), Rule.Localization);
+                    Rule.DefaultValue = MetricObj->HasField(TEXT("DefaultValue")) ? static_cast<float>(MetricObj->GetNumberField(TEXT("DefaultValue"))) : 0.0f;
+                    Rule.MinValue = MetricObj->HasField(TEXT("MinValue")) ? static_cast<float>(MetricObj->GetNumberField(TEXT("MinValue"))) : -100.0f;
+                    Rule.MaxValue = MetricObj->HasField(TEXT("MaxValue")) ? static_cast<float>(MetricObj->GetNumberField(TEXT("MaxValue"))) : 100.0f;
+                    Rule.DecayCurve = MetricObj->HasField(TEXT("DecayCurve")) ? StringToEnum<ERelationshipDecayCurve>(MetricObj->GetStringField(TEXT("DecayCurve"))) : ERelationshipDecayCurve::Exponential;
+                    Rule.DecayRatePerDay = MetricObj->HasField(TEXT("DecayRatePerDay")) ? static_cast<float>(MetricObj->GetNumberField(TEXT("DecayRatePerDay"))) : 0.05f;
+                    Rule.DecayTargetFloor = MetricObj->HasField(TEXT("DecayTargetFloor")) ? static_cast<float>(MetricObj->GetNumberField(TEXT("DecayTargetFloor"))) : 0.0f;
+                    Rule.VolatilityScalar = MetricObj->HasField(TEXT("VolatilityScalar")) ? static_cast<float>(MetricObj->GetNumberField(TEXT("VolatilityScalar"))) : 1.0f;
+                    Rule.bClampToMinMax = MetricObj->HasField(TEXT("bClampToMinMax")) ? MetricObj->GetBoolField(TEXT("bClampToMinMax")) : true;
+
+                    RelDef.SupportedMetrics.Add(Rule);
+                }
+            }
+
             TargetGameState->RelationshipTypeRegistry.Add(KeyTag, RelDef);
         }
     }

@@ -214,6 +214,8 @@ bool UDynamicLanguageComponent::RequestMiniGameChallengeForWord(
     const FString& NativeWord, 
     FTranslationMiniGameChallenge& OutChallenge)
 {
+    if (!GetOwner()->HasAuthority()) return false;
+
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
@@ -225,14 +227,17 @@ bool UDynamicLanguageComponent::RequestMiniGameChallengeForWord(
         if (WordDef.NativeWord.Equals(NativeWord, ESearchCase::IgnoreCase))
         {
             static const FGameplayTag DefaultEnglishTag = FGameplayTag::RequestGameplayTag(TEXT("Localization.Text.en"), false);
+            const FString CorrectAnswer = WordDef.LocalizedTranslations.GetLocalizedText(DefaultEnglishTag);
 
+            const FGuid ChallengeGuid = FGuid::NewGuid();
+
+            // Populate public challenge payload (CorrectTranslation is strictly omitted)
+            OutChallenge.ChallengeGuid = ChallengeGuid;
             OutChallenge.LanguageTag = LanguageTag;
             OutChallenge.NativeWord = WordDef.NativeWord;
-            OutChallenge.CorrectTranslation = WordDef.LocalizedTranslations.GetLocalizedText(DefaultEnglishTag);
             OutChallenge.Difficulty = WordDef.DifficultyRating;
-
             OutChallenge.ShuffledOptions.Empty();
-            OutChallenge.ShuffledOptions.Add(OutChallenge.CorrectTranslation);
+            OutChallenge.ShuffledOptions.Add(CorrectAnswer);
             OutChallenge.ShuffledOptions.Append(WordDef.MiniGameDecoyOptions);
 
             // Fisher-Yates Shuffle
@@ -242,49 +247,98 @@ bool UDynamicLanguageComponent::RequestMiniGameChallengeForWord(
                 OutChallenge.ShuffledOptions.Swap(i, SwapIdx);
             }
 
+            // Secure server-only storage
+            ServerSecretAnswers.Add(ChallengeGuid, CorrectAnswer);
+            ServerChallengeLanguages.Add(ChallengeGuid, LanguageTag);
+            ServerChallengeNativeWords.Add(ChallengeGuid, WordDef.NativeWord);
+
             OnTranslationChallengeReady.Broadcast(OutChallenge);
             return true;
         }
     }
-
     return false;
 }
 
 void UDynamicLanguageComponent::ServerSubmitMiniGameAnswer_Implementation(
-    FGameplayTag LanguageTag, 
-    const FString& NativeWord, 
+    const FGuid& ChallengeGuid, 
     const FString& SelectedAnswer)
 {
-    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS) return;
+    if (!GetOwner()->HasAuthority()) return;
 
-    const FDynamicLanguageDef* LangDef = GS->LanguageMasterRegistry.Find(LanguageTag);
-    if (!LangDef) return;
-
-    for (const FDynamicVocabularyWordDef& WordDef : LangDef->Vocabulary)
+    FString ExpectedAnswer;
+    if (!ServerSecretAnswers.RemoveAndCopyValue(ChallengeGuid, ExpectedAnswer))
     {
-        if (WordDef.NativeWord.Equals(NativeWord, ESearchCase::IgnoreCase))
-        {
-            static const FGameplayTag DefaultEnglishTag = FGameplayTag::RequestGameplayTag(TEXT("Localization.Text.en"), false);
-            const FString TrueTranslation = WordDef.LocalizedTranslations.GetLocalizedText(DefaultEnglishTag);
-
-            if (SelectedAnswer.Equals(TrueTranslation, ESearchCase::IgnoreCase))
-            {
-                // Correct translation selected: grant language comprehension attribute XP
-                if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
-                {
-                    if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(CharOwner->GetDynamicAttributeSet()))
-                    {
-                        const float CurrentXP = AttrSet->GetDynamicAttributeValue(LangDef->ComprehensionAttributeTag, 0);
-                        AttrSet->SetDynamicAttributeValue(LangDef->ComprehensionAttributeTag, CurrentXP + WordDef.ComprehensionXPGranted, 0);
-                    }
-                }
-
-                // Mark word permanently known
-                LocalKnownWordCache.Add(LanguageTag.ToString() + TEXT("_") + NativeWord.ToLower());
-                OnWordLearned.Broadcast(LanguageTag, NativeWord);
-            }
-            break;
-        }
+        return; // Challenge invalid, expired, or already answered
     }
+
+    FGameplayTag LanguageTag;
+    ServerChallengeLanguages.RemoveAndCopyValue(ChallengeGuid, LanguageTag);
+
+    FString NativeWord;
+    ServerChallengeNativeWords.RemoveAndCopyValue(ChallengeGuid, NativeWord);
+
+    if (SelectedAnswer.Equals(ExpectedAnswer, ESearchCase::IgnoreCase))
+    {
+        ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+        if (!GS) return;
+
+        const FDynamicLanguageDef* LangDef = GS->LanguageMasterRegistry.Find(LanguageTag);
+        if (!LangDef) return;
+
+        float XPToGrant = 2.0f;
+        for (const FDynamicVocabularyWordDef& WordDef : LangDef->Vocabulary)
+        {
+            if (WordDef.NativeWord.Equals(NativeWord, ESearchCase::IgnoreCase))
+            {
+                XPToGrant = WordDef.ComprehensionXPGranted;
+                break;
+            }
+        }
+
+        // Grant comprehension progression
+        if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+        {
+            if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(CharOwner->GetDynamicAttributeSet()))
+            {
+                const float CurrentXP = AttrSet->GetDynamicAttributeValue(LangDef->ComprehensionAttributeTag, 0);
+                AttrSet->SetDynamicAttributeValue(LangDef->ComprehensionAttributeTag, CurrentXP + XPToGrant, 0);
+            }
+        }
+
+        // Add to replicated FastArray and local cache
+        int32 FoundIdx = ReplicatedKnownWords.Items.IndexOfByPredicate([&](const FDynamicKnownWordItem& Item) {
+            return Item.LanguageTag == LanguageTag && Item.UnlockedNativeWord.Equals(NativeWord, ESearchCase::IgnoreCase);
+        });
+
+        if (FoundIdx == INDEX_NONE)
+        {
+            FDynamicKnownWordItem NewItem;
+            NewItem.LanguageTag = LanguageTag;
+            NewItem.UnlockedNativeWord = NativeWord;
+            NewItem.TimesEncountered = 1;
+            FDynamicKnownWordItem& Added = ReplicatedKnownWords.Items.Add_GetRef(NewItem);
+            ReplicatedKnownWords.MarkItemDirty(Added);
+        }
+
+        LocalKnownWordCache.Add(LanguageTag.ToString() + TEXT("_") + NativeWord.ToLower());
+        OnWordLearned.Broadcast(LanguageTag, NativeWord);
+    }
+}
+
+bool UDynamicLanguageComponent::ServerForgetWord(FGameplayTag LanguageTag, const FString& Word)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !LanguageTag.IsValid()) return false;
+
+    int32 Removed = ReplicatedKnownWords.Items.RemoveAll([LanguageTag, &Word](const FDynamicKnownWordItem& Item)
+    {
+        return Item.LanguageTag == LanguageTag && Item.UnlockedNativeWord.Equals(Word, ESearchCase::IgnoreCase);
+    });
+
+    if (Removed > 0)
+    {
+        ReplicatedKnownWords.MarkArrayDirty();
+        RebuildKnownWordCache();
+        return true;
+    }
+    return false;
 }

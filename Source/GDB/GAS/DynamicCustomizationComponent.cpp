@@ -70,13 +70,43 @@ void UDynamicCustomizationComponent::HandleSingleMorphReplicated(const FDynamicC
 
 void UDynamicCustomizationComponent::OnRep_ReplicatedMorphs()
 {
-    LocalMorphCache.Empty();
+    // Optimize morph application: Only evaluate and push delta changes to the skeletal mesh
+    // rather than resetting and rebuilding all morph targets across the character rig.
+    TSet<FGameplayTag> ReplicatedTags;
+    ReplicatedTags.Reserve(ReplicatedMorphs.Items.Num());
+
     for (const FDynamicCharacterMorphItem& Item : ReplicatedMorphs.Items)
     {
-        LocalMorphCache.Add(Item.SliderTag, Item.SliderValue);
-        OnMorphUpdated.Broadcast(Item.SliderTag, Item.SliderValue);
+        ReplicatedTags.Add(Item.SliderTag);
+
+        const float* CachedVal = LocalMorphCache.Find(Item.SliderTag);
+        if (!CachedVal || !FMath::IsNearlyEqual(*CachedVal, Item.SliderValue, 0.001f))
+        {
+            LocalMorphCache.Add(Item.SliderTag, Item.SliderValue);
+            ApplySingleSliderDeformation(Item.SliderTag, Item.SliderValue);
+            OnMorphUpdated.Broadcast(Item.SliderTag, Item.SliderValue);
+        }
     }
-    ApplyCustomizationToMesh();
+
+    // Clean up any sliders that were removed remotely
+    if (LocalMorphCache.Num() > ReplicatedMorphs.Items.Num())
+    {
+        TArray<FGameplayTag> StaleKeys;
+        for (const auto& Pair : LocalMorphCache)
+        {
+            if (!ReplicatedTags.Contains(Pair.Key))
+            {
+                StaleKeys.Add(Pair.Key);
+            }
+        }
+
+        for (const FGameplayTag& DeadTag : StaleKeys)
+        {
+            LocalMorphCache.Remove(DeadTag);
+            ApplySingleSliderDeformation(DeadTag, 0.0f);
+            OnMorphUpdated.Broadcast(DeadTag, 0.0f);
+        }
+    }
 }
 
 void UDynamicCustomizationComponent::OnRep_CharacterIdentity()

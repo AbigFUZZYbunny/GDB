@@ -11,8 +11,12 @@
         ]
       },
       "PrerequisiteConditionTreeName": "None",
-      "MinAffinityRequired": -0.2,
-      "MinTrustRequired": -0.2,
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.Affinity",
+          "Value": 5.0
+        }
+      ],
       "InitialStepTag": "QuestStep.GatherPineTimber",
       "Steps": [
         {
@@ -65,6 +69,13 @@
           { "KeyTag": "Localization.Description", "Value": "A pack of feral grey wolves has encroached upon the timber felling perimeter, injuring loggers and halting lumber operations." }
         ]
       },
+      "PrerequisiteConditionTreeName": "None",
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.Affinity",
+          "Value": 5.0
+        }
+      ],
       "InitialStepTag": "QuestStep.CullWolfPack",
       "Steps": [
         {
@@ -114,6 +125,13 @@
           { "KeyTag": "Localization.Description", "Value": "Grain storage cellars have been overrun by burrowing rodents contaminating vital food provisions." }
         ]
       },
+      "PrerequisiteConditionTreeName": "None",
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.Affinity",
+          "Value": 5.0
+        }
+      ],
       "InitialStepTag": "QuestStep.ClearGranaryPests",
       "Steps": [
         {
@@ -162,10 +180,13 @@
           { "KeyTag": "Localization.Description", "Value": "An organized bandit syndicate has blockaded the mountain pass, demanding tribute from the village magistrate or threatening to raze the settlement." }
         ]
       },
-      "RequiredPlayerTags": [],
-      "ExcludedPlayerTags": [ "State.Wanted.OutlawLeader" ],
-      "MinAffinityRequired": 0.0,
-      "MinTrustRequired": 0.0,
+      "PrerequisiteConditionTreeName": "None",
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.Affinity",
+          "Value": 5.0
+        }
+      ],
       "InitialStepTag": "QuestStep.InvestigatePass",
       "Steps": [
         {
@@ -311,20 +332,171 @@
       ]
     }
   },
-  "QuestGeneratorRules": {
-    "QuestRule.Economic.TimberShortage": {
-      "RuleTag": "QuestRule.Economic.TimberShortage",
-      "ContextProfessionOrFactionTag": "Profession.Labor.Woodcutter",
-      "TriggerConditionTreeName": "Trigger.Condition.LowTimberStock",
-      "QuestTemplateTag": "Quest.Economic.Woodworker.LumberShortage",
-      "UrgencyMultiplier": 1.5
+  "Quest.Story.RomanceOrBounty": {
+    "QuestTag": "Quest.Story.RomanceOrBounty",
+    "Category": "Story",
+    "Localization": {
+      "ReplicatedEntries": [
+        { "KeyTag": "Localization.Text.en", "Value": "A Matter of the Heart" },
+        { "KeyTag": "Localization.Text.es", "Value": "Cuestión de Corazón" }
+      ]
     },
-    "QuestRule.Bounty.WolfInfestation": {
-      "RuleTag": "QuestRule.Bounty.WolfInfestation",
-      "ContextProfessionOrFactionTag": "Faction.Beast.GreyWolfPack",
-      "TriggerConditionTreeName": "Trigger.Condition.WolfThreatHigh",
-      "QuestTemplateTag": "Quest.Bounty.WolvesAtTheLoggingCamp",
-      "UrgencyMultiplier": 1.25
+    "PrerequisiteConditionTreeName": "ConditionTree.DefaultTrue",
+    "MinimumRelationshipMetricRequirements": [
+      {
+        "KeyTag": "Relationship.Metric.Affinity",
+        "Value": 25.0
+      },
+      {
+        "KeyTag": "Relationship.Metric.Attraction",
+        "Value": 40.0
+      },
+      {
+        "KeyTag": "Relationship.Metric.Jealousy",
+        "Value": 10.0
+      }
+    ],
+    "InitialStepTag": "Quest.Step.Romance.Talk",
+    "Steps": [
+      {
+        "StepTag": "Quest.Step.Romance.Talk",
+        "Localization": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Localization.Text.en", "Value": "Speak with your prospective partner in the tavern." }
+          ]
+        },
+        "Objectives": [
+          {
+            "ObjectiveTag": "Objective.Romance.Conversation",
+            "Localization": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Localization.Text.en", "Value": "Express your feelings." }
+              ]
+            },
+            "ObjectiveType": "InteractWithActor",
+            "TargetEntityOrArchetypeTag": "Actor.NPC.Humanoid",
+            "TargetLocationOrLandmarkTag": "Landmark.Tavern",
+            "RequiredCount": 1
+          }
+        ],
+        "bAutoAdvanceOnObjectivesCompleted": true,
+        "StepBranches": [
+          {
+            "BranchTag": "Branch.Romance.Success",
+            "Localization": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Localization.Text.en", "Value": "Partnership Accepted" }
+              ]
+            },
+            "NextStepTag": "None",
+            "bConcludesQuest": true,
+            "bMarkedAsSuccess": true,
+            "BranchConsequences": {
+              "CurrencyReward": 100.0,
+              "AffinityDelta": 25.0,
+              "TrustDelta": 15.0,
+              "GrantedTags": [
+                "State.Player.Partnered"
+              ],
+              "GrantedAbilities": [
+                "Ability.Magic.Support.EmpathyShield"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "FinalRewards": {
+      "CurrencyReward": 250.0,
+      "AffinityDelta": 35.0,
+      "TrustDelta": 25.0
+    }
+  },
+  "Quest.DynamicEconomic.MerchantEscort": {
+    "QuestTag": "Quest.DynamicEconomic.MerchantEscort",
+    "Category": "DynamicEconomic",
+    "Localization": {
+      "ReplicatedEntries": [
+        { "KeyTag": "Localization.Text.en", "Value": "Caravan Security Detail" }
+      ]
+    },
+    "MinimumRelationshipMetricRequirements": [
+      {
+        "KeyTag": "Relationship.Metric.ProfessionalRespect",
+        "Value": 20.0
+      },
+      {
+        "KeyTag": "Relationship.Metric.Trust",
+        "Value": 10.0
+      }
+    ],
+    "InitialStepTag": "Quest.Step.Escort.Meet",
+    "Steps": [
+      {
+        "StepTag": "Quest.Step.Escort.Meet",
+        "Localization": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Localization.Text.en", "Value": "Meet the merchant guildmaster at the city gates." }
+          ]
+        },
+        "Objectives": [
+          {
+            "ObjectiveTag": "Objective.Escort.Rendezvous",
+            "ObjectiveType": "EscortNPC",
+            "TargetEntityOrArchetypeTag": "Actor.NPC.Merchant",
+            "TargetLocationOrLandmarkTag": "Landmark.CityGates",
+            "RequiredCount": 1
+          }
+        ],
+        "bAutoAdvanceOnObjectivesCompleted": true,
+        "StepBranches": []
+      }
+    ],
+    "FinalRewards": {
+      "CurrencyReward": 500.0,
+      "AffinityDelta": 10.0,
+      "TrustDelta": 20.0,
+      "DebtDelta": 150.0
+    }
+  },
+  "Quest.DynamicBounty.EliminateRival": {
+    "QuestTag": "Quest.DynamicBounty.EliminateRival",
+    "Category": "DynamicBounty",
+    "Localization": {
+      "ReplicatedEntries": [
+        { "KeyTag": "Localization.Text.en", "Value": "Eliminate the Bandits' Hostility" }
+      ]
+    },
+    "MinimumRelationshipMetricRequirements": [
+      {
+        "KeyTag": "Relationship.Metric.Hostility",
+        "Value": 50.0
+      }
+    ],
+    "InitialStepTag": "Quest.Step.Bounty.Cull",
+    "Steps": [
+      {
+        "StepTag": "Quest.Step.Bounty.Cull",
+        "Localization": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Localization.Text.en", "Value": "Reduce the rival faction's threat level in the region." }
+          ]
+        },
+        "Objectives": [
+          {
+            "ObjectiveTag": "Objective.Bounty.CullTargets",
+            "ObjectiveType": "CullTargets",
+            "TargetEntityOrArchetypeTag": "Actor.Enemy.Bandit",
+            "RequiredCount": 5
+          }
+        ],
+        "bAutoAdvanceOnObjectivesCompleted": true,
+        "StepBranches": []
+      }
+    ],
+    "FinalRewards": {
+      "CurrencyReward": 400.0,
+      "AffinityDelta": -5.0
     }
   }
 }

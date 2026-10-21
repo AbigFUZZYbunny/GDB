@@ -1,11 +1,13 @@
 ﻿// DynamicCharacter.cpp
 #include "DynamicCharacter.h"
+#include "DynamicEquipmentComponent.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
 #include "DynamicGameState.h"
 #include "MoverComponent.h"
+#include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
 
 ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -48,6 +50,40 @@ void ADynamicCharacter::BeginPlay()
     if (HasAuthority() && MeshComponent)
     {
         MeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicCharacter::OnServerSkeletalMeshHit);
+    }
+}
+
+void ADynamicCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+
+    // Record server-authoritative history buffer for rewind lag compensation
+    if (HasAuthority() && CapsuleComponent && MeshComponent)
+    {
+        const double CurrentTime = GetWorld()->GetTimeSeconds();
+
+        FCharacterTransformHistorySnapshot Snapshot;
+        Snapshot.ServerTimestamp = CurrentTime;
+        Snapshot.CapsuleLocation = CapsuleComponent->GetComponentLocation();
+        Snapshot.CapsuleRotation = CapsuleComponent->GetComponentQuat();
+
+        // Sample critical hit bones (pelvis, spine, head)
+        static const TArray<FName> CriticalBones = { FName("pelvis"), FName("spine_01"), FName("head"), FName("hand_r"), FName("hand_l") };
+        for (const FName& Bone : CriticalBones)
+        {
+            if (MeshComponent->DoesSocketExist(Bone))
+            {
+                Snapshot.BoneTransforms.Add(Bone, MeshComponent->GetSocketTransform(Bone, RTS_World));
+            }
+        }
+
+        TransformHistoryBuffer.Add(Snapshot);
+
+        // Prune entries older than 500ms
+        while (TransformHistoryBuffer.Num() > 0 && (CurrentTime - TransformHistoryBuffer[0].ServerTimestamp) > MaxHistorySeconds)
+        {
+            TransformHistoryBuffer.RemoveAt(0, 1, EAllowShrinking::No);
+        }
     }
 }
 
@@ -117,6 +153,123 @@ void ADynamicCharacter::RecoverFromRagdoll()
     if (MoverComponent) MoverComponent->Activate(true);
 }
 
+float ADynamicCharacter::CalculateAuthoritativeStrikeForce() const
+{
+    float Force = 1000.0f;
+
+    // 1. Attribute scaling
+    if (AttributeSet)
+    {
+        static const FGameplayTag StrengthTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Stat.Strength"), false);
+        if (StrengthTag.IsValid())
+        {
+            Force += AttributeSet->GetDynamicAttributeValue(StrengthTag, 0) * 20.0f;
+        }
+    }
+
+    // 2. Weapon mass scaling
+    if (const UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        static const FGameplayTag MainHandSlotTag = FGameplayTag::RequestGameplayTag(TEXT("Slot.Equipment.Hand.Right"), false);
+        const FGameplayTag WeaponTag = EquipComp->GetEquippedItemInSlot(MainHandSlotTag);
+        if (WeaponTag.IsValid())
+        {
+            if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+            {
+                if (const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(WeaponTag))
+                {
+                    Force += FMath::Max(1.0f, Def->MassOverride) * 150.0f;
+                }
+            }
+        }
+    }
+
+    return FMath::Clamp(Force, 100.0f, 15000.0f);
+}
+
+void ADynamicCharacter::RewindToHistoricalSnapshot(double TargetTimestamp)
+{
+    if (TransformHistoryBuffer.Num() == 0 || bIsCurrentlyRewound) return;
+
+    // Cache current transform before rewinding
+    PreRewindCachedTransform.CapsuleLocation = CapsuleComponent->GetComponentLocation();
+    PreRewindCachedTransform.CapsuleRotation = CapsuleComponent->GetComponentQuat();
+    bIsCurrentlyRewound = true;
+
+    // Find closest frame to client view timestamp
+    int32 ClosestIdx = 0;
+    double SmallestDiff = FMath::Abs(TransformHistoryBuffer[0].ServerTimestamp - TargetTimestamp);
+    for (int32 i = 1; i < TransformHistoryBuffer.Num(); ++i)
+    {
+        double Diff = FMath::Abs(TransformHistoryBuffer[i].ServerTimestamp - TargetTimestamp);
+        if (Diff < SmallestDiff)
+        {
+            SmallestDiff = Diff;
+            ClosestIdx = i;
+        }
+    }
+
+    const FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[ClosestIdx];
+    CapsuleComponent->SetWorldLocationAndRotation(Snapshot.CapsuleLocation, Snapshot.CapsuleRotation, false, nullptr, ETeleportType::TeleportPhysics);
+}
+
+void ADynamicCharacter::RestoreFromHistoricalSnapshot()
+{
+    if (!bIsCurrentlyRewound) return;
+    CapsuleComponent->SetWorldLocationAndRotation(PreRewindCachedTransform.CapsuleLocation, PreRewindCachedTransform.CapsuleRotation, false, nullptr, ETeleportType::TeleportPhysics);
+    bIsCurrentlyRewound = false;
+}
+
+bool ADynamicCharacter::Server_RequestAimedStrike_Validate(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, double ClientTargetTimestamp)
+{
+    const float OriginDistSq = FVector::DistSquared(FVector(AimOrigin), GetActorLocation());
+    return (OriginDistSq <= FMath::Square(500.0f)) && !AimDirection.IsZero();
+}
+
+void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, double ClientTargetTimestamp)
+{
+    if (!HasAuthority()) return;
+
+    const double CurrentServerTime = GetWorld()->GetTimeSeconds();
+    const double ClampedClientTimestamp = FMath::Clamp(ClientTargetTimestamp, CurrentServerTime - MaxHistorySeconds, CurrentServerTime);
+
+    // 1. Rewind all other characters to the timestamp of the attacker's client view
+    TArray<ADynamicCharacter*> RewoundCharacters;
+    for (TActorIterator<ADynamicCharacter> It(GetWorld()); It; ++It)
+    {
+        ADynamicCharacter* TargetChar = *It;
+        if (TargetChar && TargetChar != this)
+        {
+            TargetChar->RewindToHistoricalSnapshot(ClampedClientTimestamp);
+            RewoundCharacters.Add(TargetChar);
+        }
+    }
+
+    // 2. Perform authoritative line trace against the rewound world
+    const FVector Start = FVector(AimOrigin);
+    const FVector End = Start + (FVector(AimDirection) * 10000.0f);
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ServerAuthoritativeBoneTrace), false, this);
+    FHitResult ServerHit;
+
+    const bool bHit = GetWorld()->LineTraceSingleByChannel(ServerHit, Start, End, ECC_Pawn, QueryParams);
+
+    // 3. Instantly restore characters to their present authoritative positions
+    for (ADynamicCharacter* TargetChar : RewoundCharacters)
+    {
+        TargetChar->RestoreFromHistoricalSnapshot();
+    }
+
+    // 4. Resolve hit using authoritative computed strike force
+    if (bHit)
+    {
+        if (ADynamicCharacter* HitCharacter = Cast<ADynamicCharacter>(ServerHit.GetActor()))
+        {
+            const float AuthoritativeForce = CalculateAuthoritativeStrikeForce();
+            ServerProcessAuthoritativeLimbHit(HitCharacter, ServerHit.BoneName, AuthoritativeForce, 1.0f, ServerHit.ImpactPoint, ServerHit.ImpactNormal, this);
+        }
+    }
+}
+
 void ADynamicCharacter::OnServerSkeletalMeshHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
     if (!HasAuthority() || OtherActor == this) return;
@@ -134,27 +287,7 @@ void ADynamicCharacter::OnServerSkeletalMeshHit(UPrimitiveComponent* HitComponen
     ServerProcessAuthoritativeLimbHit(this, AuthoritativeBoneName, ImpulseMagnitude, MassRatio, Hit.ImpactPoint, Hit.ImpactNormal, OtherActor);
 }
 
-bool ADynamicCharacter::Server_RequestAimedStrike_Validate(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, float ClientStrikeForce)
-{
-    const float OriginDistSq = FVector::DistSquared(FVector(AimOrigin), GetActorLocation());
-    return (OriginDistSq <= FMath::Square(500.0f)) && !AimDirection.IsZero();
-}
 
-void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, float ClientStrikeForce)
-{
-    const FVector Start = FVector(AimOrigin);
-    const FVector End = Start + (FVector(AimDirection) * 10000.0f);
-    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ServerAuthoritativeBoneTrace), false, this);
-
-    FHitResult ServerHit;
-    if (GetWorld()->LineTraceSingleByChannel(ServerHit, Start, End, ECC_Pawn, QueryParams))
-    {
-        if (ADynamicCharacter* HitCharacter = Cast<ADynamicCharacter>(ServerHit.GetActor()))
-        {
-            ServerProcessAuthoritativeLimbHit(HitCharacter, ServerHit.BoneName, FMath::Clamp(ClientStrikeForce, 0.0f, 15000.0f), 1.0f, ServerHit.ImpactPoint, ServerHit.ImpactNormal, this);
-        }
-    }
-}
 
 void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(ADynamicCharacter* TargetCharacter, const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor)
 {

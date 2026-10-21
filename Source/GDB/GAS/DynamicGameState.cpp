@@ -3,35 +3,46 @@
 #include "DynamicSpatialActor.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicEffectFactory.h"
+#include "DynamicEnvironmentChunkActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "UObject/UnrealType.h"
+#include "Async/Async.h"
 
 ADynamicGameState::ADynamicGameState()
 {
     bReplicates = true;
-    ReplicatedEnvironmentGrid.OwningGameState = this;
+    // Environment grid is simulated on server and replicated through spatialized ADynamicEnvironmentChunkActor instances.
 }
 
 void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME(ADynamicGameState, ReplicatedEnvironmentGrid);
+    // CRITICAL: ReplicatedEnvironmentGrid removed to eliminate global 10,000-cell array choke.
 }
 
-void FEnvironmentGridCellItem::PostReplicatedAdd(const FFastEnvironmentGridArray& InArrayOwner)
+void ADynamicGameState::BeginPlay()
 {
-    if (InArrayOwner.OwningGameState)
+    Super::BeginPlay();
+    if (HasAuthority())
     {
-        InArrayOwner.OwningGameState->RecalculateCellPhysicalMetrics(*this);
+        SpawnServerEnvironmentChunks();
     }
 }
 
-void FEnvironmentGridCellItem::PostReplicatedChange(const FFastEnvironmentGridArray& InArrayOwner)
+void ADynamicGameState::RegisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk)
 {
-    if (InArrayOwner.OwningGameState)
+    if (Chunk)
     {
-        InArrayOwner.OwningGameState->RecalculateCellPhysicalMetrics(*this);
+        ActiveChunkMap.Add(Chunk->ChunkCoord, Chunk);
+    }
+}
+
+void ADynamicGameState::UnregisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk)
+{
+    if (Chunk)
+    {
+        ActiveChunkMap.Remove(Chunk->ChunkCoord);
     }
 }
 
@@ -39,7 +50,6 @@ void ADynamicGameState::SetupDynamicEnvironment(const FDynamicEnvironmentSystemC
 {
     EnvironmentConfig = InConfig;
     TrackedElementsMap.Empty(EnvironmentConfig.TrackedElementalTags.Num());
-
     for (int32 i = 0; i < EnvironmentConfig.TrackedElementalTags.Num(); ++i)
     {
         const FGameplayTag& Tag = EnvironmentConfig.TrackedElementalTags[i];
@@ -57,8 +67,7 @@ void ADynamicGameState::SetupDynamicEnvironment(const FDynamicEnvironmentSystemC
     if (HasAuthority())
     {
         const int32 TotalCells = GridWidth * GridHeight;
-        ReplicatedEnvironmentGrid.Items.SetNum(TotalCells);
-
+        ServerEnvironmentGrid.SetNum(TotalCells);
         const int32 NumElements = EnvironmentConfig.TrackedElementalTags.Num();
         const uint8 DefaultPackedVal = static_cast<uint8>(FMath::Clamp(
             FMath::RoundToInt((EnvironmentConfig.DefaultCellDensity / FMath::Max(1.0f, EnvironmentConfig.MaxElementDensityCap)) * 255.0f),
@@ -67,13 +76,367 @@ void ADynamicGameState::SetupDynamicEnvironment(const FDynamicEnvironmentSystemC
 
         for (int32 i = 0; i < TotalCells; ++i)
         {
-            FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[i];
+            FEnvironmentGridCellItem& Cell = ServerEnvironmentGrid[i];
             Cell.CellIndex = i;
             Cell.PackedElementalDensities.Init(DefaultPackedVal, NumElements);
             RecalculateCellPhysicalMetrics(Cell);
         }
-        ReplicatedEnvironmentGrid.MarkArrayDirty();
+
+        SpawnServerEnvironmentChunks();
     }
+}
+
+void ADynamicGameState::SpawnServerEnvironmentChunks()
+{
+    if (!HasAuthority() || ServerEnvironmentGrid.Num() == 0 || ChunkDimension <= 0) return;
+
+    const int32 ChunksX = FMath::DivideAndRoundUp(GridWidth, ChunkDimension);
+    const int32 ChunksY = FMath::DivideAndRoundUp(GridHeight, ChunkDimension);
+    const float HalfWorldW = (GridWidth * CellSizeWorldUnits) * 0.5f;
+    const float HalfWorldH = (GridHeight * CellSizeWorldUnits) * 0.5f;
+
+    for (int32 CY = 0; CY < ChunksY; ++CY)
+    {
+        for (int32 CX = 0; CX < ChunksX; ++CX)
+        {
+            const FIntPoint Coord(CX, CY);
+            if (ActiveChunkMap.Contains(Coord)) continue;
+
+            const FVector ChunkWorldOrigin(
+                (-HalfWorldW) + (CX * ChunkDimension * CellSizeWorldUnits),
+                (-HalfWorldH) + (CY * ChunkDimension * CellSizeWorldUnits),
+                0.0f
+            );
+
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.Owner = this;
+            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+            ADynamicEnvironmentChunkActor* NewChunk = GetWorld()->SpawnActor<ADynamicEnvironmentChunkActor>(
+                ADynamicEnvironmentChunkActor::StaticClass(),
+                FTransform(ChunkWorldOrigin),
+                SpawnParams
+            );
+
+            if (NewChunk)
+            {
+                NewChunk->InitializeChunk(Coord, ChunkDimension, ChunkDimension, CellSizeWorldUnits, ChunkWorldOrigin);
+                RegisterEnvironmentChunk(NewChunk);
+
+                // Populate initial chunk slice from authoritative memory
+                for (int32 LocalY = 0; LocalY < ChunkDimension; ++LocalY)
+                {
+                    for (int32 LocalX = 0; LocalX < ChunkDimension; ++LocalX)
+                    {
+                        const int32 GlobalX = (CX * ChunkDimension) + LocalX;
+                        const int32 GlobalY = (CY * ChunkDimension) + LocalY;
+                        if (GlobalX < GridWidth && GlobalY < GridHeight)
+                        {
+                            const int32 GlobalIndex = (GlobalY * GridWidth) + GlobalX;
+                            NewChunk->UpdateCellData(GlobalIndex, ServerEnvironmentGrid[GlobalIndex]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+float ADynamicGameState::GetEnvironmentMetricAtLocation(const FVector& WorldLocation, FGameplayTag MetricOrElementTag) const
+{
+    if (CellSizeWorldUnits <= 0.0f || !MetricOrElementTag.IsValid()) return 0.0f;
+
+    const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
+
+    // 1. Authoritative Server / Standalone Lookup
+    if (HasAuthority())
+    {
+        if (!ServerEnvironmentGrid.IsValidIndex(CellIdx)) return 0.0f;
+        const FEnvironmentGridCellItem& Cell = ServerEnvironmentGrid[CellIdx];
+
+        const int32 ElemIdx = ResolveElementArrayIndex(MetricOrElementTag);
+        if (ElemIdx != INDEX_NONE && Cell.PackedElementalDensities.IsValidIndex(ElemIdx))
+        {
+            return (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
+        }
+        return Cell.DerivedPhysicalMetrics.LocalLookupMap.FindRef(MetricOrElementTag);
+    }
+
+    // 2. Client Proximity Chunk Lookup
+    const int32 CellX = CellIdx % GridWidth;
+    const int32 CellY = CellIdx / GridWidth;
+    const FIntPoint ChunkCoord(CellX / ChunkDimension, CellY / ChunkDimension);
+
+    if (const TObjectPtr<ADynamicEnvironmentChunkActor>* FoundChunk = ActiveChunkMap.Find(ChunkCoord))
+    {
+        if (FoundChunk->Get())
+        {
+            if (const FEnvironmentGridCellItem* Cell = (*FoundChunk)->FindCellItemByGlobalIndex(CellIdx))
+            {
+                const int32 ElemIdx = ResolveElementArrayIndex(MetricOrElementTag);
+                if (ElemIdx != INDEX_NONE && Cell->PackedElementalDensities.IsValidIndex(ElemIdx))
+                {
+                    return (static_cast<float>(Cell->PackedElementalDensities[ElemIdx]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
+                }
+                return Cell->DerivedPhysicalMetrics.LocalLookupMap.FindRef(MetricOrElementTag);
+            }
+        }
+    }
+
+    // 3. Fall back to default equilibrium if chunk is outside network replication range
+    return 0.0f;
+}
+
+float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount)
+{
+    if (!HasAuthority() || ServerEnvironmentGrid.Num() == 0) return 0.0f;
+    const int32 ElemIdx = ResolveElementArrayIndex(ElementTag);
+    if (ElemIdx == INDEX_NONE) return 0.0f;
+
+    const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
+    if (!ServerEnvironmentGrid.IsValidIndex(CellIdx)) return 0.0f;
+
+    FEnvironmentGridCellItem& Cell = ServerEnvironmentGrid[CellIdx];
+    if (!Cell.PackedElementalDensities.IsValidIndex(ElemIdx)) return 0.0f;
+
+    const float OldValue = (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
+    const float NewValue = FMath::Clamp(OldValue + DeltaAmount, 0.0f, EnvironmentConfig.MaxElementDensityCap);
+    Cell.PackedElementalDensities[ElemIdx] = static_cast<uint8>(FMath::RoundToInt((NewValue / EnvironmentConfig.MaxElementDensityCap) * 255.0f));
+    const float ActualDelta = NewValue - OldValue;
+
+    RecalculateCellPhysicalMetrics(Cell);
+
+    // Sync authoritative modification to the relevant spatial chunk
+    const int32 CellX = CellIdx % GridWidth;
+    const int32 CellY = CellIdx / GridWidth;
+    const FIntPoint ChunkCoord(CellX / ChunkDimension, CellY / ChunkDimension);
+    if (TObjectPtr<ADynamicEnvironmentChunkActor>* ChunkPtr = ActiveChunkMap.Find(ChunkCoord))
+    {
+        if (ChunkPtr->Get())
+        {
+            (*ChunkPtr)->UpdateCellData(CellIdx, Cell);
+        }
+    }
+
+    return ActualDelta;
+}
+
+void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
+{
+    if (!HasAuthority() || ServerEnvironmentGrid.Num() == 0)
+    {
+        return;
+    }
+
+    AccumulatedUnsimulatedHours += ElapsedGameHours;
+
+    // If a worker thread is still computing the previous step, accumulate elapsed hours and return
+    if (bIsSimulationTaskRunning)
+    {
+        return;
+    }
+
+    const float HoursToSimulate = AccumulatedUnsimulatedHours;
+    AccumulatedUnsimulatedHours = 0.0f;
+    bIsSimulationTaskRunning = true;
+
+    // 1. Capture lightweight thread-safe snapshot on the Game Thread
+    const int32 TotalCells = ServerEnvironmentGrid.Num();
+    const int32 CapturedGridWidth = GridWidth;
+    const int32 CapturedGridHeight = GridHeight;
+    const int32 CapturedChunkDim = ChunkDimension;
+    const FDynamicEnvironmentSystemConfig CapturedEnvConfig = EnvironmentConfig;
+    const TMap<FGameplayTag, int32> CapturedElementMap = TrackedElementsMap;
+    const TMap<FGameplayTag, FDynamicBiomeDef> CapturedBiomeRegistry = BiomeMasterRegistry;
+
+    TArray<FEnvironmentCellWorkerInput> Inputs;
+    Inputs.SetNum(TotalCells);
+    for (int32 i = 0; i < TotalCells; ++i)
+    {
+        const FEnvironmentGridCellItem& Cell = ServerEnvironmentGrid[i];
+        Inputs[i].CellIndex = Cell.CellIndex;
+        Inputs[i].CurrentBiomeTag = Cell.CurrentBiomeTag;
+        Inputs[i].TargetShiftBiomeTag = Cell.TargetShiftBiomeTag;
+        Inputs[i].BiomeBlendAlpha = Cell.BiomeBlendAlpha;
+        Inputs[i].SustainedOutOfRangeHours = Cell.SustainedOutOfRangeHours;
+        Inputs[i].WindDirection = FVector2D(Cell.WindDirection.X, Cell.WindDirection.Y);
+        Inputs[i].PackedDensities = Cell.PackedElementalDensities;
+    }
+
+    // 2. Dispatch the heavy O(N * Elements) advection work to the thread pool
+    Async(EAsyncExecution::ThreadPool, [this, Inputs = MoveTemp(Inputs), HoursToSimulate, TotalCells, CapturedGridWidth, CapturedGridHeight, CapturedChunkDim, CapturedEnvConfig, CapturedElementMap, CapturedBiomeRegistry]()
+    {
+        const int32 NumElements = CapturedEnvConfig.TrackedElementalTags.Num();
+        TArray<TArray<float>> AdvectionDeltas;
+        AdvectionDeltas.SetNum(NumElements);
+        for (int32 e = 0; e < NumElements; ++e)
+        {
+            AdvectionDeltas[e].Init(0.0f, TotalCells);
+        }
+
+        // Pass A: Advection transfer calculations
+        for (int32 i = 0; i < TotalCells; ++i)
+        {
+            const FEnvironmentCellWorkerInput& Cell = Inputs[i];
+            const int32 X = i % CapturedGridWidth;
+            const int32 Y = i / CapturedGridWidth;
+            const int32 StepX = FMath::RoundToInt(Cell.WindDirection.X);
+            const int32 StepY = FMath::RoundToInt(Cell.WindDirection.Y);
+            const int32 TargetX = FMath::Clamp(X + StepX, 0, CapturedGridWidth - 1);
+            const int32 TargetY = FMath::Clamp(Y + StepY, 0, CapturedGridHeight - 1);
+            const int32 TargetIdx = (TargetY * CapturedGridWidth) + TargetX;
+
+            if (TargetIdx != i)
+            {
+                const float TransferRatio = FMath::Clamp(0.15f * HoursToSimulate, 0.0f, 0.35f);
+                for (int32 e = 0; e < NumElements; ++e)
+                {
+                    if (Cell.PackedDensities.IsValidIndex(e))
+                    {
+                        const float Density = (static_cast<float>(Cell.PackedDensities[e]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
+                        const float DensityMoved = Density * TransferRatio;
+                        AdvectionDeltas[e][i] -= DensityMoved;
+                        AdvectionDeltas[e][TargetIdx] += DensityMoved;
+                    }
+                }
+            }
+        }
+
+        // Pass B: Homeostasis, Biome Shift, and Physical Formula evaluations
+        TArray<FEnvironmentCellWorkerOutput> Outputs;
+        Outputs.SetNum(TotalCells);
+
+        for (int32 i = 0; i < TotalCells; ++i)
+        {
+            const FEnvironmentCellWorkerInput& InCell = Inputs[i];
+            FEnvironmentCellWorkerOutput& OutCell = Outputs[i];
+            OutCell.CellIndex = InCell.CellIndex;
+            OutCell.CurrentBiomeTag = InCell.CurrentBiomeTag;
+            OutCell.TargetShiftBiomeTag = InCell.TargetShiftBiomeTag;
+            OutCell.BiomeBlendAlpha = InCell.BiomeBlendAlpha;
+            OutCell.SustainedOutOfRangeHours = InCell.SustainedOutOfRangeHours;
+            OutCell.PackedDensities = InCell.PackedDensities;
+            OutCell.bModified = false;
+
+            for (int32 e = 0; e < NumElements; ++e)
+            {
+                if (OutCell.PackedDensities.IsValidIndex(e) && !FMath::IsNearlyZero(AdvectionDeltas[e][i]))
+                {
+                    const float CurDensity = (static_cast<float>(OutCell.PackedDensities[e]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
+                    const float NewDensity = FMath::Clamp(CurDensity + AdvectionDeltas[e][i], 0.0f, CapturedEnvConfig.MaxElementDensityCap);
+                    OutCell.PackedDensities[e] = static_cast<uint8>(FMath::RoundToInt((NewDensity / CapturedEnvConfig.MaxElementDensityCap) * 255.0f));
+                    OutCell.bModified = true;
+                }
+            }
+
+            if (const FDynamicBiomeDef* BiomeDef = CapturedBiomeRegistry.Find(OutCell.CurrentBiomeTag))
+            {
+                float MaxDeviation = 0.0f;
+                for (const FTagFloatPair& Eq : BiomeDef->DefaultElementalEquilibrium)
+                {
+                    if (const int32* ElemIdxPtr = CapturedElementMap.Find(Eq.KeyTag))
+                    {
+                        const int32 ElemIdx = *ElemIdxPtr;
+                        if (OutCell.PackedDensities.IsValidIndex(ElemIdx))
+                        {
+                            const float CurVal = (static_cast<float>(OutCell.PackedDensities[ElemIdx]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
+                            MaxDeviation = FMath::Max(MaxDeviation, FMath::Abs(CurVal - Eq.Value));
+                            const float NewVal = FMath::FInterpConstantTo(CurVal, Eq.Value, HoursToSimulate, BiomeDef->HomeostasisPullRate);
+                            if (!FMath::IsNearlyEqual(CurVal, NewVal, 0.5f))
+                            {
+                                OutCell.PackedDensities[ElemIdx] = static_cast<uint8>(FMath::RoundToInt((NewVal / CapturedEnvConfig.MaxElementDensityCap) * 255.0f));
+                                OutCell.bModified = true;
+                            }
+                        }
+                    }
+                }
+
+                if (MaxDeviation > 35.0f)
+                {
+                    OutCell.SustainedOutOfRangeHours += HoursToSimulate;
+                    for (const FBiomeShiftRule& ShiftRule : BiomeDef->BiomeShiftRules)
+                    {
+                        if (OutCell.SustainedOutOfRangeHours >= ShiftRule.RequiredSustainedGameHours)
+                        {
+                            OutCell.TargetShiftBiomeTag = ShiftRule.TargetBiomeTag;
+                            OutCell.BiomeBlendAlpha = FMath::Clamp(OutCell.BiomeBlendAlpha + (HoursToSimulate / ShiftRule.RequiredSustainedGameHours), 0.0f, 1.0f);
+                            if (OutCell.BiomeBlendAlpha >= 1.0f)
+                            {
+                                OutCell.CurrentBiomeTag = ShiftRule.TargetBiomeTag;
+                                OutCell.BiomeBlendAlpha = 0.0f;
+                                OutCell.SustainedOutOfRangeHours = 0.0f;
+                            }
+                            OutCell.bModified = true;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    OutCell.SustainedOutOfRangeHours = FMath::Max(0.0f, OutCell.SustainedOutOfRangeHours - HoursToSimulate);
+                }
+            }
+
+            // Metric formula evaluation
+            for (const FDynamicEnvironmentPhysicalMetricFormula& Formula : CapturedEnvConfig.MetricFormulas)
+            {
+                float MetricAccum = Formula.BaseConstant;
+                for (const auto& WP : Formula.ElementWeights.LocalLookupMap)
+                {
+                    if (const int32* EIdxPtr = CapturedElementMap.Find(WP.Key))
+                    {
+                        const int32 EIdx = *EIdxPtr;
+                        if (OutCell.PackedDensities.IsValidIndex(EIdx))
+                        {
+                            const float D = (static_cast<float>(OutCell.PackedDensities[EIdx]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
+                            MetricAccum += D * WP.Value;
+                        }
+                    }
+                }
+                OutCell.DerivedMetrics.UpdateEntry(Formula.MetricTag, FMath::Clamp(MetricAccum, Formula.MinClamp, Formula.MaxClamp));
+            }
+        }
+
+        // 3. Marshaling results back to the Game Thread to dirty chunk components
+        Async(EAsyncExecution::TaskGraphMainThread, [this, Outputs = MoveTemp(Outputs), CapturedGridWidth, CapturedChunkDim]()
+        {
+            if (!IsValid(this) || ServerEnvironmentGrid.Num() != Outputs.Num())
+            {
+                bIsSimulationTaskRunning = false;
+                return;
+            }
+
+            for (const FEnvironmentCellWorkerOutput& OutCell : Outputs)
+            {
+                if (!OutCell.bModified)
+                {
+                    continue;
+                }
+
+                FEnvironmentGridCellItem& MasterCell = ServerEnvironmentGrid[OutCell.CellIndex];
+                MasterCell.CurrentBiomeTag = OutCell.CurrentBiomeTag;
+                MasterCell.TargetShiftBiomeTag = OutCell.TargetShiftBiomeTag;
+                MasterCell.BiomeBlendAlpha = OutCell.BiomeBlendAlpha;
+                MasterCell.SustainedOutOfRangeHours = OutCell.SustainedOutOfRangeHours;
+                MasterCell.PackedElementalDensities = OutCell.PackedDensities;
+                MasterCell.DerivedPhysicalMetrics = OutCell.DerivedMetrics;
+
+                const int32 CellX = OutCell.CellIndex % CapturedGridWidth;
+                const int32 CellY = OutCell.CellIndex / CapturedGridWidth;
+                const FIntPoint ChunkCoord(CellX / CapturedChunkDim, CellY / CapturedChunkDim);
+
+                if (TObjectPtr<ADynamicEnvironmentChunkActor>* FoundChunk = ActiveChunkMap.Find(ChunkCoord))
+                {
+                    if (FoundChunk->Get())
+                    {
+                        (*FoundChunk)->UpdateCellData(OutCell.CellIndex, MasterCell);
+                    }
+                }
+            }
+
+            bIsSimulationTaskRunning = false;
+        });
+    });
 }
 
 UGameplayEffect* ADynamicGameState::GetOrCreateCachedEffectObject(FGameplayTag EffectTag)
@@ -104,54 +467,12 @@ void ADynamicGameState::WarmGameplayEffectCache()
 
 int32 ADynamicGameState::GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const
 {
-    if (ReplicatedEnvironmentGrid.Items.Num() == 0 || CellSizeWorldUnits <= 0.0f) return 0;
+    if (GridWidth <= 0 || GridHeight <= 0 || CellSizeWorldUnits <= 0.0f) return 0;
     const float HalfWorldW = (GridWidth * CellSizeWorldUnits) * 0.5f;
     const float HalfWorldH = (GridHeight * CellSizeWorldUnits) * 0.5f;
-
     const int32 X = FMath::Clamp(FMath::FloorToInt((WorldLocation.X + HalfWorldW) / CellSizeWorldUnits), 0, GridWidth - 1);
     const int32 Y = FMath::Clamp(FMath::FloorToInt((WorldLocation.Y + HalfWorldH) / CellSizeWorldUnits), 0, GridHeight - 1);
-
-    return FMath::Clamp((Y * GridWidth) + X, 0, ReplicatedEnvironmentGrid.Items.Num() - 1);
-}
-
-float ADynamicGameState::GetEnvironmentMetricAtLocation(const FVector& WorldLocation, FGameplayTag MetricOrElementTag) const
-{
-    if (ReplicatedEnvironmentGrid.Items.Num() == 0 || !MetricOrElementTag.IsValid()) return 0.0f;
-    const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
-    const FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[CellIdx];
-
-    // Check if querying an elemental density directly
-    const int32 ElemIdx = ResolveElementArrayIndex(MetricOrElementTag);
-    if (ElemIdx != INDEX_NONE && Cell.PackedElementalDensities.IsValidIndex(ElemIdx))
-    {
-        return (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
-    }
-
-    // Check derived physical metrics calculated by JSON formulas
-    return Cell.DerivedPhysicalMetrics.LocalLookupMap.FindRef(MetricOrElementTag);
-}
-
-float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount)
-{
-    if (!HasAuthority() || ReplicatedEnvironmentGrid.Items.Num() == 0) return 0.0f;
-
-    const int32 ElemIdx = ResolveElementArrayIndex(ElementTag);
-    if (ElemIdx == INDEX_NONE) return 0.0f;
-
-    const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
-    FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[CellIdx];
-
-    if (!Cell.PackedElementalDensities.IsValidIndex(ElemIdx)) return 0.0f;
-
-    const float OldValue = (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
-    const float NewValue = FMath::Clamp(OldValue + DeltaAmount, 0.0f, EnvironmentConfig.MaxElementDensityCap);
-
-    Cell.PackedElementalDensities[ElemIdx] = static_cast<uint8>(FMath::RoundToInt((NewValue / EnvironmentConfig.MaxElementDensityCap) * 255.0f));
-    const float ActualDelta = NewValue - OldValue;
-
-    RecalculateCellPhysicalMetrics(Cell);
-    ReplicatedEnvironmentGrid.MarkItemDirty(Cell);
-    return ActualDelta;
+    return FMath::Clamp((Y * GridWidth) + X, 0, (GridWidth * GridHeight) - 1);
 }
 
 void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell)
@@ -173,119 +494,6 @@ void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem&
 
         const float Clamped = FMath::Clamp(EvaluatedValue, Formula.MinClamp, Formula.MaxClamp);
         Cell.DerivedPhysicalMetrics.UpdateEntry(Formula.MetricTag, Clamped);
-    }
-}
-
-void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
-{
-    if (!HasAuthority() || ReplicatedEnvironmentGrid.Items.Num() == 0) return;
-    const int32 TotalCells = ReplicatedEnvironmentGrid.Items.Num();
-    const int32 NumElements = EnvironmentConfig.TrackedElementalTags.Num();
-
-    TArray<TArray<float>> AdvectionDeltas;
-    AdvectionDeltas.SetNum(NumElements);
-    for (int32 e = 0; e < NumElements; ++e)
-    {
-        AdvectionDeltas[e].Init(0.0f, TotalCells);
-    }
-
-    // 1. Data-Driven Dynamic Advection Pass
-    for (int32 i = 0; i < TotalCells; ++i)
-    {
-        const FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[i];
-        const int32 X = i % GridWidth;
-        const int32 Y = i / GridWidth;
-        const int32 StepX = FMath::RoundToInt(Cell.WindDirection.X);
-        const int32 StepY = FMath::RoundToInt(Cell.WindDirection.Y);
-        const int32 TargetX = FMath::Clamp(X + StepX, 0, GridWidth - 1);
-        const int32 TargetY = FMath::Clamp(Y + StepY, 0, GridHeight - 1);
-        const int32 TargetIdx = (TargetY * GridWidth) + TargetX;
-
-        if (TargetIdx != i)
-        {
-            const float TransferRatio = FMath::Clamp(0.15f * ElapsedGameHours, 0.0f, 0.35f);
-            for (int32 e = 0; e < NumElements; ++e)
-            {
-                if (Cell.PackedElementalDensities.IsValidIndex(e))
-                {
-                    const float Density = (static_cast<float>(Cell.PackedElementalDensities[e]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
-                    const float DensityMoved = Density * TransferRatio;
-                    AdvectionDeltas[e][i]         -= DensityMoved;
-                    AdvectionDeltas[e][TargetIdx] += DensityMoved;
-                }
-            }
-        }
-    }
-
-    // 2. Cell Update Pass (Homeostasis & Biome Shifting)
-    for (int32 i = 0; i < TotalCells; ++i)
-    {
-        FEnvironmentGridCellItem& Cell = ReplicatedEnvironmentGrid.Items[i];
-        bool bCellModified = false;
-
-        for (int32 e = 0; e < NumElements; ++e)
-        {
-            if (Cell.PackedElementalDensities.IsValidIndex(e) && !FMath::IsNearlyZero(AdvectionDeltas[e][i]))
-            {
-                const float CurrentDensity = (static_cast<float>(Cell.PackedElementalDensities[e]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
-                const float NewDensity = FMath::Clamp(CurrentDensity + AdvectionDeltas[e][i], 0.0f, EnvironmentConfig.MaxElementDensityCap);
-                Cell.PackedElementalDensities[e] = static_cast<uint8>(FMath::RoundToInt((NewDensity / EnvironmentConfig.MaxElementDensityCap) * 255.0f));
-                bCellModified = true;
-            }
-        }
-
-        // Homeostasis pull towards Biome Equilibrium
-        if (const FDynamicBiomeDef* BiomeDef = BiomeMasterRegistry.Find(Cell.CurrentBiomeTag))
-        {
-            float MaxDeviation = 0.0f;
-            for (const FTagFloatPair& Eq : BiomeDef->DefaultElementalEquilibrium)
-            {
-                const int32 ElemIdx = ResolveElementArrayIndex(Eq.KeyTag);
-                if (ElemIdx != INDEX_NONE && Cell.PackedElementalDensities.IsValidIndex(ElemIdx))
-                {
-                    const float CurrentVal = (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * EnvironmentConfig.MaxElementDensityCap;
-                    MaxDeviation = FMath::Max(MaxDeviation, FMath::Abs(CurrentVal - Eq.Value));
-
-                    const float NewVal = FMath::FInterpConstantTo(CurrentVal, Eq.Value, ElapsedGameHours, BiomeDef->HomeostasisPullRate);
-                    if (!FMath::IsNearlyEqual(CurrentVal, NewVal, 0.5f))
-                    {
-                        Cell.PackedElementalDensities[ElemIdx] = static_cast<uint8>(FMath::RoundToInt((NewVal / EnvironmentConfig.MaxElementDensityCap) * 255.0f));
-                        bCellModified = true;
-                    }
-                }
-            }
-
-            if (MaxDeviation > 35.0f)
-            {
-                Cell.SustainedOutOfRangeHours += ElapsedGameHours;
-                for (const FBiomeShiftRule& ShiftRule : BiomeDef->BiomeShiftRules)
-                {
-                    if (Cell.SustainedOutOfRangeHours >= ShiftRule.RequiredSustainedGameHours)
-                    {
-                        Cell.TargetShiftBiomeTag = ShiftRule.TargetBiomeTag;
-                        Cell.BiomeBlendAlpha = FMath::Clamp(Cell.BiomeBlendAlpha + (ElapsedGameHours / ShiftRule.RequiredSustainedGameHours), 0.0f, 1.0f);
-                        if (Cell.BiomeBlendAlpha >= 1.0f)
-                        {
-                            Cell.CurrentBiomeTag = ShiftRule.TargetBiomeTag;
-                            Cell.BiomeBlendAlpha = 0.0f;
-                            Cell.SustainedOutOfRangeHours = 0.0f;
-                        }
-                        bCellModified = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                Cell.SustainedOutOfRangeHours = FMath::Max(0.0f, Cell.SustainedOutOfRangeHours - ElapsedGameHours);
-            }
-        }
-
-        if (bCellModified)
-        {
-            RecalculateCellPhysicalMetrics(Cell);
-            ReplicatedEnvironmentGrid.MarkItemDirty(Cell);
-        }
     }
 }
 

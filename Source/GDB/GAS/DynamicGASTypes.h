@@ -20,6 +20,61 @@ class AAIController;
 class UDynamicQuestComponent;
 class UDynamicLifeComponent;
 class UDynamicEquipmentComponent;
+class ADynamicEnvironmentChunkActor;
+
+// ============================================================================
+// QUANTIZATION UTILITIES (RANGE-AWARE QUANTIZATION)
+// ============================================================================
+namespace DynamicQuantization
+{
+    FORCEINLINE uint8 QuantizeRange(float Value, float MinVal, float MaxVal)
+    {
+        const float Range = MaxVal - MinVal;
+        if (Range <= KINDA_SMALL_NUMBER) return 0;
+        const float ClampedPct = FMath::Clamp((Value - MinVal) / Range, 0.0f, 1.0f);
+        return static_cast<uint8>(FMath::RoundToInt(ClampedPct * 255.0f));
+    }
+
+    FORCEINLINE float DequantizeRange(uint8 PackedVal, float MinVal, float MaxVal)
+    {
+        const float Pct = static_cast<float>(PackedVal) / 255.0f;
+        return MinVal + (Pct * (MaxVal - MinVal));
+    }
+
+    FORCEINLINE uint8 QuantizeElement(float Value, float MaxCap = 200.0f)
+    {
+        return static_cast<uint8>(FMath::Clamp(FMath::RoundToInt((Value / FMath::Max(1.0f, MaxCap)) * 255.0f), 0, 255));
+    }
+    FORCEINLINE float DequantizeElement(uint8 PackedValue, float MaxCap = 200.0f)
+    {
+        return (static_cast<float>(PackedValue) / 255.0f) * MaxCap;
+    }
+    FORCEINLINE uint8 QuantizeMoisture(float Value, float MaxCap = 150.0f)
+    {
+        return static_cast<uint8>(FMath::Clamp(FMath::RoundToInt((Value / FMath::Max(1.0f, MaxCap)) * 255.0f), 0, 255));
+    }
+    FORCEINLINE float DequantizeMoisture(uint8 PackedValue, float MaxCap = 150.0f)
+    {
+        return (static_cast<float>(PackedValue) / 255.0f) * MaxCap;
+    }
+    FORCEINLINE uint8 QuantizeScale100(float Value)
+    {
+        return static_cast<uint8>(FMath::Clamp(FMath::RoundToInt((Value / 100.0f) * 255.0f), 0, 255));
+    }
+    FORCEINLINE float DequantizeScale100(uint8 PackedValue)
+    {
+        return (static_cast<float>(PackedValue) / 255.0f) * 100.0f;
+    }
+    FORCEINLINE uint8 QuantizeSignedClamped(float Value)
+    {
+        const float Normalized = FMath::Clamp((Value + 1.0f) * 0.5f, 0.0f, 1.0f);
+        return static_cast<uint8>(FMath::RoundToInt(Normalized * 255.0f));
+    }
+    FORCEINLINE float DequantizeSignedClamped(uint8 PackedValue)
+    {
+        return ((static_cast<float>(PackedValue) / 255.0f) * 2.0f) - 1.0f;
+    }
+}
 
 // ============================================================================
 // ENUMS
@@ -284,32 +339,24 @@ enum class EDynastyEntityType : uint8
     Faction
 };  
 
-// ============================================================================
-// QUANTIZATION UTILITIES
-// ============================================================================
-
-namespace DynamicQuantization
+UENUM(BlueprintType)
+enum class ECloudAIRequestType : uint8
 {
-    FORCEINLINE uint8 QuantizeElement(float Value, float MaxCap = 200.0f)
-    {
-        return static_cast<uint8>(FMath::Clamp(FMath::RoundToInt((Value / FMath::Max(1.0f, MaxCap)) * 255.0f), 0, 255));
-    }
+    ComplexDecision,
+    DailySchedulePlan,
+    DynamicDialogue,
+    QuestConditionGeneration
+};
 
-    FORCEINLINE float DequantizeElement(uint8 PackedValue, float MaxCap = 200.0f)
-    {
-        return (static_cast<float>(PackedValue) / 255.0f) * MaxCap;
-    }
-
-    FORCEINLINE uint8 QuantizeMoisture(float Value, float MaxCap = 150.0f)
-    {
-        return static_cast<uint8>(FMath::Clamp(FMath::RoundToInt((Value / FMath::Max(1.0f, MaxCap)) * 255.0f), 0, 255));
-    }
-
-    FORCEINLINE float DequantizeMoisture(uint8 PackedValue, float MaxCap = 150.0f)
-    {
-        return (static_cast<float>(PackedValue) / 255.0f) * MaxCap;
-    }
-}
+UENUM(BlueprintType)
+enum class ECloudAIRequestStatus : uint8
+{
+    Unsent,
+    PendingRemoteResponse,
+    Completed,
+    TimedOut,
+    Failed
+};
 
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
@@ -622,6 +669,9 @@ struct FDynamicItemDef
     int32 MaxStackSize = 1;
 };
 
+// ============================================================================
+// ITEM & CONTAINER GRID SYSTEM (NESTED CONTAINERS VIA GUID)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicContainerSlotItem : public FFastArraySerializerItem
 {
@@ -648,8 +698,9 @@ struct FDynamicContainerSlotItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
     FGameplayTagContainer SavedInteractableStates;
 
+    // Lightweight GUID reference replacing raw JSON string replication
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
-    FString NestedContainerJsonData;
+    FGuid NestedContainerInstanceGuid;
 
     void PreReplicatedRemove(const struct FFastContainerSlotArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastContainerSlotArray& InArrayOwner);
@@ -1671,13 +1722,14 @@ struct FDynamicEnvironmentSystemConfig
     TArray<FDynamicEnvironmentPhysicalMetricFormula> MetricFormulas;
 };
 
+// --- SPATIALIZED ENVIRONMENT CHUNK GRID ITEM & FAST ARRAY ---
 USTRUCT(BlueprintType)
 struct FEnvironmentGridCellItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
-    int32 CellIndex = 0;
+    int32 CellIndex = 0; // Global cell index in the world grid
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     FGameplayTag CurrentBiomeTag;
@@ -1717,7 +1769,7 @@ struct FFastEnvironmentGridArray : public FFastArraySerializer
     TArray<FEnvironmentGridCellItem> Items;
 
     UPROPERTY(NotReplicated)
-    ADynamicGameState* OwningGameState = nullptr;
+    ADynamicEnvironmentChunkActor* OwningChunkActor = nullptr;
 
     bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
     {
@@ -2500,51 +2552,103 @@ struct TStructOpsTypeTraits<FFastCharacterMorphArray> : public TStructOpsTypeTra
 };
 
 // ============================================================================
-// SOCIAL GRAPH, MEMORY, PROFESSIONS, & NEEDS
+// DATA-DRIVEN RELATIONSHIP DEFINITIONS & METRIC RULES
 // ============================================================================
+USTRUCT(BlueprintType)
+struct FRelationshipMetricRule
+{
+    GENERATED_BODY()
+
+    // e.g. Relationship.Metric.Affinity, Relationship.Metric.Attraction, Relationship.Metric.Trust
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTag MetricTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DefaultValue = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float MinValue = -100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float MaxValue = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    ERelationshipDecayCurve DecayCurve = ERelationshipDecayCurve::Exponential;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DecayRatePerDay = 0.05f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float DecayTargetFloor = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float VolatilityScalar = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    bool bClampToMinMax = true;
+};
 
 USTRUCT(BlueprintType)
 struct FDynamicRelationshipTypeDef
 {
     GENERATED_BODY()
 
+    // e.g. Relationship.Type.Friendship, Relationship.Type.Romantic, Relationship.Type.Rivalry
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     FGameplayTag RelationshipTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     FDynamicLocalizationProfile Localization;
 
+    // Fully dynamic metric rules defined strictly in JSON
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    ERelationshipDecayCurve DecayCurve = ERelationshipDecayCurve::Exponential;
+    TArray<FRelationshipMetricRule> SupportedMetrics;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float AffinityDecayRatePerDay = 0.05f;
+    bool bPruneWhenAllAtFloor = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float FamiliarityDecayRatePerDay = 0.02f;
+    float PruneTolerance = 0.05f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float DebtDecayRatePerDay = 0.15f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float MinAffinityDecayFloor = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float MinFamiliarityDecayFloor = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float DefaultAffinity = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float DefaultTrust = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float DefaultFamiliarity = 0.1f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float VolatilityScalar = 1.0f;
+    const FRelationshipMetricRule* FindMetricRule(FGameplayTag MetricTag) const
+    {
+        for (const FRelationshipMetricRule& Rule : SupportedMetrics)
+        {
+            if (Rule.MetricTag == MetricTag)
+            {
+                return &Rule;
+            }
+        }
+        return nullptr;
+    }
 };
 
+// ============================================================================
+// DATA-DRIVEN RELATIONSHIP FAST ARRAY EDGE
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicRelationshipMetricEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTag MetricTag;
+
+    // 1-byte quantized value [0..255] mapped according to [MinValue, MaxValue] in FRelationshipMetricRule
+    UPROPERTY()
+    uint8 PackedValue = 128;
+
+    // Exact unquantized value for authoritative calculations
+    UPROPERTY(NotReplicated)
+    float ExactValue = 0.0f;
+};
+
+// ============================================================================
+// SOCIAL GRAPH, MEMORY, & NEEDS (QUANTIZED BYTES)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicRelationshipEdgeItem : public FFastArraySerializerItem
 {
@@ -2565,27 +2669,43 @@ struct FDynamicRelationshipEdgeItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     FGameplayTagContainer SecondaryContextTags;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float BaseAffinity = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float BaseTrust = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float BaseFamiliarity = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float BaseIndebtedness = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float FearOrRespect = 0.0f;
+    // Dynamic metrics collection driven entirely by the JSON definition schema
+    UPROPERTY()
+    TArray<FDynamicRelationshipMetricEntry> Metrics;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     double LastInteractionWorldTime = 0.0;
 
-    void PreReplicatedRemove(const struct FFastRelationshipEdgeArray& InArrayOwner);
+    void PreReplicatedRemove(const struct FFastRelationshipEdgeArray& InArrayOwner) {}
     void PostReplicatedAdd(const struct FFastRelationshipEdgeArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastRelationshipEdgeArray& InArrayOwner);
+
+    float GetMetricValue(FGameplayTag InTag) const
+    {
+        for (const FDynamicRelationshipMetricEntry& Entry : Metrics)
+        {
+            if (Entry.MetricTag == InTag) return Entry.ExactValue;
+        }
+        return 0.0f;
+    }
+
+    void SetMetricValue(FGameplayTag InTag, float InExactVal, uint8 InPackedVal)
+    {
+        for (FDynamicRelationshipMetricEntry& Entry : Metrics)
+        {
+            if (Entry.MetricTag == InTag)
+            {
+                Entry.ExactValue = InExactVal;
+                Entry.PackedValue = InPackedVal;
+                return;
+            }
+        }
+        FDynamicRelationshipMetricEntry NewEntry;
+        NewEntry.MetricTag = InTag;
+        NewEntry.ExactValue = InExactVal;
+        NewEntry.PackedValue = InPackedVal;
+        Metrics.Add(NewEntry);
+    }
 };
 
 USTRUCT(BlueprintType)
@@ -2796,8 +2916,12 @@ struct FDynamicNeedStateItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     FGameplayTag NeedOrMoodTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    float CurrentValue = 100.0f;
+    // Quantized 1-byte representation [0..100 -> 0..255]
+    UPROPERTY()
+    uint8 PackedCurrentValue = 255;
+
+    UPROPERTY(NotReplicated)
+    float LocalExactValue = 100.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float ShiftRatePerHour = -2.0f;
@@ -3152,6 +3276,9 @@ struct FQuestDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
     FQuestRewardConsequence FinalRewards;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
+    TArray<FTagFloatPair> MinimumRelationshipMetricRequirements;
 };
 
 USTRUCT(BlueprintType)
@@ -3473,24 +3600,94 @@ struct FDynamicLanguageDef
     TArray<FDynamicVocabularyWordDef> Vocabulary;
 };
 
-// --- MINI-GAME CHALLENGE STRUCT ---
+// ============================================================================
+// LANGUAGE MINI-GAME CHALLENGE (ZERO CLIENT-EXPOSED ANSWERS)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FTranslationMiniGameChallenge
 {
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Language")
+    FGuid ChallengeGuid;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Language")
     FGameplayTag LanguageTag;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Language")
-    FString NativeWord;
+    FString NativeWord = TEXT("");
 
-    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Language")
-    FString CorrectTranslation;
-
+    // Only randomized candidate options are replicated to the client
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Language")
     TArray<FString> ShuffledOptions;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Language")
     float Difficulty = 10.0f;
+};
+
+// Snapshot struct passed safely to async worker threads
+struct FEnvironmentCellWorkerInput
+{
+    int32 CellIndex = 0;
+    FGameplayTag CurrentBiomeTag;
+    FGameplayTag TargetShiftBiomeTag;
+    float BiomeBlendAlpha = 0.0f;
+    float SustainedOutOfRangeHours = 0.0f;
+    FVector2D WindDirection = FVector2D::ZeroVector;
+    TArray<uint8> PackedDensities;
+};
+
+// Evaluated output returned from the worker thread pool
+struct FEnvironmentCellWorkerOutput
+{
+    int32 CellIndex = 0;
+    FGameplayTag CurrentBiomeTag;
+    FGameplayTag TargetShiftBiomeTag;
+    float BiomeBlendAlpha = 0.0f;
+    float SustainedOutOfRangeHours = 0.0f;
+    TArray<uint8> PackedDensities;
+    FDynamicTagFloatMapWrapper DerivedMetrics;
+    bool bModified = false;
+};
+
+USTRUCT(BlueprintType)
+struct FCloudAICommandOutput
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag CommandActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag TargetEntityOrPlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FString UtteranceText = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    float PriorityWeight = 100.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FCloudAIPayloadPackage
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGuid RequestGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGuid CharacterGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    ECloudAIRequestType RequestType = ECloudAIRequestType::ComplexDecision;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag ActiveArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FString ContextJsonPrompt = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    TArray<FCloudAICommandOutput> ResolvedCommands;
 };

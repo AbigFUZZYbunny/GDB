@@ -22,17 +22,19 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FChargeTaskSimpleDelegate OnMaxChargeReached;
 
-	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta=(HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAT_WaitChargeTime* WaitChargeTime(UGameplayAbility* OwningAbility, float MaxChargeTime, float TickRate = 0.05f);
+	/**
+	 * Ticks natively with the ability system task runner instead of spamming FTimerManager.
+	 * @param TickRate 0.0f ticks every frame smoothly; > 0.0f throttles delegate broadcasts to that interval.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
+	static UAT_WaitChargeTime* WaitChargeTime(UGameplayAbility* OwningAbility, float MaxChargeTime, float TickRate = 0.0f);
 
 	virtual void Activate() override;
-	virtual void OnDestroy(bool bInOwnerFinished) override;
+	virtual void TickTask(float DeltaTime) override;
 
 private:
-	void ExecuteTick();
-
-	float MaxDuration;
-	float UpdateInterval;
-	float ElapsedTime;
-	FTimerHandle TimerHandle_Tick;
+	float MaxDuration = 0.0f;
+	float UpdateInterval = 0.0f;
+	float TimeSinceLastBroadcast = 0.0f;
+	float ElapsedTime = 0.0f;
 };

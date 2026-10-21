@@ -8,6 +8,7 @@
 
 class ADynamicSpatialActor;
 class ADynamicPhysicsActor;
+class ADynamicEnvironmentChunkActor;
 class UGameplayEffect;
 
 UCLASS()
@@ -18,6 +19,7 @@ class GDB_API ADynamicGameState : public AGameStateBase
 public:
     ADynamicGameState();
 
+    virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     // --- Master Registries Populated via JSON ---
@@ -51,8 +53,9 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Environment")
     FDynamicEnvironmentSystemConfig EnvironmentConfig;
 
-    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Environment")
-    FFastEnvironmentGridArray ReplicatedEnvironmentGrid;
+    // Authoritative Server-Only Array (Thread-safe, Never Replicated Globally)
+    UPROPERTY()
+    TArray<FEnvironmentGridCellItem> ServerEnvironmentGrid;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     int32 GridWidth = 32;
@@ -62,6 +65,9 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     float CellSizeWorldUnits = 25000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    int32 ChunkDimension = 8;
 
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);
 
@@ -74,6 +80,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
     float ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount);
 
+    // Dispatches asynchronous simulation pass off the Game Thread
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
     void ServerTickEnvironmentSimulation(float ElapsedGameHours);
 
@@ -87,6 +94,10 @@ public:
     }
 
     void RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell);
+
+    // --- Spatial Chunk Registration API ---
+    void RegisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
+    void UnregisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
 
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
@@ -125,6 +136,7 @@ public:
     const FPhysicsCalculationSettings& GetCalculationSettings() const { return CalculationSettings; }
 
 private:
+    void SpawnServerEnvironmentChunks();
     void RebuildLimbMapsFromTransport();
     float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;
     static float ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath);
@@ -141,4 +153,9 @@ private:
     UPROPERTY() TArray<TObjectPtr<ADynamicPhysicsActor>> InactivePhysicsActorPool;
 
     TMap<FGameplayTag, int32> TrackedElementsMap;
+    TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
+
+    // --- Async Simulation Guards ---
+    bool bIsSimulationTaskRunning = false;
+    float AccumulatedUnsimulatedHours = 0.0f;
 };

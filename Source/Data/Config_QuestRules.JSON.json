@@ -1,0 +1,25 @@
+﻿{
+  "QuestGeneratorRules": {
+    "QuestRule.Economic.TimberShortage": {
+      "RuleTag": "QuestRule.Economic.TimberShortage",
+      "ContextProfessionOrFactionTag": "Profession.Labor.Woodcutter",
+      "TriggerConditionTreeName": "Trigger.Condition.LowTimberStock",
+      "QuestTemplateTag": "Quest.Economic.Woodworker.LumberShortage",
+      "UrgencyMultiplier": 1.5
+    },
+    "QuestRule.Bounty.WolfInfestation": {
+      "RuleTag": "QuestRule.Bounty.WolfInfestation",
+      "ContextProfessionOrFactionTag": "Faction.Beast.GreyWolfPack",
+      "TriggerConditionTreeName": "Trigger.Condition.WolfThreatHigh",
+      "QuestTemplateTag": "Quest.Bounty.WolvesAtTheLoggingCamp",
+      "UrgencyMultiplier": 1.25
+    },
+    "QuestRule.DynamicBounty.MerchantGuard": {
+      "RuleTag": "Rule.DynamicBounty.MerchantGuard",
+      "ContextProfessionOrFactionTag": "Profession.Merchant",
+      "TriggerConditionTreeName": "ConditionTree.EconomicCrisis",
+      "QuestTemplateTag": "Quest.DynamicEconomic.MerchantEscort",
+      "UrgencyMultiplier": 1.5
+    }
+  }
+}

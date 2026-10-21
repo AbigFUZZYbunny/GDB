@@ -1,0 +1,153 @@
+﻿{
+  "RelationshipTypeRegistry": {
+    "Relationship.Type.Romantic": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Text.en", "Value": "Romantic Partnership" },
+          { "KeyTag": "Localization.Text.es", "Value": "Relación Romántica" }
+        ]
+      },
+      "bPruneWhenAllAtFloor": true,
+      "PruneTolerance": 0.05,
+      "SupportedMetrics": [
+        {
+          "MetricTag": "Relationship.Metric.Affinity",
+          "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Text.en", "Value": "Affection" }] },
+          "DefaultValue": 10.0,
+          "MinValue": -100.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Exponential",
+          "DecayRatePerDay": 0.02,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.0,
+          "bClampToMinMax": true
+        },
+        {
+          "MetricTag": "Relationship.Metric.Trust",
+          "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Text.en", "Value": "Trust" }] },
+          "DefaultValue": 5.0,
+          "MinValue": -100.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Linear",
+          "DecayRatePerDay": 0.01,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.0,
+          "bClampToMinMax": true
+        },
+        {
+          "MetricTag": "Relationship.Metric.Attraction",
+          "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Text.en", "Value": "Physical Attraction" }] },
+          "DefaultValue": 25.0,
+          "MinValue": 0.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Exponential",
+          "DecayRatePerDay": 0.03,
+          "DecayTargetFloor": 10.0,
+          "VolatilityScalar": 1.2,
+          "bClampToMinMax": true
+        },
+        {
+          "MetricTag": "Relationship.Metric.RomanticInterest",
+          "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Text.en", "Value": "Romantic Devotion" }] },
+          "DefaultValue": 15.0,
+          "MinValue": 0.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Exponential",
+          "DecayRatePerDay": 0.02,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.0,
+          "bClampToMinMax": true
+        },
+        {
+          "MetricTag": "Relationship.Metric.Jealousy",
+          "Localization": { "ReplicatedEntries": [{ "KeyTag": "Localization.Text.en", "Value": "Jealousy" }] },
+          "DefaultValue": 0.0,
+          "MinValue": 0.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Linear",
+          "DecayRatePerDay": 0.15,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.5,
+          "bClampToMinMax": true
+        }
+      ]
+    },
+    "Relationship.Type.Business": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Text.en", "Value": "Business Associate" }
+        ]
+      },
+      "bPruneWhenAllAtFloor": true,
+      "PruneTolerance": 0.02,
+      "SupportedMetrics": [
+        {
+          "MetricTag": "Relationship.Metric.Trust",
+          "DefaultValue": 0.0,
+          "MinValue": -100.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "StepThreshold",
+          "DecayRatePerDay": 0.01,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 0.8,
+          "bClampToMinMax": true
+        },
+        {
+          "MetricTag": "Relationship.Metric.Indebtedness",
+          "DefaultValue": 0.0,
+          "MinValue": -50000.0,
+          "MaxValue": 50000.0,
+          "DecayCurve": "None",
+          "DecayRatePerDay": 0.0,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.0,
+          "bClampToMinMax": false
+        },
+        {
+          "MetricTag": "Relationship.Metric.ProfessionalRespect",
+          "DefaultValue": 10.0,
+          "MinValue": 0.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Linear",
+          "DecayRatePerDay": 0.02,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.0,
+          "bClampToMinMax": true
+        }
+      ]
+    },
+    "Relationship.Type.Rivalry": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Text.en", "Value": "Rivalry" }
+        ]
+      },
+      "bPruneWhenAllAtFloor": false,
+      "PruneTolerance": 0.05,
+      "SupportedMetrics": [
+        {
+          "MetricTag": "Relationship.Metric.Hostility",
+          "DefaultValue": 50.0,
+          "MinValue": 0.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Linear",
+          "DecayRatePerDay": 0.01,
+          "DecayTargetFloor": 10.0,
+          "VolatilityScalar": 1.2,
+          "bClampToMinMax": true
+        },
+        {
+          "MetricTag": "Relationship.Metric.Fear",
+          "DefaultValue": 0.0,
+          "MinValue": 0.0,
+          "MaxValue": 100.0,
+          "DecayCurve": "Exponential",
+          "DecayRatePerDay": 0.1,
+          "DecayTargetFloor": 0.0,
+          "VolatilityScalar": 1.5,
+          "bClampToMinMax": true
+        }
+      ]
+    }
+  }
+}

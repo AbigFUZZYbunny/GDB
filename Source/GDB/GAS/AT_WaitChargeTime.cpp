@@ -1,51 +1,54 @@
 ﻿// AT_WaitChargeTime.cpp
 #include "AT_WaitChargeTime.h"
-#include "TimerManager.h"
 
-UAT_WaitChargeTime::UAT_WaitChargeTime(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+UAT_WaitChargeTime::UAT_WaitChargeTime(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
+	bTickingTask = true;
 	ElapsedTime = 0.0f;
 	MaxDuration = 0.0f;
-	UpdateInterval = 0.05f;
+	UpdateInterval = 0.0f;
+	TimeSinceLastBroadcast = 0.0f;
 }
 
 UAT_WaitChargeTime* UAT_WaitChargeTime::WaitChargeTime(UGameplayAbility* OwningAbility, float MaxChargeTime, float TickRate)
 {
 	UAT_WaitChargeTime* MyObj = NewAbilityTask<UAT_WaitChargeTime>(OwningAbility);
-	MyObj->MaxDuration = MaxChargeTime;
-	MyObj->UpdateInterval = TickRate;
+	MyObj->MaxDuration = FMath::Max(0.01f, MaxChargeTime);
+	MyObj->UpdateInterval = FMath::Max(0.0f, TickRate);
 	return MyObj;
 }
 
 void UAT_WaitChargeTime::Activate()
 {
 	Super::Activate();
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimer(TimerHandle_Tick, this, &UAT_WaitChargeTime::ExecuteTick, UpdateInterval, true);
-	}
+	ElapsedTime = 0.0f;
+	TimeSinceLastBroadcast = 0.0f;
 }
 
-void UAT_WaitChargeTime::ExecuteTick()
+void UAT_WaitChargeTime::TickTask(float DeltaTime)
 {
-	if (ShouldBroadcastAbilityTaskDelegates())
-	{
-		ElapsedTime += UpdateInterval;
-		OnChargeTick.Broadcast(ElapsedTime, UpdateInterval);
+	Super::TickTask(DeltaTime);
 
-		if (ElapsedTime >= MaxDuration)
-		{
-			OnMaxChargeReached.Broadcast();
-			EndTask();
-		}
-	}
-}
-
-void UAT_WaitChargeTime::OnDestroy(bool bInOwnerFinished)
-{
-	if (UWorld* World = GetWorld())
+	if (!ShouldBroadcastAbilityTaskDelegates())
 	{
-		World->GetTimerManager().ClearTimer(TimerHandle_Tick);
+		return;
 	}
-	Super::OnDestroy(bInOwnerFinished);
+
+	ElapsedTime += DeltaTime;
+	TimeSinceLastBroadcast += DeltaTime;
+
+	const bool bThrottled = (UpdateInterval > 0.0f);
+	if (!bThrottled || TimeSinceLastBroadcast >= UpdateInterval)
+	{
+		const float BroadcastDelta = bThrottled ? TimeSinceLastBroadcast : DeltaTime;
+		TimeSinceLastBroadcast = 0.0f;
+		OnChargeTick.Broadcast(FMath::Min(ElapsedTime, MaxDuration), BroadcastDelta);
+	}
+
+	if (ElapsedTime >= MaxDuration)
+	{
+		OnMaxChargeReached.Broadcast();
+		EndTask();
+	}
 }

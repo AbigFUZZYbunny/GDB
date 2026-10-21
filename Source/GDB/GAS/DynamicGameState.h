@@ -6,11 +6,11 @@
 #include "DynamicGASTypes.h"
 #include "DynamicGameState.generated.h"
 
+class ADynamicCharacter;
 class ADynamicSpatialActor;
 class ADynamicPhysicsActor;
 class ADynamicEnvironmentChunkActor;
 class UGameplayEffect;
-class ADynamicCharacter;
 
 UCLASS()
 class GDB_API ADynamicGameState : public AGameStateBase
@@ -19,7 +19,6 @@ class GDB_API ADynamicGameState : public AGameStateBase
 
 public:
     ADynamicGameState();
-
     virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -54,7 +53,6 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Environment")
     FDynamicEnvironmentSystemConfig EnvironmentConfig;
 
-    // Authoritative Server-Only Double Buffers (Zero Per-Tick Allocations)
     UPROPERTY()
     TArray<FEnvironmentGridCellItem> EnvironmentReadBuffer;
 
@@ -97,13 +95,11 @@ public:
     }
 
     void RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell);
-
     void RegisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
     void UnregisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
 
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
-
     void MergeStagingRegistry(FMasterRegistryStagingData&& StagingData);
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
@@ -126,11 +122,15 @@ public:
 
     bool GetCharacterTemplate(FGameplayTag TemplateTag, FCharacterTemplateDef& OutTemplate) const;
 
+    // Pooling API
     ADynamicSpatialActor* AcquireSpatialActor(const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleaseSpatialActorToPool(ADynamicSpatialActor* ActorToReturn);
 
     ADynamicPhysicsActor* AcquirePhysicsActor(FGameplayTag ArchetypeTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleasePhysicsActorToPool(ADynamicPhysicsActor* ActorToReturn);
+
+    ADynamicCharacter* AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
+    void ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn);
 
     void SetPhysicsConfig(const FPhysicsDamageConfigData& ConfigData);
     uint8 GetLimbIdForBone(const FName& BoneName) const;
@@ -138,12 +138,6 @@ public:
     const FPhysicsJointNodeConfig* GetBoneJointData(const FName& BoneName) const;
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
     const FPhysicsCalculationSettings& GetCalculationSettings() const { return CalculationSettings; }
-    
-    // Retrieves a Character from the Object Pool or spawns a new one if pool is empty
-    ADynamicCharacter* AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
-
-    // Strips a Character of its state, drops AI controller logic, and hides it in the pool
-    void ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn);
 
 private:
     void SpawnServerEnvironmentChunks();
@@ -161,16 +155,20 @@ private:
 
     UPROPERTY() TArray<TObjectPtr<ADynamicSpatialActor>> InactiveSpatialActorPool;
     UPROPERTY() TArray<TObjectPtr<ADynamicPhysicsActor>> InactivePhysicsActorPool;
+    UPROPERTY() TArray<TObjectPtr<ADynamicCharacter>> InactiveCharacterPool;
 
     TMap<FGameplayTag, int32> TrackedElementsMap;
     TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
 
-    // Persistent Scratchpad for advection delta calculations (0 per-tick allocations)
     TArray<float> AdvectionDeltaScratchpad;
-
-    bool bIsSimulationTaskRunning = false;
-    float AccumulatedUnsimulatedHours = 0.0f;
     
-    UPROPERTY() 
-    TArray<TObjectPtr<ADynamicCharacter>> InactiveCharacterPool;
+    // In-flight thread-safe queue holding modifications applied during active worker passes
+    TQueue<FEnvironmentManaModificationRecord, EQueueMode::Mpsc> PendingManaModifications;
+
+    // Watchdog Timers: Prevents silent ThreadPool drop lockouts
+    bool bIsSimulationTaskRunning = false;
+    double SimulationTaskStartTimestamp = 0.0;
+    static constexpr double SimulationTaskTimeoutSeconds = 45.0;
+
+    float AccumulatedUnsimulatedHours = 0.0f;
 };

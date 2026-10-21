@@ -234,3 +234,29 @@ void UDynamicEquipmentComponent::ServerGrantItemXP(float XPGrantAmount)
         ItemEvolutionComponent->ServerAddProgress(XPGrantAmount);
     }
 }
+
+void UDynamicEquipmentComponent::ClearEquipmentForPooling()
+{
+    for (FDynamicEquipmentSlotItem& SlotItem : ReplicatedEquipmentSlots.Items)
+    {
+        SlotItem.EquippedItemArchetypeTag = FGameplayTag::EmptyTag;
+        SlotItem.SavedItemAttributeState.Empty();
+        SlotItem.SavedItemInteractableStates.Reset();
+    }
+    ReplicatedEquipmentSlots.MarkArrayDirty();
+    RebuildLocalCache();
+
+    // Detach and clean up attached modular meshes
+    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        TArray<USceneComponent*> Children;
+        CharOwner->GetMeshComponent()->GetChildrenComponents(true, Children);
+        for (USceneComponent* Child : Children)
+        {
+            if (USkeletalMeshComponent* SkelChild = Cast<USkeletalMeshComponent>(Child))
+            {
+                SkelChild->DestroyComponent();
+            }
+        }
+    }
+}

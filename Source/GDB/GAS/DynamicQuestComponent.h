@@ -26,11 +26,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Quest")
     FOnQuestObjectiveProgressChangedSignature OnObjectiveProgressChanged;
 
-    // High-level quest item states
     UPROPERTY(ReplicatedUsing = OnRep_ActiveQuests)
     FFastActiveQuestArray ReplicatedActiveQuests;
 
-    // Normalized objective array: updates only replicate tiny deltas per objective increment
     UPROPERTY(ReplicatedUsing = OnRep_ActiveObjectives)
     FFastActiveQuestObjectiveArray ReplicatedActiveObjectives;
 
@@ -61,9 +59,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Quest")
     TArray<FDynamicActiveQuestObjectiveItem> GetObjectivesForQuest(const FGuid& QuestInstanceGuid) const;
 
+    void ClearQuestsForPooling();
+
     const FFastActiveQuestArray& GetActiveQuests() const { return ReplicatedActiveQuests; }
     FFastActiveQuestArray& GetMutableActiveQuests() { return ReplicatedActiveQuests; }
-
     const FFastActiveQuestObjectiveArray& GetActiveObjectives() const { return ReplicatedActiveObjectives; }
     FFastActiveQuestObjectiveArray& GetMutableActiveObjectives() { return ReplicatedActiveObjectives; }
 
@@ -71,7 +70,6 @@ private:
     void AdvanceQuestStep(int32 QuestIndex, FGameplayTag NextStepTag);
     void CompleteQuestInternal(int32 ItemIndex, bool bSuccess);
     void ApplyRewardConsequences(const FQuestRewardConsequence& Consequences, const FGuid& QuestGiverGuid);
-
     void InitializeStepObjectives(const FGuid& QuestGuid, const FQuestStepDef& StepDef);
     void CleanUpObjectivesForQuest(const FGuid& QuestGuid);
 };

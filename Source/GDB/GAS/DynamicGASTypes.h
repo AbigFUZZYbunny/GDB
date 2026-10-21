@@ -359,6 +359,14 @@ enum class ECloudAIRequestStatus : uint8
     Failed
 };
 
+UENUM(BlueprintType)
+enum class ECloudAIExecutionBackend : uint8
+{
+    RemoteCloudMiner,       // MMO production: HTTP POST to remote cloud or distributed coin miner pool
+    LocalDedicatedNodeHttp, // Localhost/LAN node: HTTP POST to local LLM daemon (e.g. 127.0.0.1:11434 / Ollama)
+    LocalRuleBasedFallback  // Local hosted co-op (1-5 players): Zero HTTP socket overhead, instant rule-based simulation
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -3362,24 +3370,7 @@ struct FDynamicQuestGeneratorRule
     float UrgencyMultiplier = 1.0f;
 };
 
-USTRUCT(BlueprintType)
-struct FDynamicActiveQuestObjectiveProgress
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
-    FGameplayTag ObjectiveTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
-    int32 CurrentProgress = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
-    int32 RequiredCount = 1;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
-    bool bIsComplete = false;
-};
-
+// Normalized, independently replicated quest objective struct (O(1) bandwidth)
 USTRUCT(BlueprintType)
 struct FDynamicActiveQuestObjectiveItem : public FFastArraySerializerItem
 {
@@ -3414,7 +3405,7 @@ struct FFastActiveQuestObjectiveArray : public FFastArraySerializer
     TArray<FDynamicActiveQuestObjectiveItem> Items;
 
     UPROPERTY(NotReplicated)
-    UDynamicQuestComponent* OwningQuestComp = nullptr;
+    class UDynamicQuestComponent* OwningQuestComp = nullptr;
 
     bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
     {
@@ -3428,6 +3419,7 @@ struct TStructOpsTypeTraits<FFastActiveQuestObjectiveArray> : public TStructOpsT
     enum { WithNetDeltaSerializer = true };
 };
 
+// High-level quest instance item (contains NO nested objective arrays)
 USTRUCT(BlueprintType)
 struct FDynamicActiveQuestItem : public FFastArraySerializerItem
 {
@@ -3468,7 +3460,7 @@ struct FFastActiveQuestArray : public FFastArraySerializer
     TArray<FDynamicActiveQuestItem> Items;
 
     UPROPERTY(NotReplicated)
-    UDynamicQuestComponent* OwningQuestComp = nullptr;
+    class UDynamicQuestComponent* OwningQuestComp = nullptr;
 
     bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
     {
@@ -3531,9 +3523,6 @@ struct FPlayerPersistenceSnapshot
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
-    FGuid CharacterGuid;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     FGameplayTag CharacterTemplateTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
@@ -3566,12 +3555,14 @@ struct FPlayerPersistenceSnapshot
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     TArray<FDynamicActiveQuestItem> ActiveQuests;
 
-    // Added to support normalized objective persistence snapshots
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     TArray<FDynamicActiveQuestObjectiveItem> ActiveObjectives;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     TArray<FDynamicKnownWordItem> KnownWords;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGuid CharacterGuid;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     TArray<FDynamicRelationshipEdgeItem> Relationships;
@@ -3902,4 +3893,19 @@ struct FMasterRegistryStagingData
 
     bool bHasAbilityScoreConfig = false;
     FAbilityScoreConfigData AbilityScoreConfig;
+};
+
+USTRUCT()
+struct FEnvironmentManaModificationRecord
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    int32 CellIndex = INDEX_NONE;
+
+    UPROPERTY()
+    FGameplayTag ElementTag;
+
+    UPROPERTY()
+    float DeltaAmount = 0.0f;
 };

@@ -248,3 +248,30 @@ bool UDynamicInteractableComponent::ServerExecuteInteraction(AActor* InstigatorA
     OnInteractionStateChanged.Broadcast(InstigatorActor, Profile.InteractionActionTag, LocalStateCache);
     return true;
 }
+
+void UDynamicInteractableComponent::InvalidateAllKinematicCaches()
+{
+    for (FInteractionTargetPoint& Point : KinematicTargetPoints)
+    {
+        Point.InvalidateCache();
+    }
+}
+
+void UDynamicInteractableComponent::ResetForPooling()
+{
+    LocalStateCache.Reset();
+    ReplicatedStateTags.Items.Empty();
+    
+    // Invalidate cached scene component weak pointers
+    for (FInteractionTargetPoint& TargetPoint : KinematicTargetPoints)
+    {
+        TargetPoint.InvalidateCache();
+    }
+
+    // Re-apply baseline startup state tags
+    for (const FGameplayTag& Tag : StartupStateTags)
+    {
+        AddStateTag(Tag);
+    }
+    ReplicatedStateTags.MarkArrayDirty();
+}

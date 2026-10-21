@@ -102,7 +102,6 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
 {
     if (!InArchetypeTag.IsValid()) return;
     ActorArchetypeTag = InArchetypeTag;
-
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
 
@@ -112,7 +111,6 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
     bIsActiveInWorld = true;
     SetActorHiddenInGame(false);
     SetActorEnableCollision(true);
-
     ApplyArchetypePresentationAndTopology(*Def);
 
     if (!HasAuthority()) return;
@@ -124,8 +122,7 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
         {
             if (Pair.KeyTag.IsValid()) MutableAttr->SetDynamicAttributeValue(Pair.KeyTag, Pair.Value, 0);
         }
-        
-        // FIXED: Iterate over the optimized pointer map directly to initialize limb attributes
+
         for (const auto& Pair : LocalLimbLookupMap)
         {
             if (Pair.Value)
@@ -145,13 +142,15 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
     if (InteractableComponent)
     {
         InteractableComponent->KinematicTargetPoints = Def->KinematicTargetPoints;
+        // Invalidate transient caches on the freshly assigned target point records
+        InteractableComponent->InvalidateAllKinematicCaches();
+
         for (const FGameplayTag& StateTag : Def->InitialInteractableStateTags)
         {
             InteractableComponent->AddStateTag(StateTag);
         }
     }
 
-    // Initialize multi-containers dynamically from archetype
     bool bFirstContainer = true;
     for (const FDynamicContainerDef& ContainerDef : Def->Containers)
     {
@@ -266,22 +265,17 @@ void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerS
 
 void ADynamicPhysicsActor::ResetToDefaultPoolState()
 {
-    // 1. Ability System Component: cancel abilities, wipe active effects, and purge all gameplay cues
+    // 1. Ability System Component: cancel abilities, wipe active effects, and purge gameplay cues
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->CancelAllAbilities();
-
         FGameplayEffectQuery AllEffectsQuery;
         AbilitySystemComponent->RemoveActiveEffects(AllEffectsQuery);
         AbilitySystemComponent->RemoveActiveGameplayEffectBySourceEffect(nullptr, nullptr);
-
         FGameplayTagContainer AllTags;
         AbilitySystemComponent->GetOwnedGameplayTags(AllTags);
         AbilitySystemComponent->RemoveLooseGameplayTags(AllTags);
-
         AbilitySystemComponent->ClearAllAbilities();
-
-        // PURGE GAMEPLAY CUES: Extinguishes looping Niagara particles and audio emitters from pool location
         AbilitySystemComponent->RemoveAllGameplayCues();
     }
 
@@ -317,7 +311,7 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         StaticMeshComponent->EmptyOverrideMaterials();
     }
 
-    // 5. Staging Relocation: Move far below world to prevent audio leaks or spatial overlap hits
+    // 5. Staging Relocation: Move far below world
     SetActorLocationAndRotation(FVector(0.0f, 0.0f, -50000.0f), FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
 
     // 6. Container Component: clear slots and weight tracking
@@ -326,7 +320,7 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         ContainerComponent->ClearContainerForPooling();
     }
 
-    // 7. Dynamic Instance Components: destroy any runtime-added container instances
+    // 7. Dynamic Instance Components: destroy runtime added container instances
     TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
     for (UActorComponent* Comp : InstanceComps)
     {
@@ -337,18 +331,10 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         }
     }
 
-    // 8. Interactable Component: reset state tags and invalidate cached target components
+    // 8. Interactable Component: scrub state tags and clear cached component pointers
     if (InteractableComponent)
     {
-        InteractableComponent->StartupStateTags.Reset();
-        InteractableComponent->ReplicatedStateTags.Items.Empty();
-        InteractableComponent->ReplicatedStateTags.MarkArrayDirty();
-        InteractableComponent->OnRep_ReplicatedStateTags();
-
-        for (FInteractionTargetPoint& Point : InteractableComponent->KinematicTargetPoints)
-        {
-            Point.InvalidateCache();
-        }
+        InteractableComponent->ResetForPooling();
     }
 
     bAttributesInitializedOnServer = false;

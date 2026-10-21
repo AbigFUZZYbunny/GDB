@@ -1,39 +1,36 @@
 ﻿// DynamicCharacter.cpp
 #include "DynamicCharacter.h"
 #include "DynamicEquipmentComponent.h"
+#include "DynamicInteractableComponent.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
+#include "DynamicWorldDirectorSubsystem.h"
 #include "DynamicGameState.h"
 #include "DynamicContainerComponent.h"
 #include "MoverComponent.h"
 #include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
+#include "Engine/OverlapResult.h"
 
 ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
     bReplicates = true;
     bIsRagdolling = false;
-
     CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
     RootComponent = CapsuleComponent;
-
     MeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComponent"));
     MeshComponent->SetupAttachment(RootComponent);
-    
-    CustomizationComponent = CreateDefaultSubobject<UDynamicCustomizationComponent>(TEXT("CustomizationComponent"));
 
+    CustomizationComponent = CreateDefaultSubobject<UDynamicCustomizationComponent>(TEXT("CustomizationComponent"));
     MoverComponent = CreateDefaultSubobject<UMoverComponent>(TEXT("MoverComponent"));
     PhysicsControlComponent = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControlComponent"));
-
     ForceComponent = CreateDefaultSubobject<UDynamicForceComponent>(TEXT("ForceComponent"));
     ForceComponent->SetIsReplicated(true);
-
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
     AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
-
     DynamicGASManager = CreateDefaultSubobject<UDynamicGASManagerComponent>(TEXT("DynamicGASManager"));
     AttributeSet = CreateDefaultSubobject<UDynamicAttributeSet>(TEXT("DynamicAttributeSet"));
 
@@ -41,6 +38,11 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     MeshComponent->SetNotifyRigidBodyCollision(true);
     MeshComponent->bMultiBodyOverlap = true;
+
+    // Pre-allocate the fixed ring buffer memory once at construction
+    TransformHistoryBuffer.SetNum(HistoryRingBufferSize);
+    HistoryBufferWriteIndex = 0;
+    HistoryBufferCount = 0;
 }
 
 UAbilitySystemComponent* ADynamicCharacter::GetAbilitySystemComponent() const { return AbilitySystemComponent; }
@@ -48,9 +50,22 @@ UAbilitySystemComponent* ADynamicCharacter::GetAbilitySystemComponent() const { 
 void ADynamicCharacter::BeginPlay()
 {
     Super::BeginPlay();
+
     if (HasAuthority() && MeshComponent)
     {
         MeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicCharacter::OnServerSkeletalMeshHit);
+    }
+
+    // Fix B: Autonomous registration into the World Director Subsystem
+    if (HasAuthority() && !IsPlayerControlled())
+    {
+        if (UWorld* World = GetWorld())
+        {
+            if (UDynamicWorldDirectorSubsystem* Director = World->GetSubsystem<UDynamicWorldDirectorSubsystem>())
+            {
+                Director->RegisterActiveNPC(this);
+            }
+        }
     }
 }
 
@@ -58,17 +73,18 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
 
-    // Record server-authoritative history buffer for rewind lag compensation
+    // Record server-authoritative history snapshot in place (O(1) circular ring write, zero allocations)
     if (HasAuthority() && CapsuleComponent && MeshComponent)
     {
         const double CurrentTime = GetWorld()->GetTimeSeconds();
-
-        FCharacterTransformHistorySnapshot Snapshot;
+        FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[HistoryBufferWriteIndex];
         Snapshot.ServerTimestamp = CurrentTime;
         Snapshot.CapsuleLocation = CapsuleComponent->GetComponentLocation();
         Snapshot.CapsuleRotation = CapsuleComponent->GetComponentQuat();
 
-        // Sample critical hit bones (pelvis, spine, head)
+        // Retain map capacity to prevent heap reallocation
+        Snapshot.BoneTransforms.Reset();
+
         static const TArray<FName> CriticalBones = { FName("pelvis"), FName("spine_01"), FName("head"), FName("hand_r"), FName("hand_l") };
         for (const FName& Bone : CriticalBones)
         {
@@ -78,13 +94,9 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
             }
         }
 
-        TransformHistoryBuffer.Add(Snapshot);
-
-        // Prune entries older than 500ms
-        while (TransformHistoryBuffer.Num() > 0 && (CurrentTime - TransformHistoryBuffer[0].ServerTimestamp) > MaxHistorySeconds)
-        {
-            TransformHistoryBuffer.RemoveAt(0, 1, EAllowShrinking::No);
-        }
+        // Advance circular head index and count
+        HistoryBufferWriteIndex = (HistoryBufferWriteIndex + 1) % HistoryRingBufferSize;
+        HistoryBufferCount = FMath::Min(HistoryBufferCount + 1, HistoryRingBufferSize);
     }
 }
 
@@ -190,19 +202,20 @@ float ADynamicCharacter::CalculateAuthoritativeStrikeForce() const
 
 void ADynamicCharacter::RewindToHistoricalSnapshot(double TargetTimestamp)
 {
-    if (TransformHistoryBuffer.Num() == 0 || bIsCurrentlyRewound) return;
+    if (HistoryBufferCount == 0 || bIsCurrentlyRewound) return;
 
-    // Cache current transform before rewinding
     PreRewindCachedTransform.CapsuleLocation = CapsuleComponent->GetComponentLocation();
     PreRewindCachedTransform.CapsuleRotation = CapsuleComponent->GetComponentQuat();
     bIsCurrentlyRewound = true;
 
-    // Find closest frame to client view timestamp
-    int32 ClosestIdx = 0;
-    double SmallestDiff = FMath::Abs(TransformHistoryBuffer[0].ServerTimestamp - TargetTimestamp);
-    for (int32 i = 1; i < TransformHistoryBuffer.Num(); ++i)
+    // Locate closest historical frame
+    int32 ClosestIdx = INDEX_NONE;
+    double SmallestDiff = MAX_dbl;
+    for (int32 i = 0; i < HistoryBufferCount; ++i)
     {
-        double Diff = FMath::Abs(TransformHistoryBuffer[i].ServerTimestamp - TargetTimestamp);
+        const FCharacterTransformHistorySnapshot& Candidate = TransformHistoryBuffer[i];
+        if (Candidate.ServerTimestamp <= 0.0) continue;
+        const double Diff = FMath::Abs(Candidate.ServerTimestamp - TargetTimestamp);
         if (Diff < SmallestDiff)
         {
             SmallestDiff = Diff;
@@ -210,8 +223,18 @@ void ADynamicCharacter::RewindToHistoricalSnapshot(double TargetTimestamp)
         }
     }
 
-    const FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[ClosestIdx];
-    CapsuleComponent->SetWorldLocationAndRotation(Snapshot.CapsuleLocation, Snapshot.CapsuleRotation, false, nullptr, ETeleportType::TeleportPhysics);
+    if (ClosestIdx != INDEX_NONE)
+    {
+        const FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[ClosestIdx];
+        CapsuleComponent->SetWorldLocationAndRotation(Snapshot.CapsuleLocation, Snapshot.CapsuleRotation, false, nullptr, ETeleportType::TeleportPhysics);
+        
+        // If Active Ragdoll or physics simulation is enabled, synchronize root physics body
+        if (MeshComponent && MeshComponent->IsSimulatingPhysics())
+        {
+            MeshComponent->SetAllPhysicsPosition(Snapshot.CapsuleLocation);
+            MeshComponent->SetAllPhysicsRotation(Snapshot.CapsuleRotation.Rotator());
+        }
+    }
 }
 
 void ADynamicCharacter::RestoreFromHistoricalSnapshot()
@@ -234,24 +257,43 @@ void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_N
     const double CurrentServerTime = GetWorld()->GetTimeSeconds();
     const double ClampedClientTimestamp = FMath::Clamp(ClientTargetTimestamp, CurrentServerTime - MaxHistorySeconds, CurrentServerTime);
 
-    // 1. Rewind all other characters to the timestamp of the attacker's client view
+    // 1. Broadphase: Query characters within the trace bounding cylinder
+    const FVector Start = FVector(AimOrigin);
+    const FVector End = Start + (FVector(AimDirection) * 10000.0f);
+    const FVector BoxCenter = (Start + End) * 0.5f;
+    const FVector BoxExtent = FVector(500.0f, 500.0f, (End - Start).Size() * 0.5f);
+
+    TArray<FOverlapResult> CandidateOverlaps;
+    FCollisionShape QueryBox = FCollisionShape::MakeBox(BoxExtent);
+    FCollisionQueryParams BroadphaseParams(SCENE_QUERY_STAT(LagCompensationBroadphase), false, this);
+
+    GetWorld()->OverlapMultiByChannel(
+        CandidateOverlaps, 
+        BoxCenter, 
+        FQuat::FindBetweenVectors(FVector::UpVector, (End - Start).GetSafeNormal()), 
+        ECC_Pawn, 
+        QueryBox, 
+        BroadphaseParams
+    );
+
     TArray<ADynamicCharacter*> RewoundCharacters;
-    for (TActorIterator<ADynamicCharacter> It(GetWorld()); It; ++It)
+    for (const FOverlapResult& Overlap : CandidateOverlaps)
     {
-        ADynamicCharacter* TargetChar = *It;
-        if (TargetChar && TargetChar != this)
+        if (ADynamicCharacter* TargetChar = Cast<ADynamicCharacter>(Overlap.GetActor()))
         {
-            TargetChar->RewindToHistoricalSnapshot(ClampedClientTimestamp);
-            RewoundCharacters.Add(TargetChar);
+            if (TargetChar != this && !RewoundCharacters.Contains(TargetChar))
+            {
+                TargetChar->RewindToHistoricalSnapshot(ClampedClientTimestamp);
+                RewoundCharacters.Add(TargetChar);
+            }
         }
     }
 
-    // 2. Perform authoritative line trace against the rewound world
-    const FVector Start = FVector(AimOrigin);
-    const FVector End = Start + (FVector(AimDirection) * 10000.0f);
-    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ServerAuthoritativeBoneTrace), false, this);
-    FHitResult ServerHit;
+    // 2. Fix F: Complex line trace against the rewound skeletal geometry
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ServerAuthoritativeBoneTrace), true, this);
+    QueryParams.bReturnPhysicalMaterial = true;
 
+    FHitResult ServerHit;
     const bool bHit = GetWorld()->LineTraceSingleByChannel(ServerHit, Start, End, ECC_Pawn, QueryParams);
 
     // 3. Instantly restore characters to their present authoritative positions
@@ -260,7 +302,7 @@ void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_N
         TargetChar->RestoreFromHistoricalSnapshot();
     }
 
-    // 4. Resolve hit using authoritative computed strike force
+    // 4. Resolve hit using authoritative computed strike force and specific bone
     if (bHit)
     {
         if (ADynamicCharacter* HitCharacter = Cast<ADynamicCharacter>(ServerHit.GetActor()))
@@ -402,9 +444,28 @@ void ADynamicCharacter::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascade
     }
 }
 
-void ADynamicCharacter::ApplyJointMotorMultipliers_Implementation(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier)
+void ADynamicCharacter::ApplyJointMotorMultipliers_Implementation(
+    FName BoneName, 
+    uint8 JointChainIndex, 
+    float AngularSpringMultiplier, 
+    float LinearSpringMultiplier, 
+    float DampingMultiplier)
 {
-    // Native hook for physics motor adjustment
+    if (!PhysicsControlComponent) return;
+
+    const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *BoneName.ToString()));
+
+    FPhysicsControlMultiplier Multiplier;
+    
+    // Linear strength and damping are 3D vectors (X, Y, Z)
+    Multiplier.LinearStrengthMultiplier = FVector(LinearSpringMultiplier);
+    Multiplier.LinearExtraDampingMultiplier = FVector(DampingMultiplier);
+    
+    // Angular strength and damping are scalar floats
+    Multiplier.AngularStrengthMultiplier = AngularSpringMultiplier;
+    Multiplier.AngularExtraDampingMultiplier = DampingMultiplier;
+
+    PhysicsControlComponent->SetControlMultiplier(ControlName, Multiplier);
 }
 
 void ADynamicCharacter::AlignLimbToInteractionTarget_Implementation(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent)
@@ -414,32 +475,30 @@ void ADynamicCharacter::AlignLimbToInteractionTarget_Implementation(FName Effect
 
 void ADynamicCharacter::ResetToDefaultPoolState()
 {
-    // 1. Purge GAS Effects and Cooldowns
+    // 1. Purge GAS Effects and Granted Abilities
     if (AbilitySystemComponent)
     {
-        AbilitySystemComponent->ClearAllAbilities();
+        AbilitySystemComponent->CancelAllAbilities();
+        FGameplayEffectQuery AllEffectsQuery;
+        AbilitySystemComponent->RemoveActiveEffects(AllEffectsQuery);
         FGameplayTagContainer ActiveTags;
         AbilitySystemComponent->GetOwnedGameplayTags(ActiveTags);
-        AbilitySystemComponent->RemoveActiveEffectsWithGrantedTags(ActiveTags);
+        AbilitySystemComponent->RemoveLooseGameplayTags(ActiveTags);
+        AbilitySystemComponent->ClearAllAbilities();
+        AbilitySystemComponent->RemoveAllGameplayCues();
     }
 
-    // 2. Reset Physics State
+    // 2. Physical & Mover recovery
     RecoverFromRagdoll();
     if (ForceComponent)
     {
         ForceComponent->ConsumePendingImpulse();
     }
 
-    // 3. Purge Active Inventory & Visuals
+    // 3. Dismantle equipped gear and containers without dropping physical actors into the world
     if (UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
     {
-        for (const FDynamicEquipmentSlotItem& Slot : EquipComp->ReplicatedEquipmentSlots.Items)
-        {
-            if (Slot.EquippedItemArchetypeTag.IsValid())
-            {
-                EquipComp->ServerUnequipSlot(Slot.SlotTag, GetActorTransform());
-            }
-        }
+        EquipComp->ClearEquipmentForPooling();
     }
 
     if (UDynamicContainerComponent* Container = FindComponentByClass<UDynamicContainerComponent>())
@@ -447,7 +506,28 @@ void ADynamicCharacter::ResetToDefaultPoolState()
         Container->ClearContainerForPooling();
     }
 
-    // 4. Wipe lag compensation buffers
-    TransformHistoryBuffer.Empty();
+    // 4. Reset Lag Compensation Ring Buffer
+    HistoryBufferWriteIndex = 0;
+    HistoryBufferCount = 0;
+    for (FCharacterTransformHistorySnapshot& Snapshot : TransformHistoryBuffer)
+    {
+        Snapshot.ServerTimestamp = 0.0;
+        Snapshot.BoneTransforms.Reset();
+    }
+    bIsCurrentlyRewound = false;
     ServerLastLimbHitTimestamp.Empty();
+
+    // 5. Reset Customization morphs & colors
+    if (UDynamicCustomizationComponent* Cust = GetCustomizationComponent())
+    {
+        Cust->ReplicatedMorphs.Items.Empty();
+        Cust->ReplicatedMorphs.MarkArrayDirty();
+        Cust->OnRep_ReplicatedMorphs();
+    }
+
+    // 6. Reset Interactable component if attached
+    if (UDynamicInteractableComponent* Interactable = FindComponentByClass<UDynamicInteractableComponent>())
+    {
+        Interactable->ResetForPooling();
+    }
 }

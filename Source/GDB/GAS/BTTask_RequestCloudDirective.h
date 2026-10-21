@@ -8,12 +8,6 @@
 
 class UDynamicCloudAISubsystem;
 
-struct FBTRequestCloudDirectiveMemory
-{
-	FGuid ActiveRequestGuid;
-	TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp;
-};
-
 UCLASS()
 class GDB_API UBTTask_RequestCloudDirective : public UBTTaskNode
 {
@@ -22,7 +16,6 @@ class GDB_API UBTTask_RequestCloudDirective : public UBTTaskNode
 public:
 	UBTTask_RequestCloudDirective();
 
-	virtual uint16 GetInstanceMemorySize() const override { return sizeof(FBTRequestCloudDirectiveMemory); }
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 	virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 
@@ -32,22 +25,19 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Cloud AI")
 	float RequestTimeoutSeconds = 8.0f;
 
-	// Blackboard Key to store the resolved action tag (e.g. Action.Converse.Greet or Schedule.Activity.Work)
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
 	FBlackboardKeySelector ActionTagKey;
 
-	// Blackboard Key to store the target entity or landmark role tag
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
 	FBlackboardKeySelector TargetPlaceRoleKey;
 
-	// Blackboard Key to store generated utterance dialogue text
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
 	FBlackboardKeySelector UtteranceTextKey;
 
 protected:
-	UFUNCTION()
-	void HandleCloudAIResponse(const FGuid& ResponseGuid, const TArray<FCloudAICommandOutput>& Commands);
+	void HandleDirectCloudResponse(TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp, const TArray<FCloudAICommandOutput>& Commands);
 
 private:
+	FGuid ActiveRequestGuid;
 	TWeakObjectPtr<UDynamicCloudAISubsystem> CachedCloudSubsystem;
 };

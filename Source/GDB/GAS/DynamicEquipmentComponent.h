@@ -55,6 +55,9 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Equipment Evolution")
     void ServerGrantItemXP(float XPGrantAmount);
 
+    // Non-dropping equipment scrubbing for actor pooling
+    void ClearEquipmentForPooling();
+
 private:
     TMap<FGameplayTag, int32> SlotTagToArrayIndexMap;
     void RebuildLocalCache();

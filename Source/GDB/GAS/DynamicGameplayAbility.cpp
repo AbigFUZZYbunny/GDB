@@ -362,7 +362,7 @@ bool UDynamicGameplayAbility::TransitionIntoComboAbilityInternal(FGameplayTag Ne
 void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
     // If tag is valid but config is unhydrated, fetch from the local GameState registry
-    if (AbilityConfig.ExecutionType == EAbilityExecutionType::Instant && ActiveAbilityRegistryTag.IsValid())
+    if (ActiveAbilityRegistryTag.IsValid())
     {
         HydrateConfigFromRegistry(ActiveAbilityRegistryTag);
     }

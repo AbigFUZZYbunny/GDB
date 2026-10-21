@@ -10,7 +10,6 @@ ADynamicEnvironmentChunkActor::ADynamicEnvironmentChunkActor()
     bAlwaysRelevant = false;
     NetPriority = 1.5f;
 
-    // Fast array serializer back-pointer
     ChunkCells.OwningChunkActor = this;
 }
 
@@ -19,11 +18,14 @@ void ADynamicEnvironmentChunkActor::BeginPlay()
     Super::BeginPlay();
     ChunkCells.OwningChunkActor = this;
 
-    if (UWorld* World = GetWorld())
+    if (HasAuthority())
     {
-        if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
+        if (UWorld* World = GetWorld())
         {
-            GS->RegisterEnvironmentChunk(this);
+            if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
+            {
+                GS->RegisterEnvironmentChunk(this);
+            }
         }
     }
 }
@@ -43,10 +45,22 @@ void ADynamicEnvironmentChunkActor::EndPlay(const EEndPlayReason::Type EndPlayRe
 void ADynamicEnvironmentChunkActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
     DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkCoord);
     DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkDimX);
     DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkDimY);
     DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkCells);
+}
+
+void ADynamicEnvironmentChunkActor::OnRep_ChunkCoord()
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
+        {
+            GS->RegisterEnvironmentChunk(this);
+        }
+    }
 }
 
 void ADynamicEnvironmentChunkActor::InitializeChunk(FIntPoint InCoord, int32 InDimX, int32 InDimY, float CellSizeWorldUnits, const FVector& WorldOrigin)
@@ -55,13 +69,11 @@ void ADynamicEnvironmentChunkActor::InitializeChunk(FIntPoint InCoord, int32 InD
     ChunkDimX = InDimX;
     ChunkDimY = InDimY;
 
-    // Center the chunk actor in the physical world and configure its net cull radius
     const float ChunkWorldWidth = InDimX * CellSizeWorldUnits;
     const float ChunkWorldHeight = InDimY * CellSizeWorldUnits;
     const FVector CenterLocation = WorldOrigin + FVector(ChunkWorldWidth * 0.5f, ChunkWorldHeight * 0.5f, 0.0f);
     SetActorLocation(CenterLocation);
 
-    // Clients cull this chunk beyond 1.5x chunk diameter, keeping replication tightly localized
     const float CullRadius = FMath::Max(ChunkWorldWidth, ChunkWorldHeight) * 1.5f;
     SetNetCullDistanceSquared(FMath::Square(CullRadius));
 }
@@ -124,6 +136,9 @@ void ADynamicEnvironmentChunkActor::HandleSingleCellReplicated(const FEnvironmen
     }
 }
 
+// ============================================================================
+// FEnvironmentGridCellItem Fast Array Replication Hooks (Resolves Linker Errors)
+// ============================================================================
 void FEnvironmentGridCellItem::PostReplicatedAdd(const FFastEnvironmentGridArray& InArrayOwner)
 {
     if (InArrayOwner.OwningChunkActor)

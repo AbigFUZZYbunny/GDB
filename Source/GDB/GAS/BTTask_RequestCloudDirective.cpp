@@ -10,7 +10,8 @@ UBTTask_RequestCloudDirective::UBTTask_RequestCloudDirective()
 {
     NodeName = "Request Cloud Directive";
     bNotifyTick = false;
-    bCreateNodeInstance = false; // Shared node definition using node memory
+    // Enable unique node instance per behavior tree component to avoid cross-NPC state contamination
+    bCreateNodeInstance = true;
 
     ActionTagKey.AddNameFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_RequestCloudDirective, ActionTagKey));
     TargetPlaceRoleKey.AddNameFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_RequestCloudDirective, TargetPlaceRoleKey));
@@ -19,9 +20,7 @@ UBTTask_RequestCloudDirective::UBTTask_RequestCloudDirective()
 
 EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-    FBTRequestCloudDirectiveMemory* TaskMemory = reinterpret_cast<FBTRequestCloudDirectiveMemory*>(NodeMemory);
-    TaskMemory->ActiveRequestGuid.Invalidate();
-    TaskMemory->OwnerTreeComp = &OwnerComp;
+    ActiveRequestGuid.Invalidate();
 
     AAIController* AICon = OwnerComp.GetAIOwner();
     APawn* ControlledPawn = AICon ? AICon->GetPawn() : nullptr;
@@ -44,26 +43,39 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
     }
 
     CachedCloudSubsystem = CloudSubsystem;
-
-    // Serialize agent context and notify social component of suspension
     SocialComp->ServerSetCloudAISuspension(true);
+
     const FString ContextJson = SocialComp->SerializeAgentContextForLLM(RequestType);
 
-    TaskMemory->ActiveRequestGuid = CloudSubsystem->DispatchRemoteAIRequest(ControlledPawn, RequestType, ContextJson, RequestTimeoutSeconds);
+    // Register direct O(1) callback bound to this specific node instance
+    TWeakObjectPtr<UBTTask_RequestCloudDirective> WeakThis(this);
+    TWeakObjectPtr<UBehaviorTreeComponent> WeakOwnerComp(&OwnerComp);
 
-    // Bind callback to subsystem
-    CloudSubsystem->OnRemoteAIResponseReceived.AddUniqueDynamic(this, &UBTTask_RequestCloudDirective::HandleCloudAIResponse);
+    FOnCloudAIResponseDirectCallback DirectCallback;
+    DirectCallback.BindLambda([WeakThis, WeakOwnerComp](const TArray<FCloudAICommandOutput>& Commands)
+    {
+        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get())
+        {
+            StrongThis->HandleDirectCloudResponse(WeakOwnerComp, Commands);
+        }
+    });
+
+    ActiveRequestGuid = CloudSubsystem->DispatchRemoteAIRequestNative(
+        ControlledPawn, 
+        RequestType, 
+        ContextJson, 
+        RequestTimeoutSeconds, 
+        DirectCallback
+    );
 
     return EBTNodeResult::InProgress;
 }
 
 EBTNodeResult::Type UBTTask_RequestCloudDirective::AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-    FBTRequestCloudDirectiveMemory* TaskMemory = reinterpret_cast<FBTRequestCloudDirectiveMemory*>(NodeMemory);
-
-    if (CachedCloudSubsystem.IsValid())
+    if (CachedCloudSubsystem.IsValid() && ActiveRequestGuid.IsValid())
     {
-        CachedCloudSubsystem->OnRemoteAIResponseReceived.RemoveDynamic(this, &UBTTask_RequestCloudDirective::HandleCloudAIResponse);
+        CachedCloudSubsystem->CancelRemoteAIRequest(ActiveRequestGuid);
     }
 
     AAIController* AICon = OwnerComp.GetAIOwner();
@@ -75,64 +87,47 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::AbortTask(UBehaviorTreeCompon
         }
     }
 
-    TaskMemory->ActiveRequestGuid.Invalidate();
+    ActiveRequestGuid.Invalidate();
     return EBTNodeResult::Aborted;
 }
 
-void UBTTask_RequestCloudDirective::HandleCloudAIResponse(const FGuid& ResponseGuid, const TArray<FCloudAICommandOutput>& Commands)
+void UBTTask_RequestCloudDirective::HandleDirectCloudResponse(TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp, const TArray<FCloudAICommandOutput>& Commands)
 {
-    // Search active task memory instances across trees
-    if (!CachedCloudSubsystem.IsValid()) return;
+    ActiveRequestGuid.Invalidate();
 
-    for (FConstControllerIterator It = CachedCloudSubsystem->GetWorld()->GetControllerIterator(); It; ++It)
+    UBehaviorTreeComponent* BTC = OwnerTreeComp.Get();
+    if (!BTC) return;
+
+    AAIController* AICon = BTC->GetAIOwner();
+    if (APawn* ControlledPawn = AICon ? AICon->GetPawn() : nullptr)
     {
-        if (AAIController* AICon = Cast<AAIController>(It->Get()))
+        if (UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>())
         {
-            if (UBehaviorTreeComponent* BTC = Cast<UBehaviorTreeComponent>(AICon->GetBrainComponent()))
-            {
-                uint8* RawMemory = BTC->GetNodeMemory(this, BTC->FindInstanceContainingNode(this));
-                if (!RawMemory) continue;
-
-                FBTRequestCloudDirectiveMemory* TaskMemory = reinterpret_cast<FBTRequestCloudDirectiveMemory*>(RawMemory);
-                if (TaskMemory->ActiveRequestGuid == ResponseGuid)
-                {
-                    TaskMemory->ActiveRequestGuid.Invalidate();
-
-                    if (APawn* ControlledPawn = AICon->GetPawn())
-                    {
-                        if (UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>())
-                        {
-                            SocialComp->ServerSetCloudAISuspension(false);
-                        }
-                    }
-
-                    UBlackboardComponent* BB = BTC->GetBlackboardComponent();
-                    if (BB && Commands.Num() > 0)
-                    {
-                        const FCloudAICommandOutput& PrimaryCmd = Commands[0];
-
-                        if (ActionTagKey.SelectedKeyName != NAME_None)
-                        {
-                            BB->SetValueAsName(ActionTagKey.SelectedKeyName, PrimaryCmd.CommandActionTag.GetTagName());
-                        }
-                        if (TargetPlaceRoleKey.SelectedKeyName != NAME_None)
-                        {
-                            BB->SetValueAsName(TargetPlaceRoleKey.SelectedKeyName, PrimaryCmd.TargetEntityOrPlaceRoleTag.GetTagName());
-                        }
-                        if (UtteranceTextKey.SelectedKeyName != NAME_None)
-                        {
-                            BB->SetValueAsString(UtteranceTextKey.SelectedKeyName, PrimaryCmd.UtteranceText);
-                        }
-
-                        FinishLatentTask(*BTC, EBTNodeResult::Succeeded);
-                        return;
-                    }
-
-                    // Fallback if timeout or empty commands returned
-                    FinishLatentTask(*BTC, EBTNodeResult::Failed);
-                    return;
-                }
-            }
+            SocialComp->ServerSetCloudAISuspension(false);
         }
     }
+
+    UBlackboardComponent* BB = BTC->GetBlackboardComponent();
+    if (BB && Commands.Num() > 0)
+    {
+        const FCloudAICommandOutput& PrimaryCmd = Commands[0];
+
+        if (ActionTagKey.SelectedKeyName != NAME_None)
+        {
+            BB->SetValueAsName(ActionTagKey.SelectedKeyName, PrimaryCmd.CommandActionTag.GetTagName());
+        }
+        if (TargetPlaceRoleKey.SelectedKeyName != NAME_None)
+        {
+            BB->SetValueAsName(TargetPlaceRoleKey.SelectedKeyName, PrimaryCmd.TargetEntityOrPlaceRoleTag.GetTagName());
+        }
+        if (UtteranceTextKey.SelectedKeyName != NAME_None)
+        {
+            BB->SetValueAsString(UtteranceTextKey.SelectedKeyName, PrimaryCmd.UtteranceText);
+        }
+
+        FinishLatentTask(*BTC, EBTNodeResult::Succeeded);
+        return;
+    }
+
+    FinishLatentTask(*BTC, EBTNodeResult::Failed);
 }

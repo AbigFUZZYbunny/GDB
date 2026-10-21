@@ -363,3 +363,12 @@ void UDynamicQuestComponent::ApplyRewardConsequences(const FQuestRewardConsequen
         }
     }
 }
+
+void UDynamicQuestComponent::ClearQuestsForPooling()
+{
+    ReplicatedActiveQuests.Items.Empty();
+    ReplicatedActiveQuests.MarkArrayDirty();
+    ReplicatedActiveObjectives.Items.Empty();
+    ReplicatedActiveObjectives.MarkArrayDirty();
+    CompletedQuestTags.Reset();
+}

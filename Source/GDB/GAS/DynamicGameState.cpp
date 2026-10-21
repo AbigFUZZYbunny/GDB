@@ -3,7 +3,9 @@
 #include "DynamicSpatialActor.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicEffectFactory.h"
+#include "AIController.h"
 #include "DynamicCharacter.h"
+#include "DynamicCustomizationComponent.h"
 #include "DynamicEnvironmentChunkActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
@@ -214,13 +216,21 @@ float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocat
 
     RecalculateCellPhysicalMetrics(Cell);
 
-    // Keep write buffer aligned if simulation task is not running
-    if (!bIsSimulationTaskRunning && EnvironmentWriteBuffer.IsValidIndex(CellIdx))
+    // If worker thread is executing, stage modification to reapply post-swap
+    if (bIsSimulationTaskRunning)
+    {
+        FEnvironmentManaModificationRecord Record;
+        Record.CellIndex = CellIdx;
+        Record.ElementTag = ElementTag;
+        Record.DeltaAmount = ActualDelta;
+        PendingManaModifications.Enqueue(Record);
+    }
+    else if (EnvironmentWriteBuffer.IsValidIndex(CellIdx))
     {
         EnvironmentWriteBuffer[CellIdx] = Cell;
     }
 
-    // Sync authoritative modification to the relevant spatial chunk
+    // Immediately push to spatial chunk
     const int32 CellX = CellIdx % GridWidth;
     const int32 CellY = CellIdx / GridWidth;
     const FIntPoint ChunkCoord(CellX / ChunkDimension, CellY / ChunkDimension);
@@ -243,15 +253,27 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
     }
 
     AccumulatedUnsimulatedHours += ElapsedGameHours;
+    const double CurrentWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 
+    // Watchdog check: If task has been running longer than timeout, recover
     if (bIsSimulationTaskRunning)
     {
-        return;
+        if (SimulationTaskStartTimestamp > 0.0 && (CurrentWorldTime - SimulationTaskStartTimestamp) > SimulationTaskTimeoutSeconds)
+        {
+            UE_LOG(LogTemp, Error, TEXT("ADynamicGameState: Async environment simulation task timed out after %.1f seconds (ThreadPool stall or crash detected). Forcing watchdog reset."), (CurrentWorldTime - SimulationTaskStartTimestamp));
+            bIsSimulationTaskRunning = false;
+            SimulationTaskStartTimestamp = 0.0;
+        }
+        else
+        {
+            return;
+        }
     }
 
     const float HoursToSimulate = AccumulatedUnsimulatedHours;
     AccumulatedUnsimulatedHours = 0.0f;
     bIsSimulationTaskRunning = true;
+    SimulationTaskStartTimestamp = CurrentWorldTime;
 
     const int32 TotalCells = EnvironmentReadBuffer.Num();
     const int32 CapturedGridWidth = GridWidth;
@@ -261,8 +283,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
     const TMap<FGameplayTag, int32> CapturedElementMap = TrackedElementsMap;
     const TMap<FGameplayTag, FDynamicBiomeDef> CapturedBiomeRegistry = BiomeMasterRegistry;
 
-    // Worker thread reads from EnvironmentReadBuffer (read-only) and writes directly to EnvironmentWriteBuffer.
-    // Zero allocations on the Game Thread.
     Async(EAsyncExecution::ThreadPool, [this, HoursToSimulate, TotalCells, CapturedGridWidth, CapturedGridHeight, CapturedChunkDim, CapturedEnvConfig, CapturedElementMap, CapturedBiomeRegistry]()
     {
         const int32 NumElements = CapturedEnvConfig.TrackedElementalTags.Num();
@@ -285,7 +305,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
         const float BorderDissipation = FMath::Clamp(CapturedEnvConfig.BorderDissipationRate, 0.0f, 1.0f);
         const float TransferRatio = FMath::Clamp(0.15f * HoursToSimulate, 0.0f, 0.35f);
 
-        // Pass A: Advection transfer calculation with toroidal wrapping or boundary dissipation
+        // Pass A: Advection transfer calculation
         for (int32 i = 0; i < TotalCells; ++i)
         {
             const FEnvironmentGridCellItem& Cell = ReadCells[i];
@@ -323,7 +343,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 {
                     const float Density = (static_cast<float>(Cell.PackedElementalDensities[e]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
                     const float DensityMoved = Density * TransferRatio;
-
                     if (bBleedOffMap)
                     {
                         Deltas[e * TotalCells + i] -= DensityMoved * BorderDissipation;
@@ -440,23 +459,57 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
         }
 
-        // Pass C: GameThread completion - O(1) buffer swap
-        Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim]()
+        // Pass C: GameThread completion - O(1) buffer swap, delta flush, and watchdog reset
+        Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim, CapturedEnvConfig]()
         {
             if (!IsValid(this))
             {
                 bIsSimulationTaskRunning = false;
+                SimulationTaskStartTimestamp = 0.0;
                 return;
             }
 
+            // Swap buffers: write buffer becomes authoritative read buffer
             Swap(EnvironmentReadBuffer, EnvironmentWriteBuffer);
 
-            for (const int32 CellIdx : ModifiedIndices)
+            // Flush modifications that occurred on the GameThread while the worker was simulating
+            FEnvironmentManaModificationRecord PendingMod;
+            TSet<int32> PostSwapModifiedCells;
+            PostSwapModifiedCells.Reserve(ModifiedIndices.Num());
+            PostSwapModifiedCells.Append(ModifiedIndices);
+
+            while (PendingManaModifications.Dequeue(PendingMod))
             {
+                if (EnvironmentReadBuffer.IsValidIndex(PendingMod.CellIndex))
+                {
+                    const int32 ElemIdx = ResolveElementArrayIndex(PendingMod.ElementTag);
+                    if (ElemIdx != INDEX_NONE && EnvironmentReadBuffer[PendingMod.CellIndex].PackedElementalDensities.IsValidIndex(ElemIdx))
+                    {
+                        FEnvironmentGridCellItem& Cell = EnvironmentReadBuffer[PendingMod.CellIndex];
+                        const float CurrentVal = (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
+                        const float AdjustedVal = FMath::Clamp(CurrentVal + PendingMod.DeltaAmount, 0.0f, CapturedEnvConfig.MaxElementDensityCap);
+                        Cell.PackedElementalDensities[ElemIdx] = static_cast<uint8>(FMath::RoundToInt((AdjustedVal / CapturedEnvConfig.MaxElementDensityCap) * 255.0f));
+
+                        RecalculateCellPhysicalMetrics(Cell);
+                        PostSwapModifiedCells.Add(PendingMod.CellIndex);
+                    }
+                }
+            }
+
+            // Sync updated cells across spatial chunks
+            for (const int32 CellIdx : PostSwapModifiedCells)
+            {
+                if (!EnvironmentReadBuffer.IsValidIndex(CellIdx)) continue;
+
+                // Sync write buffer so the next simulation cycle reads congruent values
+                if (EnvironmentWriteBuffer.IsValidIndex(CellIdx))
+                {
+                    EnvironmentWriteBuffer[CellIdx] = EnvironmentReadBuffer[CellIdx];
+                }
+
                 const int32 CellX = CellIdx % CapturedGridWidth;
                 const int32 CellY = CellIdx / CapturedGridWidth;
                 const FIntPoint ChunkCoord(CellX / CapturedChunkDim, CellY / CapturedChunkDim);
-
                 if (TObjectPtr<ADynamicEnvironmentChunkActor>* FoundChunk = ActiveChunkMap.Find(ChunkCoord))
                 {
                     if (FoundChunk->Get())
@@ -467,6 +520,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
 
             bIsSimulationTaskRunning = false;
+            SimulationTaskStartTimestamp = 0.0;
         });
     });
 }
@@ -874,6 +928,32 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
 {
     if (!HasAuthority()) return nullptr;
 
+    auto SpawnConfiguredAIController = [this](ADynamicCharacter* TargetCharacter, const FGameplayTag& InTemplateTag)
+    {
+        FCharacterTemplateDef TemplateDef;
+        if (GetCharacterTemplate(InTemplateTag, TemplateDef))
+        {
+            if (const FDynamicAIAgentDef* AgentDef = MasterAIAgentRegistry.Find(TemplateDef.DefaultAIAgentTag))
+            {
+                if (!AgentDef->AIControllerClass.IsNull())
+                {
+                    if (UClass* ControllerClass = AgentDef->AIControllerClass.LoadSynchronous())
+                    {
+                        FActorSpawnParameters ConParams;
+                        ConParams.Owner = TargetCharacter;
+                        ConParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+                        if (AAIController* NewAICon = GetWorld()->SpawnActor<AAIController>(ControllerClass, TargetCharacter->GetActorTransform(), ConParams))
+                        {
+                            NewAICon->Possess(TargetCharacter);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        TargetCharacter->SpawnDefaultController();
+    };
+
     while (InactiveCharacterPool.Num() > 0)
     {
         ADynamicCharacter* PooledActor = InactiveCharacterPool.Pop(EAllowShrinking::No);
@@ -885,10 +965,16 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
             PooledActor->SetActorHiddenInGame(false);
             PooledActor->SetActorTickEnabled(true);
             PooledActor->SetActorEnableCollision(true);
-            PooledActor->ResetToDefaultPoolState(); 
+            PooledActor->ResetToDefaultPoolState();
 
-            // Spawn AI Controller
-            PooledActor->SpawnDefaultController();
+            // Initialize identity, bodyslide morphs, and mesh from the requested template tag
+            if (UDynamicCustomizationComponent* Cust = PooledActor->GetCustomizationComponent())
+            {
+                Cust->InitializeCustomization(TemplateTag, ECharacterGender::Neutral);
+            }
+
+            // Fix E: Data-driven AI controller binding
+            SpawnConfiguredAIController(PooledActor, TemplateTag);
             return PooledActor;
         }
     }
@@ -897,11 +983,17 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
     SpawnParams.Owner = OwnerActor;
     SpawnParams.Instigator = InstigatorPawn;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-    
+
     ADynamicCharacter* NewCharacter = GetWorld()->SpawnActor<ADynamicCharacter>(ADynamicCharacter::StaticClass(), SpawnTransform, SpawnParams);
     if (NewCharacter)
     {
-        NewCharacter->SpawnDefaultController();
+        if (UDynamicCustomizationComponent* Cust = NewCharacter->GetCustomizationComponent())
+        {
+            Cust->InitializeCustomization(TemplateTag, ECharacterGender::Neutral);
+        }
+
+        // Fix E: Data-driven AI controller binding
+        SpawnConfiguredAIController(NewCharacter, TemplateTag);
     }
     return NewCharacter;
 }

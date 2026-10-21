@@ -231,30 +231,68 @@ void UDynamicCustomizationComponent::ApplyCustomizationToMesh()
 void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value)
 {
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
-    if (!CharOwner || !CharOwner->GetMeshComponent()) return;
+    if (!CharOwner) return;
 
-    USkeletalMeshComponent* MeshComp = CharOwner->GetMeshComponent();
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
 
     FCharacterTemplateDef TemplateDef;
     if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return;
 
-    if (const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag))
+    const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag);
+    if (!SkelDef) return;
+
+    // Collect all modular skeletal meshes attached to the character (Face, Torso, Legs, Feet)
+    TArray<USkeletalMeshComponent*> ModularMeshes;
+    CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
+
+    for (const FBodyslideSliderDef& SliderDef : SkelDef->BodyslideSliders)
     {
-        for (const FBodyslideSliderDef& SliderDef : SkelDef->BodyslideSliders)
+        if (SliderDef.SliderTag == SliderTag)
         {
-            if (SliderDef.SliderTag == SliderTag)
+            // 1. Morph Targets: Apply directly across all modular meshes
+            for (const FName& MorphName : SliderDef.TargetMorphTargets)
             {
-                for (const FName& MorphName : SliderDef.TargetMorphTargets)
+                if (!MorphName.IsNone())
                 {
-                    if (!MorphName.IsNone())
+                    for (USkeletalMeshComponent* MeshComp : ModularMeshes)
                     {
-                        MeshComp->SetMorphTarget(MorphName, Value);
+                        if (MeshComp)
+                        {
+                            MeshComp->SetMorphTarget(MorphName, Value);
+                        }
                     }
                 }
-                break;
             }
+
+            // 2. Bone Scales: Propagate bone scale and length adjustments via curves to the AnimBP/ControlRig
+            for (const FBoneScaleConstraint& BoneConstraint : SliderDef.TargetBones)
+            {
+                if (!BoneConstraint.BoneName.IsNone())
+                {
+                    const float TargetScale = FMath::Lerp(BoneConstraint.MinScaleMultiplier, BoneConstraint.MaxScaleMultiplier, Value);
+
+                    for (USkeletalMeshComponent* MeshComp : ModularMeshes)
+                    {
+                        if (MeshComp && MeshComp->DoesSocketExist(BoneConstraint.BoneName))
+                        {
+                            const FName DirectBoneCurve = BoneConstraint.BoneName;
+                            const FName ScaleCurveName = FName(*FString::Printf(TEXT("scale_%s"), *BoneConstraint.BoneName.ToString()));
+
+                            MeshComp->SetMorphTarget(ScaleCurveName, TargetScale);
+                            MeshComp->SetMorphTarget(DirectBoneCurve, TargetScale);
+
+                            if (BoneConstraint.bAllowLengthAdjustment)
+                            {
+                                const float TargetLength = FMath::Lerp(BoneConstraint.MinLengthOffset, BoneConstraint.MaxLengthOffset, Value);
+                                const FName LengthCurveName = FName(*FString::Printf(TEXT("length_%s"), *BoneConstraint.BoneName.ToString()));
+                                MeshComp->SetMorphTarget(LengthCurveName, TargetLength);
+                            }
+                        }
+                    }
+                }
+            }
+            break;
         }
     }
 }

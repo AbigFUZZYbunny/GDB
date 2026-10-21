@@ -19,11 +19,21 @@ class UDynamicForceComponent;
 class UDynamicCustomizationComponent;
 
 // Server-side lag compensation snapshot
+USTRUCT()
 struct FCharacterTransformHistorySnapshot
 {
+    GENERATED_BODY()
+
+    UPROPERTY()
     double ServerTimestamp = 0.0;
+
+    UPROPERTY()
     FVector CapsuleLocation = FVector::ZeroVector;
+
+    UPROPERTY()
     FQuat CapsuleRotation = FQuat::Identity;
+
+    UPROPERTY()
     TMap<FName, FTransform> BoneTransforms;
 };
 
@@ -34,6 +44,7 @@ class GDB_API ADynamicCharacter : public APawn, public IAbilitySystemInterface, 
 
 public:
     ADynamicCharacter(const FObjectInitializer& ObjectInitializer);
+
     virtual void Tick(float DeltaSeconds) override;
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
@@ -42,7 +53,9 @@ public:
     UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
     const UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
 
-    // Authoritative aimed strike: removes client-trusted force; incorporates client view timestamp for rewind
+    // IDynamicPoolScrubbableInterface implementation
+    virtual void ResetToDefaultPoolState() override;
+
     UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category = "DynamicGAS|Combat")
     void Server_RequestAimedStrike(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, double ClientTargetTimestamp);
 
@@ -50,10 +63,7 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
     void RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren = true);
-
-    UFUNCTION(BlueprintNativeEvent, Category = "DynamicGAS|Physics")
-    void ApplyJointMotorMultipliers(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier);
-
+    
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "DynamicGAS|Interaction")
     void AlignLimbToInteractionTarget(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent);
 
@@ -69,12 +79,24 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Abilities|Ragdoll")
     void RecoverFromRagdoll();
 
-    // Server-side lag compensation: temporarily rewinds this character's bones to match the attacker's view
     void RewindToHistoricalSnapshot(double TargetTimestamp);
     void RestoreFromHistoricalSnapshot();
     
-    // Clears attributes, clears GAS effects, and resets bones
-    virtual void ResetToDefaultPoolState() override;
+    UFUNCTION(BlueprintNativeEvent, Category = "DynamicGAS|Physics")
+    void ApplyJointMotorMultipliers(
+        FName BoneName, 
+        uint8 JointChainIndex, 
+        float AngularSpringMultiplier, 
+        float LinearSpringMultiplier, 
+        float DampingMultiplier
+    );
+    virtual void ApplyJointMotorMultipliers_Implementation(
+        FName BoneName, 
+        uint8 JointChainIndex, 
+        float AngularSpringMultiplier, 
+        float LinearSpringMultiplier, 
+        float DampingMultiplier
+    );
 
 protected:
     virtual void BeginPlay() override;
@@ -116,9 +138,16 @@ private:
     bool bAttributesInitializedOnServer = false;
     TMap<uint8, double> ServerLastLimbHitTimestamp;
 
-    // Server lag compensation history buffer (500ms sliding window)
+    // Fixed-size pre-allocated circular history buffer (replaces O(N) array shifting)
+    static constexpr int32 HistoryRingBufferSize = 128;
+    static constexpr double MaxHistorySeconds = 0.5;
+
+    UPROPERTY()
     TArray<FCharacterTransformHistorySnapshot> TransformHistoryBuffer;
+
+    int32 HistoryBufferWriteIndex = 0;
+    int32 HistoryBufferCount = 0;
+
     FCharacterTransformHistorySnapshot PreRewindCachedTransform;
     bool bIsCurrentlyRewound = false;
-    static constexpr double MaxHistorySeconds = 0.5;
 };

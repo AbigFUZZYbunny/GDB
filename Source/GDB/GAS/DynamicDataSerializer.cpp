@@ -905,7 +905,7 @@ bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharact
         Snapshot.InventorySlots = Container->GetReplicatedSlots().Items;
     }
 
-    // 6. Quests
+    // 6. Quests (Normalized Quests & Objectives)
     if (const UDynamicQuestComponent* QuestComp = InCharacter->FindComponentByClass<UDynamicQuestComponent>())
     {
         Snapshot.ActiveQuests = QuestComp->ReplicatedActiveQuests.Items;
@@ -992,7 +992,7 @@ bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter
         Container->OnRep_ReplicatedSlots();
     }
 
-    // 6. Quests
+    // 6. Quests & Objectives
     if (UDynamicQuestComponent* QuestComp = TargetCharacter->FindComponentByClass<UDynamicQuestComponent>())
     {
         QuestComp->ReplicatedActiveQuests.Items = Snapshot.ActiveQuests;

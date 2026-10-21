@@ -5,6 +5,7 @@
 #include "DynamicSocialComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicEvolutionComponent.h"
+#include "DynamicCustomizationComponent.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -147,8 +148,14 @@ void UDynamicWorldDirectorSubsystem::VirtualizeNPC(ADynamicCharacter* NPC)
     Record.WorldLocation = NPC->GetActorLocation();
     Record.WorldRotation = NPC->GetActorRotation();
     Record.HibernationStartWorldTime = GetWorld()->GetTimeSeconds();
+
+    // Fix A: Capture CharacterTemplateTag so pooled rehydration restores mesh, morphs, and stats
+    if (const UDynamicCustomizationComponent* Cust = NPC->GetCustomizationComponent())
+    {
+        Record.CharacterTemplateTag = Cust->ActiveCharacterTemplateTag;
+    }
     
-    // Extract movement intent if they were navigating via AAIController
+    // Extract movement intent if navigating via AAIController
     if (AAIController* AICon = Cast<AAIController>(NPC->GetController()))
     {
         if (AICon->GetPathFollowingComponent() && AICon->GetPathFollowingComponent()->HasValidPath())

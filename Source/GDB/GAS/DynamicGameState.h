@@ -10,6 +10,7 @@ class ADynamicSpatialActor;
 class ADynamicPhysicsActor;
 class ADynamicEnvironmentChunkActor;
 class UGameplayEffect;
+class ADynamicCharacter;
 
 UCLASS()
 class GDB_API ADynamicGameState : public AGameStateBase
@@ -137,6 +138,12 @@ public:
     const FPhysicsJointNodeConfig* GetBoneJointData(const FName& BoneName) const;
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
     const FPhysicsCalculationSettings& GetCalculationSettings() const { return CalculationSettings; }
+    
+    // Retrieves a Character from the Object Pool or spawns a new one if pool is empty
+    ADynamicCharacter* AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
+
+    // Strips a Character of its state, drops AI controller logic, and hides it in the pool
+    void ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn);
 
 private:
     void SpawnServerEnvironmentChunks();
@@ -163,4 +170,7 @@ private:
 
     bool bIsSimulationTaskRunning = false;
     float AccumulatedUnsimulatedHours = 0.0f;
+    
+    UPROPERTY() 
+    TArray<TObjectPtr<ADynamicCharacter>> InactiveCharacterPool;
 };

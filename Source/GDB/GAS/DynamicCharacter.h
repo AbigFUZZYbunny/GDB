@@ -28,7 +28,7 @@ struct FCharacterTransformHistorySnapshot
 };
 
 UCLASS()
-class GDB_API ADynamicCharacter : public APawn, public IAbilitySystemInterface
+class GDB_API ADynamicCharacter : public APawn, public IAbilitySystemInterface, public IDynamicPoolScrubbableInterface
 {
     GENERATED_BODY()
 
@@ -72,6 +72,9 @@ public:
     // Server-side lag compensation: temporarily rewinds this character's bones to match the attacker's view
     void RewindToHistoricalSnapshot(double TargetTimestamp);
     void RestoreFromHistoricalSnapshot();
+    
+    // Clears attributes, clears GAS effects, and resets bones
+    virtual void ResetToDefaultPoolState() override;
 
 protected:
     virtual void BeginPlay() override;

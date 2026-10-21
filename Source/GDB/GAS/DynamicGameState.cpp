@@ -3,6 +3,7 @@
 #include "DynamicSpatialActor.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicEffectFactory.h"
+#include "DynamicCharacter.h"
 #include "DynamicEnvironmentChunkActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
@@ -867,4 +868,58 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
 
     // 4. Rebuild ability progression scores
     RebuildAllAbilityScores();
+}
+
+ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn)
+{
+    if (!HasAuthority()) return nullptr;
+
+    while (InactiveCharacterPool.Num() > 0)
+    {
+        ADynamicCharacter* PooledActor = InactiveCharacterPool.Pop(EAllowShrinking::No);
+        if (IsValid(PooledActor))
+        {
+            PooledActor->SetOwner(OwnerActor);
+            PooledActor->SetInstigator(InstigatorPawn);
+            PooledActor->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
+            PooledActor->SetActorHiddenInGame(false);
+            PooledActor->SetActorTickEnabled(true);
+            PooledActor->SetActorEnableCollision(true);
+            PooledActor->ResetToDefaultPoolState(); 
+
+            // Spawn AI Controller
+            PooledActor->SpawnDefaultController();
+            return PooledActor;
+        }
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = OwnerActor;
+    SpawnParams.Instigator = InstigatorPawn;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    
+    ADynamicCharacter* NewCharacter = GetWorld()->SpawnActor<ADynamicCharacter>(ADynamicCharacter::StaticClass(), SpawnTransform, SpawnParams);
+    if (NewCharacter)
+    {
+        NewCharacter->SpawnDefaultController();
+    }
+    return NewCharacter;
+}
+
+void ADynamicGameState::ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn)
+{
+    if (!HasAuthority() || !IsValid(ActorToReturn)) return;
+
+    // Detach and destroy AI Controller
+    if (AController* CharController = ActorToReturn->GetController())
+    {
+        CharController->Destroy();
+    }
+
+    ActorToReturn->SetActorHiddenInGame(true);
+    ActorToReturn->SetActorTickEnabled(false);
+    ActorToReturn->SetActorEnableCollision(false);
+    ActorToReturn->SetActorLocation(FVector(0, 0, -10000.0f)); // Move out of broadphase bounds
+
+    InactiveCharacterPool.AddUnique(ActorToReturn);
 }

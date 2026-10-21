@@ -6,6 +6,7 @@
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
 #include "DynamicGameState.h"
+#include "DynamicContainerComponent.h"
 #include "MoverComponent.h"
 #include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
@@ -409,4 +410,44 @@ void ADynamicCharacter::ApplyJointMotorMultipliers_Implementation(FName BoneName
 void ADynamicCharacter::AlignLimbToInteractionTarget_Implementation(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent)
 {
     // Native hook for IK / Physics effector alignment
+}
+
+void ADynamicCharacter::ResetToDefaultPoolState()
+{
+    // 1. Purge GAS Effects and Cooldowns
+    if (AbilitySystemComponent)
+    {
+        AbilitySystemComponent->ClearAllAbilities();
+        FGameplayTagContainer ActiveTags;
+        AbilitySystemComponent->GetOwnedGameplayTags(ActiveTags);
+        AbilitySystemComponent->RemoveActiveEffectsWithGrantedTags(ActiveTags);
+    }
+
+    // 2. Reset Physics State
+    RecoverFromRagdoll();
+    if (ForceComponent)
+    {
+        ForceComponent->ConsumePendingImpulse();
+    }
+
+    // 3. Purge Active Inventory & Visuals
+    if (UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        for (const FDynamicEquipmentSlotItem& Slot : EquipComp->ReplicatedEquipmentSlots.Items)
+        {
+            if (Slot.EquippedItemArchetypeTag.IsValid())
+            {
+                EquipComp->ServerUnequipSlot(Slot.SlotTag, GetActorTransform());
+            }
+        }
+    }
+
+    if (UDynamicContainerComponent* Container = FindComponentByClass<UDynamicContainerComponent>())
+    {
+        Container->ClearContainerForPooling();
+    }
+
+    // 4. Wipe lag compensation buffers
+    TransformHistoryBuffer.Empty();
+    ServerLastLimbHitTimestamp.Empty();
 }

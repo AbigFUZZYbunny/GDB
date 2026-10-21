@@ -53,8 +53,12 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Environment")
     FDynamicEnvironmentSystemConfig EnvironmentConfig;
 
+    // Authoritative Server-Only Double Buffers (Zero Per-Tick Allocations)
     UPROPERTY()
-    TArray<FEnvironmentGridCellItem> ServerEnvironmentGrid;
+    TArray<FEnvironmentGridCellItem> EnvironmentReadBuffer;
+
+    UPROPERTY()
+    TArray<FEnvironmentGridCellItem> EnvironmentWriteBuffer;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     int32 GridWidth = 32;
@@ -99,7 +103,6 @@ public:
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
 
-    // Merges asynchronously deserialized staging data directly into live memory
     void MergeStagingRegistry(FMasterRegistryStagingData&& StagingData);
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
@@ -154,6 +157,9 @@ private:
 
     TMap<FGameplayTag, int32> TrackedElementsMap;
     TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
+
+    // Persistent Scratchpad for advection delta calculations (0 per-tick allocations)
+    TArray<float> AdvectionDeltaScratchpad;
 
     bool bIsSimulationTaskRunning = false;
     float AccumulatedUnsimulatedHours = 0.0f;

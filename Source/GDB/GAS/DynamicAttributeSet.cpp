@@ -151,8 +151,9 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
 
     const uint64 CompositeKey = MakeCompositeKey(LimbId, AttributeTag);
 
-    // Call-stack cycle detector: Explicit stack tracking prevents infinite loops across all threads
-    if (InOutEvaluationStack.Contains(CompositeKey))
+    // Guaranteed RAII Scope Tracker
+    FScopedAttributeEvaluationGuard CycleGuard(InOutEvaluationStack, CompositeKey);
+    if (CycleGuard.IsCycleDetected())
     {
         UE_LOG(LogTemp, Warning, TEXT("DynamicAttributeSet: Aborted recursive cycle on Tag %s (Limb %d)"), *AttributeTag.ToString(), LimbId);
         return;
@@ -166,7 +167,7 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
     const float OldVal = FastCompositeLookupMap.FindRef(CompositeKey);
     float Delta = NewVal - OldVal;
 
-    // 1. Threshold rules check (if registered)
+    // 1. Threshold rules modifier check
     if (GS && !FMath::IsNearlyZero(Delta))
     {
         if (FDynamicThresholdContainer* Container = GS->MasterThresholdRegistry.Find(AttributeTag))
@@ -231,8 +232,7 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
         }
     }
 
-    // 2. High-Performance Milestone Evaluation:
-    // Only evaluate milestones when crossing an integer boundary AND the tag actually exists in the registry
+    // 2. High-Performance Milestone Evaluation
     if (OwningActor && GS && GS->MasterMilestoneRegistry.Contains(AttributeTag))
     {
         const int32 OldInt = FMath::FloorToInt(OldVal);
@@ -255,8 +255,6 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
                 {
                     if (Rule.TriggerBehavior == EThresholdTriggerType::LevelUpAttribute)
                     {
-                        InOutEvaluationStack.Add(CompositeKey);
-
                         const float RemainingProgress = NewVal - MaxCapValue;
                         SetDynamicAttributeValueInternal(Rule.MonitoredAttributeTag, RemainingProgress, LimbId, InOutEvaluationStack);
                         SetDynamicAttributeValueInternal(Rule.TargetEvolvedAttributeTag, GetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, LimbId) + 1.0f, LimbId, InOutEvaluationStack);
@@ -271,8 +269,6 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
                                 ASC->HandleGameplayEvent(Rule.BroadcastEventTag, &Payload);
                             }
                         }
-
-                        InOutEvaluationStack.Remove(CompositeKey);
                     }
                 }
             }

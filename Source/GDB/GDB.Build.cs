@@ -23,7 +23,8 @@ public class GDB : ModuleRules
 			"Mover",               // Required for Mover Component
 			"PhysicsControl",       // Required for Active Ragdoll 5.8 configurations 
 			"MotionTrajectory",
-			"AIModule"
+			"AIModule", 
+			"HTTP"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

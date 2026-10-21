@@ -583,6 +583,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
     {
         TSharedPtr<FJsonObject> EnvConfigObj = RootObject->GetObjectField(TEXT("EnvironmentConfig"));
         FDynamicEnvironmentSystemConfig Config;
+
         if (EnvConfigObj->HasField(TEXT("TrackedElementalTags")))
         {
             for (const auto& TagVal : EnvConfigObj->GetArrayField(TEXT("TrackedElementalTags")))
@@ -600,6 +601,13 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         Config.DefaultCellDensity = EnvConfigObj->HasField(TEXT("DefaultCellDensity"))
             ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("DefaultCellDensity")))
             : 50.0f;
+        Config.bWrapGridBoundaries = EnvConfigObj->HasField(TEXT("bWrapGridBoundaries"))
+            ? EnvConfigObj->GetBoolField(TEXT("bWrapGridBoundaries"))
+            : false;
+        Config.BorderDissipationRate = EnvConfigObj->HasField(TEXT("BorderDissipationRate"))
+            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("BorderDissipationRate")))
+            : 0.15f;
+
         if (EnvConfigObj->HasField(TEXT("MetricFormulas")))
         {
             for (const auto& FormVal : EnvConfigObj->GetArrayField(TEXT("MetricFormulas")))

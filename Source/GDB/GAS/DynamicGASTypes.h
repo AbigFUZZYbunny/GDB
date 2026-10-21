@@ -1747,6 +1747,9 @@ struct FDynamicEnvironmentPhysicalMetricFormula
     float MaxClamp = 100.0f;
 };
 
+// ============================================================================
+// DYNAMIC ENVIRONMENT SYSTEM CONFIG (BOUNDARY & WRAPPING SETTINGS)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicEnvironmentSystemConfig
 {
@@ -1763,6 +1766,14 @@ struct FDynamicEnvironmentSystemConfig
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     TArray<FDynamicEnvironmentPhysicalMetricFormula> MetricFormulas;
+
+    // Continuous/spherical world wrapping: enables toroidal wrap on advection
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    bool bWrapGridBoundaries = false;
+
+    // Dissipation factor when crossing non-wrapped borders (prevents unnatural edge accumulation)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
+    float BorderDissipationRate = 0.15f;
 };
 
 // --- SPATIALIZED ENVIRONMENT CHUNK GRID ITEM & FAST ARRAY ---

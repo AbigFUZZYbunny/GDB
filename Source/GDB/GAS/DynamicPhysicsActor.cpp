@@ -266,30 +266,26 @@ void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerS
 
 void ADynamicPhysicsActor::ResetToDefaultPoolState()
 {
-    // 1. Ability System Component: strip all active effects and granted abilities
+    // 1. Ability System Component: cancel abilities, wipe active effects, and purge all gameplay cues
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->CancelAllAbilities();
+
+        FGameplayEffectQuery AllEffectsQuery;
+        AbilitySystemComponent->RemoveActiveEffects(AllEffectsQuery);
+        AbilitySystemComponent->RemoveActiveGameplayEffectBySourceEffect(nullptr, nullptr);
+
         FGameplayTagContainer AllTags;
         AbilitySystemComponent->GetOwnedGameplayTags(AllTags);
-        AbilitySystemComponent->RemoveActiveEffectsWithGrantedTags(AllTags);
-
-        // Remove loose dynamic tags
         AbilitySystemComponent->RemoveLooseGameplayTags(AllTags);
 
-        // Clear granted ability specs
-        TArray<FGameplayAbilitySpecHandle> AbilitiesToRemove;
-        for (const FGameplayAbilitySpec& Spec : AbilitySystemComponent->GetActivatableAbilities())
-        {
-            AbilitiesToRemove.Add(Spec.Handle);
-        }
-        for (const FGameplayAbilitySpecHandle& Handle : AbilitiesToRemove)
-        {
-            AbilitySystemComponent->ClearAbility(Handle);
-        }
+        AbilitySystemComponent->ClearAllAbilities();
+
+        // PURGE GAMEPLAY CUES: Extinguishes looping Niagara particles and audio emitters from pool location
+        AbilitySystemComponent->RemoveAllGameplayCues();
     }
 
-    // 2. Dynamic Attribute Set: completely empty fast array items and maps
+    // 2. Dynamic Attribute Set: reset fast array items
     if (UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get()))
     {
         MutableAttr->FastAttributes.Items.Empty();
@@ -297,13 +293,13 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         MutableAttr->OnRep_FastAttributes();
     }
 
-    // 3. Dynamic Force Component: cancel velocities and pending impulses
+    // 3. Dynamic Force Component: clear pending impulses
     if (ForceComponent)
     {
         ForceComponent->ConsumePendingImpulse();
     }
 
-    // 4. Physical Primitives: reset transforms, linear/angular velocities, and physics controls
+    // 4. Physical Primitives: reset transforms, linear/angular velocities, and materials
     if (SkeletalMeshComponent)
     {
         SkeletalMeshComponent->SetSimulatePhysics(false);
@@ -321,13 +317,16 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         StaticMeshComponent->EmptyOverrideMaterials();
     }
 
-    // 5. Container Component: clear slots and weight tracking
+    // 5. Staging Relocation: Move far below world to prevent audio leaks or spatial overlap hits
+    SetActorLocationAndRotation(FVector(0.0f, 0.0f, -50000.0f), FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
+
+    // 6. Container Component: clear slots and weight tracking
     if (ContainerComponent)
     {
         ContainerComponent->ClearContainerForPooling();
     }
 
-    // 6. Dynamic Instance Components: destroy any extra dynamic sub-containers added at runtime
+    // 7. Dynamic Instance Components: destroy any runtime-added container instances
     TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
     for (UActorComponent* Comp : InstanceComps)
     {
@@ -338,7 +337,7 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         }
     }
 
-    // 7. Interactable Component: clear state tags and invalidate cached target component pointers
+    // 8. Interactable Component: reset state tags and invalidate cached target components
     if (InteractableComponent)
     {
         InteractableComponent->StartupStateTags.Reset();

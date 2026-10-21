@@ -35,20 +35,50 @@ void UDynamicForceComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 
 void UDynamicForceComponent::QueueInstantMovementImpulse(FVector ImpulseDirection, float Intensity)
 {
-    PendingImpulseVector = ImpulseDirection.GetSafeNormal() * Intensity;
-    bHasPendingImpulse = true;
+    if (ImpulseDirection.IsZero() || Intensity <= 0.0f) return;
 
-    // Direct Integration with Mover Component via QueueLayeredMove
-    if (CachedMoverComp.IsValid())
+    const FVector NormalizedDir = ImpulseDirection.GetSafeNormal();
+    const FVector LaunchVel = NormalizedDir * Intensity;
+
+    AActor* OwnerActor = GetOwner();
+    APawn* PawnOwner = Cast<APawn>(OwnerActor);
+
+    // 1. Locally Controlled Autonomous Client:
+    // Execute QueueLayeredMove immediately on local MoverComponent for client prediction
+    if (PawnOwner && PawnOwner->IsLocallyControlled())
     {
-        TSharedPtr<FLayeredMove_Launch> LaunchMove = MakeShared<FLayeredMove_Launch>();
-        LaunchMove->LaunchVelocity = PendingImpulseVector;
-        LaunchMove->DurationMs = 250.0f; // 250ms duration
+        if (CachedMoverComp.IsValid())
+        {
+            TSharedPtr<FLayeredMove_Launch> LaunchMove = MakeShared<FLayeredMove_Launch>();
+            LaunchMove->LaunchVelocity = LaunchVel;
+            LaunchMove->DurationMs = 250.0f;
+            CachedMoverComp->QueueLayeredMove(LaunchMove);
+        }
 
-        // FLayeredMove_Launch inherits from FLayeredMoveBase.
-        // QueueLayeredMove takes TSharedPtr<FLayeredMoveBase>, which implicitly converts without any casts.
-        CachedMoverComp->QueueLayeredMove(LaunchMove);
-        bHasPendingImpulse = false;
+        // Send input intent to server
+        if (!OwnerActor->HasAuthority())
+        {
+            Server_QueueInstantMovementImpulse(NormalizedDir, Intensity);
+        }
+        return;
+    }
+
+    // 2. Server Authority Execution:
+    if (OwnerActor && OwnerActor->HasAuthority())
+    {
+        if (CachedMoverComp.IsValid())
+        {
+            TSharedPtr<FLayeredMove_Launch> LaunchMove = MakeShared<FLayeredMove_Launch>();
+            LaunchMove->LaunchVelocity = LaunchVel;
+            LaunchMove->DurationMs = 250.0f;
+            CachedMoverComp->QueueLayeredMove(LaunchMove);
+        }
+
+        // If target is a remote client player, sync matching predicted move
+        if (PawnOwner && PawnOwner->IsPlayerControlled() && !PawnOwner->IsLocallyControlled())
+        {
+            Client_ReceivePredictedLaunch(LaunchVel);
+        }
     }
 }
 
@@ -148,23 +178,67 @@ void UDynamicForceComponent::OnClientReceiveAuthoritativeHit(const FFastPhysicsH
     }
 }
 
+bool UDynamicForceComponent::Server_QueueInstantMovementImpulse_Validate(FVector_NetQuantizeNormal ImpulseDirection, float Intensity)
+{
+    return !ImpulseDirection.IsZero() && Intensity >= 0.0f && Intensity <= 25000.0f;
+}
+
+void UDynamicForceComponent::Server_QueueInstantMovementImpulse_Implementation(FVector_NetQuantizeNormal ImpulseDirection, float Intensity)
+{
+    const float ClampedIntensity = FMath::Clamp(Intensity, 0.0f, 25000.0f);
+    const FVector LaunchVel = FVector(ImpulseDirection) * ClampedIntensity;
+
+    if (CachedMoverComp.IsValid())
+    {
+        TSharedPtr<FLayeredMove_Launch> LaunchMove = MakeShared<FLayeredMove_Launch>();
+        LaunchMove->LaunchVelocity = LaunchVel;
+        LaunchMove->DurationMs = 250.0f;
+        CachedMoverComp->QueueLayeredMove(LaunchMove);
+    }
+}
+
+void UDynamicForceComponent::Client_ReceivePredictedLaunch_Implementation(FVector_NetQuantize LaunchVelocity)
+{
+    AActor* OwnerActor = GetOwner();
+    APawn* PawnOwner = Cast<APawn>(OwnerActor);
+    if (!PawnOwner || !PawnOwner->IsLocallyControlled()) return;
+
+    if (CachedMoverComp.IsValid())
+    {
+        TSharedPtr<FLayeredMove_Launch> LaunchMove = MakeShared<FLayeredMove_Launch>();
+        LaunchMove->LaunchVelocity = FVector(LaunchVelocity);
+        LaunchMove->DurationMs = 250.0f;
+        CachedMoverComp->QueueLayeredMove(LaunchMove);
+    }
+}
+
 void UDynamicForceComponent::ApplyPredictiveLimbImpulse(const FName& BoneName, float ImpulseMagnitude, const FVector& HitLocation, const FVector& HitNormal)
 {
     AActor* Owner = GetOwner();
     if (!Owner) return;
 
+    const FVector ImpulseVector = (-HitNormal) * ImpulseMagnitude;
+
     if (ADynamicCharacter* CharacterOwner = Cast<ADynamicCharacter>(Owner))
     {
+        if (CachedMoverComp.IsValid() && CharacterOwner->IsLocallyControlled())
+        {
+            TSharedPtr<FLayeredMove_Launch> LaunchMove = MakeShared<FLayeredMove_Launch>();
+            LaunchMove->LaunchVelocity = ImpulseVector;
+            LaunchMove->DurationMs = 150.0f;
+            CachedMoverComp->QueueLayeredMove(LaunchMove);
+        }
+
         if (USkeletalMeshComponent* MeshComp = CharacterOwner->GetMeshComponent())
         {
-            MeshComp->AddImpulseAtLocation((-HitNormal) * ImpulseMagnitude, HitLocation, BoneName);
+            MeshComp->AddImpulseAtLocation(ImpulseVector, HitLocation, BoneName);
         }
     }
     else if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Owner))
     {
         if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
         {
-            Prim->AddImpulseAtLocation((-HitNormal) * ImpulseMagnitude, HitLocation, BoneName);
+            Prim->AddImpulseAtLocation(ImpulseVector, HitLocation, BoneName);
         }
     }
 }

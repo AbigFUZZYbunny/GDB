@@ -10,6 +10,34 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FDynamicLimbAttributeChangedSignature, uint8, LimbId, FGameplayTag, AttributeTag, float, NewValue);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FDynamicAttributeChangedSignature, FGameplayTag, AttributeTag, float, NewValue);
 
+// RAII Scope Guard: Guarantees InOutEvaluationStack.Remove() is invoked on any exit path
+struct FScopedAttributeEvaluationGuard
+{
+    TSet<uint64>& StackRef;
+    uint64 Key;
+    bool bPushed;
+
+    FScopedAttributeEvaluationGuard(TSet<uint64>& InStack, uint64 InKey)
+        : StackRef(InStack), Key(InKey), bPushed(false)
+    {
+        if (!StackRef.Contains(Key))
+        {
+            StackRef.Add(Key);
+            bPushed = true;
+        }
+    }
+
+    ~FScopedAttributeEvaluationGuard()
+    {
+        if (bPushed)
+        {
+            StackRef.Remove(Key);
+        }
+    }
+
+    bool IsCycleDetected() const { return !bPushed; }
+};
+
 UCLASS()
 class GDB_API UDynamicAttributeSet : public UAttributeSet
 {

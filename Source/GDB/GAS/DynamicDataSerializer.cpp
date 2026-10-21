@@ -1,8 +1,18 @@
 ﻿// DynamicDataSerializer.cpp
 #include "DynamicDataSerializer.h"
+#include "DynamicCharacter.h"
+#include "DynamicCustomizationComponent.h"
+#include "DynamicAttributeSet.h"
+#include "DynamicEquipmentComponent.h"
+#include "DynamicContainerComponent.h"
+#include "DynamicLifeComponent.h"
+#include "DynamicSocialComponent.h"
+#include "DynamicLanguageComponent.h"
+#include "DynamicQuestComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "JsonObjectConverter.h"
 #include "DynamicGameState.h"
+#include "Async/Async.h"
 
 void UDynamicDataSerializer::DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper)
 {
@@ -102,6 +112,61 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
 {
     if (!TargetGameState) return false;
 
+    FMasterRegistryStagingData Staging;
+    if (!DeserializeMasterRegistryToStaging(InJsonString, Staging))
+    {
+        return false;
+    }
+
+    TargetGameState->MergeStagingRegistry(MoveTemp(Staging));
+    return true;
+}
+
+void UDynamicDataSerializer::DeserializeMasterRegistryAsync(
+    const FString& InJsonString, 
+    ADynamicGameState* TargetGameState, 
+    FOnMasterRegistryDeserializedSignature OnComplete)
+{
+    DeserializeMasterRegistryAsyncNative(InJsonString, TargetGameState, [OnComplete](bool bSuccess)
+    {
+        OnComplete.ExecuteIfBound(bSuccess);
+    });
+}
+
+void UDynamicDataSerializer::DeserializeMasterRegistryAsyncNative(
+    const FString& InJsonString, 
+    ADynamicGameState* TargetGameState, 
+    TFunction<void(bool)> OnComplete)
+{
+    if (!TargetGameState)
+    {
+        if (OnComplete) OnComplete(false);
+        return;
+    }
+
+    // Dispatch heavy JSON reflection & parsing to thread pool
+    Async(EAsyncExecution::ThreadPool, [InJsonString, TargetGameState, OnComplete]()
+    {
+        FMasterRegistryStagingData Staging;
+        const bool bSuccess = DeserializeMasterRegistryToStaging(InJsonString, Staging);
+
+        // Marshal back to GameThread for pointer swaps
+        Async(EAsyncExecution::TaskGraphMainThread, [TargetGameState, Staging = MoveTemp(Staging), bSuccess, OnComplete]() mutable
+        {
+            if (IsValid(TargetGameState) && bSuccess)
+            {
+                TargetGameState->MergeStagingRegistry(MoveTemp(Staging));
+            }
+            if (OnComplete)
+            {
+                OnComplete(bSuccess && IsValid(TargetGameState));
+            }
+        });
+    });
+}
+
+bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& InJsonString, FMasterRegistryStagingData& OutStaging)
+{
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InJsonString);
     TSharedPtr<FJsonObject> RootObject;
     if (!FJsonSerializer::Deserialize(Reader, RootObject) || !RootObject.IsValid()) return false;
@@ -112,12 +177,11 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> AttrObj = Pair.Value->AsObject();
             FDynamicAttributeDef AttrDef;
             FJsonObjectConverter::JsonObjectToUStruct(AttrObj.ToSharedRef(), &AttrDef, 0, 0);
             DeserializeLocalizationMap(AttrObj, TEXT("Localization"), AttrDef.Localization);
-            TargetGameState->AttributeMasterRegistry.Add(KeyTag, AttrDef);
+            OutStaging.AttributeMasterRegistry.Add(KeyTag, AttrDef);
         }
     }
 
@@ -127,14 +191,12 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> ArchObj = Pair.Value->AsObject();
             FDynamicDeliveryArchetype ArchDef;
             FJsonObjectConverter::JsonObjectToUStruct(ArchObj.ToSharedRef(), &ArchDef, 0, 0);
-
             DeserializeLocalizationMap(ArchObj, TEXT("Localization"), ArchDef.Localization);
             DeserializeMapWrapper(ArchObj, TEXT("Metrics"), ArchDef.Metrics);
-            TargetGameState->DeliveryArchetypes.Add(KeyTag, ArchDef);
+            OutStaging.DeliveryArchetypes.Add(KeyTag, ArchDef);
         }
     }
 
@@ -144,11 +206,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> AbilityObj = Pair.Value->AsObject();
             FDynamicAbilityDef AbilityDef;
             FJsonObjectConverter::JsonObjectToUStruct(AbilityObj.ToSharedRef(), &AbilityDef, 0, 0);
-
             DeserializeLocalizationMap(AbilityObj, TEXT("Localization"), AbilityDef.Localization);
             DeserializeMapWrapper(AbilityObj, TEXT("NumericParams"), AbilityDef.NumericParams);
             if (AbilityObj->HasField(TEXT("SpatialDelivery")))
@@ -162,8 +222,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                 if (MovObj->HasField(TEXT("GaspMotorSettings")))
                     DeserializeMapWrapper(MovObj->GetObjectField(TEXT("GaspMotorSettings")), TEXT("RequiredAttributeThresholds"), AbilityDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds);
             }
-
-            TargetGameState->AbilityMasterRegistry.Add(KeyTag, AbilityDef);
+            OutStaging.AbilityMasterRegistry.Add(KeyTag, AbilityDef);
         }
     }
 
@@ -173,14 +232,11 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> ActorObj = Pair.Value->AsObject();
             FDynamicPhysicsActorDef ActorDef;
             FJsonObjectConverter::JsonObjectToUStruct(ActorObj.ToSharedRef(), &ActorDef, 0, 0);
-
             DeserializeLocalizationMap(ActorObj, TEXT("Localization"), ActorDef.Localization);
             DeserializeMapWrapper(ActorObj, TEXT("DefaultGlobalAttributes"), ActorDef.DefaultGlobalAttributes);
-
             if (ActorObj->HasField(TEXT("CustomLimbs")))
             {
                 const TArray<TSharedPtr<FJsonValue>>& LimbsArr = ActorObj->GetArrayField(TEXT("CustomLimbs"));
@@ -193,13 +249,12 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                     DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), ActorDef.CustomLimbs[i].LinearMotorAttributeScalars);
                 }
             }
-
-            TargetGameState->MasterPhysicsActorRegistry.Add(KeyTag, ActorDef);
+            OutStaging.MasterPhysicsActorRegistry.Add(KeyTag, ActorDef);
             if (ActorDef.CraftingRecipes.Num() > 0)
             {
                 FDynamicRecipeList List;
                 List.Recipes = ActorDef.CraftingRecipes;
-                TargetGameState->RecipeMasterRegistry.Add(KeyTag, List);
+                OutStaging.RecipeMasterRegistry.Add(KeyTag, List);
             }
         }
     }
@@ -210,7 +265,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FDynamicConditionTreeContainer TreeContainer;
             FlattenAndParseJsonNode(Pair.Value->AsObject(), TreeContainer);
-            TargetGameState->SharedConditionTrees.Add(FName(*Pair.Key), TreeContainer);
+            OutStaging.SharedConditionTrees.Add(FName(*Pair.Key), TreeContainer);
         }
     }
 
@@ -220,10 +275,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FDynamicMilestoneContainer Container;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Container, 0, 0);
-            TargetGameState->MasterMilestoneRegistry.Add(KeyTag, Container);
+            OutStaging.MasterMilestoneRegistry.Add(KeyTag, Container);
         }
     }
 
@@ -233,10 +287,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FDynamicThresholdContainer Container;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Container, 0, 0);
-            TargetGameState->MasterThresholdRegistry.Add(KeyTag, Container);
+            OutStaging.MasterThresholdRegistry.Add(KeyTag, Container);
         }
     }
 
@@ -248,12 +301,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             if (!KeyTag.IsValid()) continue;
             TSharedPtr<FJsonObject> EffectObj = Pair.Value->AsObject();
             FDynamicEffectDef EffectDef;
-            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &EffectDef, 0, 0);
-            TargetGameState->MasterEffectRegistry.Add(KeyTag, EffectDef);
+            FJsonObjectConverter::JsonObjectToUStruct(EffectObj.ToSharedRef(), &EffectDef, 0, 0);
+            OutStaging.MasterEffectRegistry.Add(KeyTag, EffectDef);
         }
-
-        // Pre-warm the UGameplayEffect cache immediately upon registry hydration
-        TargetGameState->WarmGameplayEffectCache();
     }
 
     if (RootObject->HasField(TEXT("CalculationSettings")) && RootObject->HasField(TEXT("Limbs")))
@@ -270,7 +320,8 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                 DeserializeMapWrapper(LimbObj, TEXT("AngularMotorAttributeScalars"), PhysicsConfig.Limbs[i].AngularMotorAttributeScalars);
                 DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), PhysicsConfig.Limbs[i].LinearMotorAttributeScalars);
             }
-            TargetGameState->SetPhysicsConfig(PhysicsConfig);
+            OutStaging.bHasPhysicsConfig = true;
+            OutStaging.PhysicsConfig = PhysicsConfig;
         }
     }
     else if (RootObject->HasField(TEXT("CalculationSettings")))
@@ -278,7 +329,8 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         FPhysicsCalculationSettings CalcSettings;
         if (FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalculationSettings")).ToSharedRef(), &CalcSettings, 0, 0))
         {
-            TargetGameState->CalculationSettings = CalcSettings;
+            OutStaging.bHasCalcSettings = true;
+            OutStaging.CalcSettings = CalcSettings;
         }
     }
 
@@ -289,7 +341,8 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         if (FJsonObjectConverter::JsonObjectToUStruct(ScoreObj.ToSharedRef(), &ScoreConfig, 0, 0))
         {
             DeserializeMapWrapper(ScoreObj, TEXT("ExecutionTypeWeights"), ScoreConfig.ExecutionTypeWeights);
-            TargetGameState->SetAbilityScoreConfig(ScoreConfig);
+            OutStaging.bHasAbilityScoreConfig = true;
+            OutStaging.AbilityScoreConfig = ScoreConfig;
         }
     }
 
@@ -332,8 +385,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                     RelDef.SupportedMetrics.Add(Rule);
                 }
             }
-
-            TargetGameState->RelationshipTypeRegistry.Add(KeyTag, RelDef);
+            OutStaging.RelationshipTypeRegistry.Add(KeyTag, RelDef);
         }
     }
 
@@ -343,13 +395,12 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> ProfObj = Pair.Value->AsObject();
             FDynamicProfessionDef ProfDef;
             FJsonObjectConverter::JsonObjectToUStruct(ProfObj.ToSharedRef(), &ProfDef, 0, 0);
             DeserializeLocalizationMap(ProfObj, TEXT("Localization"), ProfDef.Localization);
             DeserializeMapWrapper(ProfObj, TEXT("PrioritizedItemWeights"), ProfDef.PrioritizedItemWeights);
-            TargetGameState->ProfessionMasterRegistry.Add(KeyTag, ProfDef);
+            OutStaging.ProfessionMasterRegistry.Add(KeyTag, ProfDef);
         }
     }
 
@@ -359,11 +410,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> AgentObj = Pair.Value->AsObject();
             FDynamicAIAgentDef AgentDef;
             FJsonObjectConverter::JsonObjectToUStruct(AgentObj.ToSharedRef(), &AgentDef, 0, 0);
-            TargetGameState->MasterAIAgentRegistry.Add(KeyTag, AgentDef);
+            OutStaging.MasterAIAgentRegistry.Add(KeyTag, AgentDef);
         }
     }
 
@@ -373,7 +423,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> TempObj = Pair.Value->AsObject();
             FCharacterTemplateDef TempDef;
             FJsonObjectConverter::JsonObjectToUStruct(TempObj.ToSharedRef(), &TempDef, 0, 0);
@@ -392,7 +441,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             {
                 DeserializeMapWrapper(TempObj->GetObjectField(TEXT("AlleleDominanceOverrides")), TEXT("ReplicatedEntries"), TempDef.AlleleDominanceOverrides);
             }
-            TargetGameState->CharacterTemplatesRegistry.Add(KeyTag, TempDef);
+            OutStaging.CharacterTemplatesRegistry.Add(KeyTag, TempDef);
         }
     }
 
@@ -402,12 +451,11 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> SkelObj = Pair.Value->AsObject();
             FDynamicSkeletonDef SkelDef;
             FJsonObjectConverter::JsonObjectToUStruct(SkelObj.ToSharedRef(), &SkelDef, 0, 0);
             DeserializeLocalizationMap(SkelObj, TEXT("Localization"), SkelDef.Localization);
-            TargetGameState->SkeletonMasterRegistry.Add(KeyTag, SkelDef);
+            OutStaging.SkeletonMasterRegistry.Add(KeyTag, SkelDef);
         }
     }
 
@@ -417,104 +465,95 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> ConvObj = Pair.Value->AsObject();
             FDynamicTransformationRule RuleDef;
             FJsonObjectConverter::JsonObjectToUStruct(ConvObj.ToSharedRef(), &RuleDef, 0, 0);
             DeserializeLocalizationMap(ConvObj, TEXT("Localization"), RuleDef.Localization);
-            TargetGameState->ConversionRegistry.Add(KeyTag, RuleDef);
+            OutStaging.ConversionRegistry.Add(KeyTag, RuleDef);
         }
     }
-    
+
     if (RootObject->HasField(TEXT("EvolutionRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("EvolutionRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> EvoObj = Pair.Value->AsObject();
             FDynamicEvolutionContainer Container;
             FJsonObjectConverter::JsonObjectToUStruct(EvoObj.ToSharedRef(), &Container, 0, 0);
-            TargetGameState->EvolutionMasterRegistry.Add(KeyTag, Container);
+            OutStaging.EvolutionMasterRegistry.Add(KeyTag, Container);
         }
     }
-    
-    // 1. Calendar
+
     if (RootObject->HasField(TEXT("CalendarConfig")))
     {
-        FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalendarConfig")).ToSharedRef(), &TargetGameState->CalendarConfig, 0, 0);
+        FDynamicCalendarDef CalDef;
+        if (FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalendarConfig")).ToSharedRef(), &CalDef, 0, 0))
+        {
+            OutStaging.bHasCalendarConfig = true;
+            OutStaging.CalendarConfig = CalDef;
+        }
     }
 
-    // 3. Genetics
     if (RootObject->HasField(TEXT("GeneticsMasterRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("GeneticsMasterRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FDynamicGeneLocusDef Locus;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Locus, 0, 0);
-            TargetGameState->GeneticsMasterRegistry.Add(KeyTag, Locus);
+            OutStaging.GeneticsMasterRegistry.Add(KeyTag, Locus);
         }
     }
-    
-    // 1. Biomes Registry
+
     if (RootObject->HasField(TEXT("BiomeMasterRegistry")))
     {
         for (const auto& Pair : RootObject->GetObjectField(TEXT("BiomeMasterRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FDynamicBiomeDef BiomeDef;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &BiomeDef, 0, 0);
-            TargetGameState->BiomeMasterRegistry.Add(KeyTag, BiomeDef);
+            OutStaging.BiomeMasterRegistry.Add(KeyTag, BiomeDef);
         }
     }
 
-    // 2. Weather Patterns Registry
     if (RootObject->HasField(TEXT("WeatherMasterRegistry")))
     {
         for (const auto& Pair : RootObject->GetObjectField(TEXT("WeatherMasterRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FDynamicWeatherPatternDef WeatherDef;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &WeatherDef, 0, 0);
-            TargetGameState->WeatherMasterRegistry.Add(KeyTag, WeatherDef);
+            OutStaging.WeatherMasterRegistry.Add(KeyTag, WeatherDef);
         }
     }
-    
+
     if (RootObject->HasField(TEXT("EvolutionProfilesRegistry")))
     {
         for (const auto& Pair : RootObject->GetObjectField(TEXT("EvolutionProfilesRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FEvolutionProfileDef ProfileDef;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &ProfileDef, 0, 0);
-            TargetGameState->EvolutionProfilesRegistry.Add(KeyTag, ProfileDef);
+            OutStaging.EvolutionProfilesRegistry.Add(KeyTag, ProfileDef);
         }
     }
-    
-    // 1. Quests Master Registry
+
     if (RootObject->HasField(TEXT("QuestMasterRegistry")))
     {
         for (const auto& Pair : RootObject->GetObjectField(TEXT("QuestMasterRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             TSharedPtr<FJsonObject> QuestObj = Pair.Value->AsObject();
             FQuestDef Quest;
             FJsonObjectConverter::JsonObjectToUStruct(QuestObj.ToSharedRef(), &Quest, 0, 0);
             DeserializeLocalizationMap(QuestObj, TEXT("Localization"), Quest.Localization);
-
-            // Deserialize Step localizations
             if (QuestObj->HasField(TEXT("Steps")))
             {
                 const TArray<TSharedPtr<FJsonValue>>& StepsArr = QuestObj->GetArrayField(TEXT("Steps"));
@@ -524,30 +563,26 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                     DeserializeLocalizationMap(StepObj, TEXT("Localization"), Quest.Steps[i].Localization);
                 }
             }
-
-            TargetGameState->QuestMasterRegistry.Add(KeyTag, Quest);
+            OutStaging.QuestMasterRegistry.Add(KeyTag, Quest);
         }
     }
 
-    // 2. Dynamic Quest Generator Rules
     if (RootObject->HasField(TEXT("QuestGeneratorRules")))
     {
         for (const auto& Pair : RootObject->GetObjectField(TEXT("QuestGeneratorRules"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-
             FDynamicQuestGeneratorRule Rule;
             FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &Rule, 0, 0);
-            TargetGameState->QuestGeneratorRules.Add(KeyTag, Rule);
+            OutStaging.QuestGeneratorRules.Add(KeyTag, Rule);
         }
     }
-    
+
     if (RootObject->HasField(TEXT("EnvironmentConfig")))
     {
         TSharedPtr<FJsonObject> EnvConfigObj = RootObject->GetObjectField(TEXT("EnvironmentConfig"));
         FDynamicEnvironmentSystemConfig Config;
-
         if (EnvConfigObj->HasField(TEXT("TrackedElementalTags")))
         {
             for (const auto& TagVal : EnvConfigObj->GetArrayField(TEXT("TrackedElementalTags")))
@@ -559,15 +594,12 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                 }
             }
         }
-
-        Config.MaxElementDensityCap = EnvConfigObj->HasField(TEXT("MaxElementDensityCap")) 
-            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("MaxElementDensityCap"))) 
+        Config.MaxElementDensityCap = EnvConfigObj->HasField(TEXT("MaxElementDensityCap"))
+            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("MaxElementDensityCap")))
             : 200.0f;
-
-        Config.DefaultCellDensity = EnvConfigObj->HasField(TEXT("DefaultCellDensity")) 
-            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("DefaultCellDensity"))) 
+        Config.DefaultCellDensity = EnvConfigObj->HasField(TEXT("DefaultCellDensity"))
+            ? static_cast<float>(EnvConfigObj->GetNumberField(TEXT("DefaultCellDensity")))
             : 50.0f;
-
         if (EnvConfigObj->HasField(TEXT("MetricFormulas")))
         {
             for (const auto& FormVal : EnvConfigObj->GetArrayField(TEXT("MetricFormulas")))
@@ -582,10 +614,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                 Config.MetricFormulas.Add(Formula);
             }
         }
-
-        TargetGameState->SetupDynamicEnvironment(Config);
+        OutStaging.bHasEnvironmentConfig = true;
+        OutStaging.EnvironmentConfig = Config;
     }
-    
+
     if (RootObject->HasField(TEXT("Languages")))
     {
         for (const auto& LangVal : RootObject->GetArrayField(TEXT("Languages")))
@@ -593,13 +625,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             TSharedPtr<FJsonObject> LangObj = LangVal->AsObject();
             FGameplayTag LangTag = FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("LanguageTag"))), false);
             if (!LangTag.IsValid()) continue;
-
             FDynamicLanguageDef LangDef;
             LangDef.LanguageTag = LangTag;
             LangDef.ComprehensionAttributeTag = FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("ComprehensionAttributeTag"))), false);
-
             DeserializeLocalizationMap(LangObj, TEXT("Localization"), LangDef.Localization);
-
             if (LangObj->HasField(TEXT("PhoneticPhonemes")))
             {
                 for (const auto& PhVal : LangObj->GetArrayField(TEXT("PhoneticPhonemes")))
@@ -607,7 +636,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                     LangDef.PhoneticPhonemes.Add(PhVal->AsString());
                 }
             }
-
             if (LangObj->HasField(TEXT("Vocabulary")))
             {
                 for (const auto& VocVal : LangObj->GetArrayField(TEXT("Vocabulary")))
@@ -617,9 +645,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                     WordDef.NativeWord = VocObj->GetStringField(TEXT("NativeWord"));
                     WordDef.DifficultyRating = static_cast<float>(VocObj->GetNumberField(TEXT("DifficultyRating")));
                     WordDef.ComprehensionXPGranted = static_cast<float>(VocObj->GetNumberField(TEXT("ComprehensionXPGranted")));
-
                     DeserializeLocalizationMap(VocObj, TEXT("LocalizedTranslations"), WordDef.LocalizedTranslations);
-
                     if (VocObj->HasField(TEXT("MiniGameDecoyOptions")))
                     {
                         for (const auto& Decoy : VocObj->GetArrayField(TEXT("MiniGameDecoyOptions")))
@@ -630,11 +656,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
                     LangDef.Vocabulary.Add(WordDef);
                 }
             }
-
-            TargetGameState->LanguageMasterRegistry.Add(LangTag, LangDef);
+            OutStaging.LanguageMasterRegistry.Add(LangTag, LangDef);
         }
-    }   
-    
+    }
+
     if (RootObject->HasField(TEXT("NameGenerationRules")))
     {
         const TArray<TSharedPtr<FJsonValue>>& RulesArr = RootObject->GetArrayField(TEXT("NameGenerationRules"));
@@ -646,7 +671,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             FNameGenerationRuleConfig RuleConfig;
             RuleConfig.CultureOrTemplateTag = FGameplayTag::RequestGameplayTag(FName(*RuleObj->GetStringField(TEXT("CultureOrTemplateTag"))), false);
             if (!RuleConfig.CultureOrTemplateTag.IsValid()) continue;
-
             RuleConfig.GenerationMode = StringToEnum<ENameGenerationMode>(RuleObj->GetStringField(TEXT("GenerationMode")));
             DeserializeMapWrapper(RuleObj, TEXT("CulturalAdoptionWeights"), RuleConfig.CulturalAdoptionWeights);
 
@@ -673,8 +697,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistry(const FString& InJsonStri
             ParseLexiconArray(RuleObj, TEXT("StandaloneNames"), RuleConfig.StandaloneNames);
             ParseLexiconArray(RuleObj, TEXT("PrefixPool"), RuleConfig.PrefixPool);
             ParseLexiconArray(RuleObj, TEXT("SuffixPool"), RuleConfig.SuffixPool);
-
-            TargetGameState->NameGenerationRulesRegistry.Add(RuleConfig.CultureOrTemplateTag, RuleConfig);
+            OutStaging.NameGenerationRulesRegistry.Add(RuleConfig.CultureOrTemplateTag, RuleConfig);
         }
     }
 
@@ -825,4 +848,175 @@ bool UDynamicDataSerializer::DeserializeContainerSlots(const FString& InJsonStri
         return true;
     }
     return false;
+}
+
+bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload)
+{
+    if (!InCharacter || !InCharacter->HasAuthority()) return false;
+
+    FPlayerPersistenceSnapshot Snapshot;
+
+    // 1. Identity & Customization
+    if (const UDynamicCustomizationComponent* Cust = InCharacter->GetCustomizationComponent())
+    {
+        Snapshot.CharacterTemplateTag = Cust->ActiveCharacterTemplateTag;
+        Snapshot.Gender = Cust->ActiveGender;
+        Snapshot.SkinColor = Cust->SkinColor;
+        Snapshot.HairColor = Cust->HairColor;
+        Snapshot.ActiveHairArchetypeTag = Cust->ActiveHairArchetypeTag;
+        for (const FDynamicCharacterMorphItem& Morph : Cust->ReplicatedMorphs.Items)
+        {
+            FTagFloatPair Pair;
+            Pair.KeyTag = Morph.SliderTag;
+            Pair.Value = Morph.SliderValue;
+            Snapshot.MorphSliders.Add(Pair);
+        }
+    }
+
+    // 2. Attributes
+    if (const UDynamicAttributeSet* AttrSet = InCharacter->GetDynamicAttributeSet())
+    {
+        Snapshot.Attributes = AttrSet->FastAttributes.Items;
+    }
+
+    // 3. Genetics & Aging
+    if (const UDynamicLifeComponent* Life = InCharacter->FindComponentByClass<UDynamicLifeComponent>())
+    {
+        Snapshot.Genome = Life->ReplicatedGenome.Items;
+    }
+
+    // 4. Equipment
+    if (const UDynamicEquipmentComponent* Equip = InCharacter->FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        Snapshot.Equipment = Equip->ReplicatedEquipmentSlots.Items;
+    }
+
+    // 5. Container Inventory
+    if (const UDynamicContainerComponent* Container = InCharacter->FindComponentByClass<UDynamicContainerComponent>())
+    {
+        Snapshot.InventorySlots = Container->GetReplicatedSlots().Items;
+    }
+
+    // 6. Quests
+    if (const UDynamicQuestComponent* QuestComp = InCharacter->FindComponentByClass<UDynamicQuestComponent>())
+    {
+        Snapshot.ActiveQuests = QuestComp->ReplicatedActiveQuests.Items;
+        Snapshot.ActiveObjectives = QuestComp->ReplicatedActiveObjectives.Items;
+    }
+
+    // 7. Language
+    if (const UDynamicLanguageComponent* Lang = InCharacter->FindComponentByClass<UDynamicLanguageComponent>())
+    {
+        Snapshot.KnownWords = Lang->ReplicatedKnownWords.Items;
+    }
+
+    // 8. Social, Needs, Memory
+    if (const UDynamicSocialComponent* Social = InCharacter->FindComponentByClass<UDynamicSocialComponent>())
+    {
+        Snapshot.CharacterGuid = Social->CharacterPersistentGuid;
+        Snapshot.Relationships = Social->ReplicatedRelationships.Items;
+        Snapshot.Needs = Social->ReplicatedNeedsAndMoods.Items;
+        Snapshot.KnownPlaces = Social->ReplicatedKnownPlaces.Items;
+    }
+
+    TSharedPtr<FJsonObject> JsonObj = FJsonObjectConverter::UStructToJsonObject(Snapshot);
+    if (!JsonObj.IsValid()) return false;
+
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonPayload);
+    return FJsonSerializer::Serialize(JsonObj.ToSharedRef(), Writer);
+}
+
+bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload)
+{
+    if (!TargetCharacter || !TargetCharacter->HasAuthority() || InJsonPayload.IsEmpty()) return false;
+
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InJsonPayload);
+    TSharedPtr<FJsonObject> RootObj;
+    if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid()) return false;
+
+    FPlayerPersistenceSnapshot Snapshot;
+    if (!FJsonObjectConverter::JsonObjectToUStruct(RootObj.ToSharedRef(), &Snapshot, 0, 0)) return false;
+
+    // 1. Identity & Mesh
+    if (UDynamicCustomizationComponent* Cust = TargetCharacter->GetCustomizationComponent())
+    {
+        Cust->InitializeCustomization(Snapshot.CharacterTemplateTag, Snapshot.Gender);
+        Cust->SkinColor = Snapshot.SkinColor;
+        Cust->HairColor = Snapshot.HairColor;
+        Cust->ActiveHairArchetypeTag = Snapshot.ActiveHairArchetypeTag;
+        Cust->OnRep_AppearanceColors();
+        for (const FTagFloatPair& Slider : Snapshot.MorphSliders)
+        {
+            Cust->ServerSetMorphSliderValue(Slider.KeyTag, Slider.Value);
+        }
+    }
+
+    // 2. Attributes
+    if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(TargetCharacter->GetDynamicAttributeSet()))
+    {
+        for (const FDynamicAttributeItem& SavedAttr : Snapshot.Attributes)
+        {
+            AttrSet->SetDynamicAttributeValue(SavedAttr.AttributeTag, SavedAttr.Value, SavedAttr.LimbId);
+        }
+    }
+
+    // 3. Genetics
+    if (UDynamicLifeComponent* Life = TargetCharacter->FindComponentByClass<UDynamicLifeComponent>())
+    {
+        Life->ReplicatedGenome.Items = Snapshot.Genome;
+        Life->ReplicatedGenome.MarkArrayDirty();
+        Life->OnRep_Genome();
+    }
+
+    // 4. Equipment
+    if (UDynamicEquipmentComponent* Equip = TargetCharacter->FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        Equip->ReplicatedEquipmentSlots.Items = Snapshot.Equipment;
+        Equip->ReplicatedEquipmentSlots.MarkArrayDirty();
+        Equip->OnRep_ReplicatedEquipmentSlots();
+    }
+
+    // 5. Container Inventory
+    if (UDynamicContainerComponent* Container = TargetCharacter->FindComponentByClass<UDynamicContainerComponent>())
+    {
+        Container->GetMutableReplicatedSlots().Items = Snapshot.InventorySlots;
+        Container->GetMutableReplicatedSlots().MarkArrayDirty();
+        Container->OnRep_ReplicatedSlots();
+    }
+
+    // 6. Quests
+    if (UDynamicQuestComponent* QuestComp = TargetCharacter->FindComponentByClass<UDynamicQuestComponent>())
+    {
+        QuestComp->ReplicatedActiveQuests.Items = Snapshot.ActiveQuests;
+        QuestComp->ReplicatedActiveQuests.MarkArrayDirty();
+        QuestComp->ReplicatedActiveObjectives.Items = Snapshot.ActiveObjectives;
+        QuestComp->ReplicatedActiveObjectives.MarkArrayDirty();
+    }
+
+    // 7. Language
+    if (UDynamicLanguageComponent* Lang = TargetCharacter->FindComponentByClass<UDynamicLanguageComponent>())
+    {
+        Lang->ReplicatedKnownWords.Items = Snapshot.KnownWords;
+        Lang->ReplicatedKnownWords.MarkArrayDirty();
+        Lang->RebuildKnownWordCache();
+    }
+
+    // 8. Social Graph, Needs, and Locations
+    if (UDynamicSocialComponent* Social = TargetCharacter->FindComponentByClass<UDynamicSocialComponent>())
+    {
+        Social->CharacterPersistentGuid = Snapshot.CharacterGuid;
+        Social->ReplicatedRelationships.Items = Snapshot.Relationships;
+        Social->ReplicatedRelationships.MarkArrayDirty();
+        Social->RebuildRelationshipCache();
+
+        Social->ReplicatedNeedsAndMoods.Items = Snapshot.Needs;
+        Social->ReplicatedNeedsAndMoods.MarkArrayDirty();
+        Social->RebuildNeedCache();
+
+        Social->ReplicatedKnownPlaces.Items = Snapshot.KnownPlaces;
+        Social->ReplicatedKnownPlaces.MarkArrayDirty();
+        Social->RebuildPlaceCache();
+    }
+
+    return true;
 }

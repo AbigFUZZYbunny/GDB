@@ -52,8 +52,7 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Life")
     void ServerInheritGenetics(const UDynamicLifeComponent* Mother, const UDynamicLifeComponent* Father);
-    
-    // Returns the active life stage tag (e.g. Age.Stage.Child vs Age.Stage.Adult) based on current age
+
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Life")
     FGameplayTag GetCurrentLifeStageTag() const;
 
@@ -67,7 +66,8 @@ private:
 
     FTimerHandle TimerHandle_GrowthTick;
 
-    // Cache of authoring-time baseline morph values, preventing recursive drift during aging calculations
-    TMap<FGameplayTag, float> CachedBaseMorphSliders;
-    bool bBaseMorphsCached = false;
+    // Authoritative pristine baseline morph values seeded directly from the template definition
+    TMap<FGameplayTag, float> PristineBaseMorphSliders;
+    bool bBaseMorphsSeeded = false;
+    void EnsurePristineBaseMorphsSeeded();
 };

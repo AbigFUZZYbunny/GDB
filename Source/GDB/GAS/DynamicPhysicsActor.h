@@ -19,7 +19,7 @@ class UDynamicInteractableComponent;
 class UDynamicContainerComponent;
 
 UCLASS()
-class GDB_API ADynamicPhysicsActor : public AActor, public IAbilitySystemInterface
+class GDB_API ADynamicPhysicsActor : public AActor, public IAbilitySystemInterface, public IDynamicPoolScrubbableInterface
 {
     GENERATED_BODY()
 
@@ -27,6 +27,9 @@ public:
     ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer);
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    // IDynamicPoolScrubbableInterface Implementation
+    virtual void ResetToDefaultPoolState() override;
 
     USkeletalMeshComponent* GetMeshComponent() const { return SkeletalMeshComponent; }
     UStaticMeshComponent* GetStaticMeshComponent() const { return StaticMeshComponent; }

@@ -21,6 +21,7 @@ class UDynamicQuestComponent;
 class UDynamicLifeComponent;
 class UDynamicEquipmentComponent;
 class ADynamicEnvironmentChunkActor;
+class UDynamicQuestComponent;
 
 // ============================================================================
 // QUANTIZATION UTILITIES (RANGE-AWARE QUANTIZATION)
@@ -544,9 +545,29 @@ struct TStructOpsTypeTraits<FFastAttributeArray> : public TStructOpsTypeTraitsBa
 };
 
 // ============================================================================
-// INTERACTABLE STATE FAST ARRAY & TARGET ANCHORS
+// INTERFACE: POOLED OBJECT SCRUBBING
 // ============================================================================
+UINTERFACE(MinimalAPI, BlueprintType)
+class UDynamicPoolScrubbableInterface : public UInterface
+{
+    GENERATED_BODY()
+};
 
+class GDB_API IDynamicPoolScrubbableInterface
+{
+    GENERATED_BODY()
+
+public:
+    /**
+     * Authoritatively resets all runtime mutations (ASC effects, attributes, forces, 
+     * materials, containers, interactables) before returning an actor from the pool.
+     */
+    virtual void ResetToDefaultPoolState() = 0;
+};
+
+// ============================================================================
+// INTERACTION TARGET POINT (WITH RESOLVED COMPONENT POINTER CACHING)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FInteractionTargetPoint
 {
@@ -566,6 +587,15 @@ struct FInteractionTargetPoint
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     FTransform LocalOffset = FTransform::Identity;
+
+    // Transient cached pointer: eliminates TInlineComponentArray iterations and FName comparisons
+    UPROPERTY(NotReplicated)
+    mutable TWeakObjectPtr<USceneComponent> CachedResolvedComponent = nullptr;
+
+    void InvalidateCache()
+    {
+        CachedResolvedComponent.Reset();
+    }
 };
 
 USTRUCT(BlueprintType)
@@ -919,6 +949,9 @@ struct FDynamicDeliveryArchetype
     FDynamicTagFloatMapWrapper Metrics;
 };
 
+// ============================================================================
+// SPATIAL DELIVERY SYSTEM (WITH LIVENESS & TARGET VALIDATION GUARDS)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicSpatialDeliveryDef
 {
@@ -986,6 +1019,16 @@ struct FDynamicSpatialDeliveryDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     FGameplayTagContainer PropagatedTriggerTags;
+
+    // --- Target Liveness & Faction Validation Filters ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery|Validation")
+    FGameplayTagContainer RequiredTargetTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery|Validation")
+    FGameplayTagContainer BlockedTargetTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery|Validation")
+    FName TargetValidationConditionTree = NAME_None;
 };
 
 // ============================================================================
@@ -2271,6 +2314,9 @@ struct FDynamicGeneLocusDef
     TArray<FDynamicAlleleDef> PossibleAlleles;
 };
 
+// ============================================================================
+// GENOME FAST ARRAY (BANDWIDTH OPTIMIZED: REPLICATE EXPRESSED ONLY)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicGenePairItem : public FFastArraySerializerItem
 {
@@ -2279,16 +2325,19 @@ struct FDynamicGenePairItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
     FGameplayTag LocusTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    // Server-Only / Backend persistence: Recessive lineage is never sent over the wire
+    UPROPERTY(NotReplicated, EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
     FGameplayTag MaternalAllele;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
+    // Server-Only / Backend persistence: Recessive lineage is never sent over the wire
+    UPROPERTY(NotReplicated, EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
     FGameplayTag PaternalAllele;
 
+    // Replicated to client proxies strictly to drive visual shaders, morphs, and abilities
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Genetics")
     FGameplayTag ExpressedAllele;
 
-    void PreReplicatedRemove(const struct FFastGenomeArray& InArrayOwner);
+    void PreReplicatedRemove(const struct FFastGenomeArray& InArrayOwner) {}
     void PostReplicatedAdd(const struct FFastGenomeArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastGenomeArray& InArrayOwner);
 };
@@ -3321,6 +3370,54 @@ struct FDynamicActiveQuestObjectiveProgress
 };
 
 USTRUCT(BlueprintType)
+struct FDynamicActiveQuestObjectiveItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
+    FGuid QuestInstanceGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
+    FGameplayTag ObjectiveTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
+    int32 CurrentProgress = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
+    int32 RequiredCount = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
+    bool bIsComplete = false;
+
+    void PreReplicatedRemove(const struct FFastActiveQuestObjectiveArray& InArrayOwner) {}
+    void PostReplicatedAdd(const struct FFastActiveQuestObjectiveArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastActiveQuestObjectiveArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastActiveQuestObjectiveArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicActiveQuestObjectiveItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicQuestComponent* OwningQuestComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicActiveQuestObjectiveItem, FFastActiveQuestObjectiveArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastActiveQuestObjectiveArray> : public TStructOpsTypeTraitsBase2<FFastActiveQuestObjectiveArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
 struct FDynamicActiveQuestItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
@@ -3339,9 +3436,6 @@ struct FDynamicActiveQuestItem : public FFastArraySerializerItem
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
     EQuestStepState StepState = EQuestStepState::Active;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
-    TArray<FDynamicActiveQuestObjectiveProgress> ObjectivesProgress;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quest")
     FGameplayTagContainer QuestContextTags;
@@ -3375,6 +3469,107 @@ template<>
 struct TStructOpsTypeTraits<FFastActiveQuestArray> : public TStructOpsTypeTraitsBase2<FFastActiveQuestArray>
 {
     enum { WithNetDeltaSerializer = true };
+};
+
+// --- FAST KNOWN WORD ARRAY ---
+USTRUCT(BlueprintType)
+struct FDynamicKnownWordItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
+    FGameplayTag LanguageTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
+    FString UnlockedNativeWord = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
+    int32 TimesEncountered = 1;
+
+    void PreReplicatedRemove(const struct FFastKnownWordArray& InArrayOwner) {}
+    void PostReplicatedAdd(const struct FFastKnownWordArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastKnownWordArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastKnownWordArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicKnownWordItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicLanguageComponent* OwningComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicKnownWordItem, FFastKnownWordArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastKnownWordArray> : public TStructOpsTypeTraitsBase2<FFastKnownWordArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
+struct FPlayerPersistenceSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGuid CharacterGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGameplayTag CharacterTemplateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    ECharacterGender Gender = ECharacterGender::Neutral;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FDynamicColorGradient SkinColor;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FDynamicColorGradient HairColor;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGameplayTag ActiveHairArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FTagFloatPair> MorphSliders;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicAttributeItem> Attributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicGenePairItem> Genome;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicEquipmentSlotItem> Equipment;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicContainerSlotItem> InventorySlots;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicActiveQuestItem> ActiveQuests;
+
+    // Added to support normalized objective persistence snapshots
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicActiveQuestObjectiveItem> ActiveObjectives;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicKnownWordItem> KnownWords;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicRelationshipEdgeItem> Relationships;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicNeedStateItem> Needs;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicKnownPlaceItem> KnownPlaces;
 };
 
 USTRUCT(BlueprintType)
@@ -3504,49 +3699,6 @@ struct FFastEntityMemberArray : public FFastArraySerializer
 
 template<>
 struct TStructOpsTypeTraits<FFastEntityMemberArray> : public TStructOpsTypeTraitsBase2<FFastEntityMemberArray>
-{
-    enum { WithNetDeltaSerializer = true };
-};
-
-// --- FAST KNOWN WORD ARRAY ---
-USTRUCT(BlueprintType)
-struct FDynamicKnownWordItem : public FFastArraySerializerItem
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
-    FGameplayTag LanguageTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
-    FString UnlockedNativeWord = TEXT("");
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
-    int32 TimesEncountered = 1;
-
-    void PreReplicatedRemove(const struct FFastKnownWordArray& InArrayOwner) {}
-    void PostReplicatedAdd(const struct FFastKnownWordArray& InArrayOwner);
-    void PostReplicatedChange(const struct FFastKnownWordArray& InArrayOwner);
-};
-
-USTRUCT(BlueprintType)
-struct FFastKnownWordArray : public FFastArraySerializer
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    TArray<FDynamicKnownWordItem> Items;
-
-    UPROPERTY(NotReplicated)
-    UDynamicLanguageComponent* OwningComp = nullptr;
-
-    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
-    {
-        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicKnownWordItem, FFastKnownWordArray>(Items, DeltaParms, *this);
-    }
-};
-
-template<>
-struct TStructOpsTypeTraits<FFastKnownWordArray> : public TStructOpsTypeTraitsBase2<FFastKnownWordArray>
 {
     enum { WithNetDeltaSerializer = true };
 };
@@ -3690,4 +3842,53 @@ struct FCloudAIPayloadPackage
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
     TArray<FCloudAICommandOutput> ResolvedCommands;
+};
+
+// ============================================================================
+// ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FMasterRegistryStagingData
+{
+    GENERATED_BODY()
+
+    TMap<FGameplayTag, FDynamicAttributeDef> AttributeMasterRegistry;
+    TMap<FGameplayTag, FDynamicDeliveryArchetype> DeliveryArchetypes;
+    TMap<FGameplayTag, FDynamicAbilityDef> AbilityMasterRegistry;
+    TMap<FName, FDynamicConditionTreeContainer> SharedConditionTrees;
+    TMap<FGameplayTag, FDynamicMilestoneContainer> MasterMilestoneRegistry;
+    TMap<FGameplayTag, FDynamicThresholdContainer> MasterThresholdRegistry;
+    TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
+    TMap<FGameplayTag, FDynamicPhysicsActorDef> MasterPhysicsActorRegistry;
+    TMap<FGameplayTag, FCharacterTemplateDef> CharacterTemplatesRegistry;
+    TMap<FGameplayTag, FDynamicSkeletonDef> SkeletonMasterRegistry;
+    TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
+    TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
+    TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
+    TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
+    TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
+    TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
+    TMap<FGameplayTag, FDynamicBiomeDef> BiomeMasterRegistry;
+    TMap<FGameplayTag, FDynamicWeatherPatternDef> WeatherMasterRegistry;
+    TMap<FGameplayTag, FEvolutionProfileDef> EvolutionProfilesRegistry;
+    TMap<FGameplayTag, FQuestDef> QuestMasterRegistry;
+    TMap<FGameplayTag, FDynamicQuestGeneratorRule> QuestGeneratorRules;
+    TMap<FGameplayTag, FDynamicLanguageDef> LanguageMasterRegistry;
+    TMap<FGameplayTag, FNameGenerationRuleConfig> NameGenerationRulesRegistry;
+    TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
+
+    bool bHasCalendarConfig = false;
+    FDynamicCalendarDef CalendarConfig;
+
+    bool bHasEnvironmentConfig = false;
+    FDynamicEnvironmentSystemConfig EnvironmentConfig;
+
+    bool bHasPhysicsConfig = false;
+    FPhysicsDamageConfigData PhysicsConfig;
+
+    bool bHasCalcSettings = false;
+    FPhysicsCalculationSettings CalcSettings;
+
+    bool bHasAbilityScoreConfig = false;
+    FAbilityScoreConfigData AbilityScoreConfig;
 };

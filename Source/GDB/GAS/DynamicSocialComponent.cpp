@@ -494,6 +494,8 @@ void UDynamicSocialComponent::ServerPruneStalePlaces(float MinimumConfidenceThre
         ReplicatedKnownPlaces.MarkArrayDirty();
         RebuildPlaceCache();
     }
+
+    EnforceKnownPlaceMemoryCap();
 }
 
 bool UDynamicSocialComponent::ServerForgetPlace(FGameplayTag PlaceRoleTag)
@@ -553,6 +555,8 @@ void UDynamicSocialComponent::ServerRegisterKnownPlace(FGameplayTag PlaceRoleTag
     FDynamicKnownPlaceItem& Added = ReplicatedKnownPlaces.Items.Add_GetRef(NewPlace);
     ReplicatedKnownPlaces.MarkItemDirty(Added);
     RebuildPlaceCache();
+
+    EnforceKnownPlaceMemoryCap();
 }
 
 bool UDynamicSocialComponent::GetKnownPlaceByRole(FGameplayTag PlaceRoleTag, FDynamicKnownPlaceItem& OutPlace) const
@@ -834,4 +838,31 @@ bool UDynamicSocialComponent::CanInitiateSocialInteraction(FGameplayTag Interact
         }
     }
     return true;
+}
+
+void UDynamicSocialComponent::EnforceKnownPlaceMemoryCap()
+{
+    if (ReplicatedKnownPlaces.Items.Num() <= MaxRetainedKnownPlaces)
+    {
+        return;
+    }
+
+    // Sort ascending: lowest confidence, then oldest visit time
+    ReplicatedKnownPlaces.Items.Sort([](const FDynamicKnownPlaceItem& A, const FDynamicKnownPlaceItem& B)
+    {
+        if (!FMath::IsNearlyEqual(A.ConfidenceScore, B.ConfidenceScore, 0.05f))
+        {
+            return A.ConfidenceScore < B.ConfidenceScore;
+        }
+        return A.LastVisitedWorldTime < B.LastVisitedWorldTime;
+    });
+
+    const int32 NumToPrune = ReplicatedKnownPlaces.Items.Num() - MaxRetainedKnownPlaces;
+    for (int32 i = 0; i < NumToPrune; ++i)
+    {
+        ReplicatedKnownPlaces.Items.RemoveAt(0, 1, EAllowShrinking::No);
+    }
+
+    ReplicatedKnownPlaces.MarkArrayDirty();
+    RebuildPlaceCache();
 }

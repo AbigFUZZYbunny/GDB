@@ -264,50 +264,109 @@ void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerS
     }
 }
 
-void ADynamicPhysicsActor::DeactivateAndReturnToPool()
+void ADynamicPhysicsActor::ResetToDefaultPoolState()
 {
-    bIsActiveInWorld = false;
-    SkeletalMeshComponent->SetSimulatePhysics(false);
-    StaticMeshComponent->SetSimulatePhysics(false);
-    SetActorEnableCollision(false);
-    SetActorHiddenInGame(true);
-
-    // 1. Destroy dynamic instance components (extra container components)
-    TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
-    for (UActorComponent* Comp : InstanceComps)
+    // 1. Ability System Component: strip all active effects and granted abilities
+    if (AbilitySystemComponent)
     {
-        if (UDynamicContainerComponent* DynamicContainer = Cast<UDynamicContainerComponent>(Comp))
+        AbilitySystemComponent->CancelAllAbilities();
+        FGameplayTagContainer AllTags;
+        AbilitySystemComponent->GetOwnedGameplayTags(AllTags);
+        AbilitySystemComponent->RemoveActiveEffectsWithGrantedTags(AllTags);
+
+        // Remove loose dynamic tags
+        AbilitySystemComponent->RemoveLooseGameplayTags(AllTags);
+
+        // Clear granted ability specs
+        TArray<FGameplayAbilitySpecHandle> AbilitiesToRemove;
+        for (const FGameplayAbilitySpec& Spec : AbilitySystemComponent->GetActivatableAbilities())
         {
-            RemoveInstanceComponent(DynamicContainer);
-            DynamicContainer->DestroyComponent();
+            AbilitiesToRemove.Add(Spec.Handle);
+        }
+        for (const FGameplayAbilitySpecHandle& Handle : AbilitiesToRemove)
+        {
+            AbilitySystemComponent->ClearAbility(Handle);
         }
     }
 
-    // 2. Clear root container
+    // 2. Dynamic Attribute Set: completely empty fast array items and maps
+    if (UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get()))
+    {
+        MutableAttr->FastAttributes.Items.Empty();
+        MutableAttr->FastAttributes.MarkArrayDirty();
+        MutableAttr->OnRep_FastAttributes();
+    }
+
+    // 3. Dynamic Force Component: cancel velocities and pending impulses
+    if (ForceComponent)
+    {
+        ForceComponent->ConsumePendingImpulse();
+    }
+
+    // 4. Physical Primitives: reset transforms, linear/angular velocities, and physics controls
+    if (SkeletalMeshComponent)
+    {
+        SkeletalMeshComponent->SetSimulatePhysics(false);
+        SkeletalMeshComponent->SetPhysicsLinearVelocity(FVector::ZeroVector);
+        SkeletalMeshComponent->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+        SkeletalMeshComponent->SetRelativeLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
+        SkeletalMeshComponent->EmptyOverrideMaterials();
+    }
+    if (StaticMeshComponent)
+    {
+        StaticMeshComponent->SetSimulatePhysics(false);
+        StaticMeshComponent->SetPhysicsLinearVelocity(FVector::ZeroVector);
+        StaticMeshComponent->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+        StaticMeshComponent->SetRelativeLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
+        StaticMeshComponent->EmptyOverrideMaterials();
+    }
+
+    // 5. Container Component: clear slots and weight tracking
     if (ContainerComponent)
     {
         ContainerComponent->ClearContainerForPooling();
     }
 
-    // 3. Clear attributes
-    if (UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get()))
+    // 6. Dynamic Instance Components: destroy any extra dynamic sub-containers added at runtime
+    TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
+    for (UActorComponent* Comp : InstanceComps)
     {
-        MutableAttr->FastAttributes.Items.Empty();
-        MutableAttr->FastAttributes.MarkArrayDirty();
+        if (UDynamicContainerComponent* ExtraContainer = Cast<UDynamicContainerComponent>(Comp))
+        {
+            RemoveInstanceComponent(ExtraContainer);
+            ExtraContainer->DestroyComponent();
+        }
     }
 
-    // 4. Clear interactable state tags
+    // 7. Interactable Component: clear state tags and invalidate cached target component pointers
     if (InteractableComponent)
     {
         InteractableComponent->StartupStateTags.Reset();
         InteractableComponent->ReplicatedStateTags.Items.Empty();
         InteractableComponent->ReplicatedStateTags.MarkArrayDirty();
         InteractableComponent->OnRep_ReplicatedStateTags();
+
+        for (FInteractionTargetPoint& Point : InteractableComponent->KinematicTargetPoints)
+        {
+            Point.InvalidateCache();
+        }
     }
 
     bAttributesInitializedOnServer = false;
     LocalLimbLookupMap.Empty();
     LocalBoneToLimbMap.Empty();
+    ServerLastLimbHitTimestamp.Empty();
+}
+
+void ADynamicPhysicsActor::DeactivateAndReturnToPool()
+{
+    bIsActiveInWorld = false;
+
+    // Execute complete scrub before putting actor to sleep
+    ResetToDefaultPoolState();
+
+    SetActorEnableCollision(false);
+    SetActorHiddenInGame(true);
 
     if (HasAuthority())
     {

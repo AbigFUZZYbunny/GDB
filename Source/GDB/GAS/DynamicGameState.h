@@ -53,7 +53,6 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Environment")
     FDynamicEnvironmentSystemConfig EnvironmentConfig;
 
-    // Authoritative Server-Only Array (Thread-safe, Never Replicated Globally)
     UPROPERTY()
     TArray<FEnvironmentGridCellItem> ServerEnvironmentGrid;
 
@@ -80,7 +79,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
     float ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount);
 
-    // Dispatches asynchronous simulation pass off the Game Thread
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Environment")
     void ServerTickEnvironmentSimulation(float ElapsedGameHours);
 
@@ -95,12 +93,14 @@ public:
 
     void RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell);
 
-    // --- Spatial Chunk Registration API ---
     void RegisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
     void UnregisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
 
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
+
+    // Merges asynchronously deserialized staging data directly into live memory
+    void MergeStagingRegistry(FMasterRegistryStagingData&& StagingData);
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
@@ -155,7 +155,6 @@ private:
     TMap<FGameplayTag, int32> TrackedElementsMap;
     TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
 
-    // --- Async Simulation Guards ---
     bool bIsSimulationTaskRunning = false;
     float AccumulatedUnsimulatedHours = 0.0f;
 };

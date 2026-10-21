@@ -12,6 +12,11 @@ class UAT_WaitChargeTime;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FDynamicAbilityConfigChangedSignature, const FDynamicAbilityDef&, NewConfig);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FDynamicComboWindowChangedSignature, FGameplayTag, AvailableComboAbilityTag, bool, bIsOpen);
 
+/**
+ * MMO Memory Optimized Dynamic Ability:
+ * Shifted from InstancedPerActor to InstancedPerExecution.
+ * 75,000 idle abilities on 5,000 NPCs consume ZERO permanent UObject heap allocations.
+ */
 UCLASS()
 class GDB_API UDynamicGameplayAbility : public UGameplayAbility
 {
@@ -26,7 +31,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Dynamic Ability|Combo")
     FDynamicComboWindowChangedSignature OnComboWindowChanged;
 
-    // Config populated locally on Client via OnRep_ActiveAbilityRegistryTag to save massive network bandwidth
+    // Ephemeral config hydrated per execution cast
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic Configuration")
     FDynamicAbilityDef AbilityConfig;
 
@@ -59,6 +64,9 @@ public:
     static bool CanBypassComboGate(const FDynamicAbilityDef& DefToCheck, const UAbilitySystemComponent* CasterASC);
     EValidationPhase GetCurrentPhase() const { return CurrentPhase; }
 
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Delivery|Validation")
+    bool IsValidTargetForSpatialDelivery(const FDynamicSpatialDeliveryDef& Delivery, const AActor* TargetActor) const;
+
 protected:
     bool EvaluateDynamicRule(const FGameplayTag& RuleTag, const FGameplayAbilityActorInfo* ActorInfo) const;
     UDynamicInteractableComponent* FindBestNearbyInteractable(const FGameplayAbilityActorInfo* ActorInfo) const;
@@ -81,6 +89,8 @@ protected:
     void HandleMaxChargeReached();
 
 private:
+    void HydrateConfigFromRegistry(FGameplayTag AbilityTag);
+
     float RuntimeTrackedChargeTime = 0.0f;
     double PhaseStartWorldTime = 0.0;
     bool bServerApprovedActivation = false;

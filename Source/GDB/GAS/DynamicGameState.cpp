@@ -572,6 +572,9 @@ ADynamicSpatialActor* ADynamicGameState::AcquireSpatialActor(const FTransform& S
             PooledActor->SetOwner(OwnerActor);
             PooledActor->SetInstigator(InstigatorPawn);
             PooledActor->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
+
+            // SCRUB STALE DATA: Sanitize actor before returning to active world
+            PooledActor->ResetToDefaultPoolState();
             return PooledActor;
         }
     }
@@ -601,6 +604,9 @@ ADynamicPhysicsActor* ADynamicGameState::AcquirePhysicsActor(FGameplayTag Archet
             PooledActor->SetOwner(OwnerActor);
             PooledActor->SetInstigator(InstigatorPawn);
             PooledActor->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
+
+            // SCRUB STALE DATA: Sanitize actor before re-hydrating new archetype
+            PooledActor->ResetToDefaultPoolState();
             PooledActor->InitializeFromArchetype(ArchetypeTag);
             return PooledActor;
         }
@@ -765,4 +771,69 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
     Result.MinimumMasteryRequired = FMath::Max(0.0f, Result.DifficultyAdjustedScore * ActiveDiff.MinMasteryRequiredPerScoreUnit);
 
     return Result;
+}
+
+void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& StagingData)
+{
+    check(IsInGameThread());
+
+    // 1. Move/Append all parsed TMaps in O(1) pointer operations
+    AttributeMasterRegistry.Append(MoveTemp(StagingData.AttributeMasterRegistry));
+    DeliveryArchetypes.Append(MoveTemp(StagingData.DeliveryArchetypes));
+    AbilityMasterRegistry.Append(MoveTemp(StagingData.AbilityMasterRegistry));
+    SharedConditionTrees.Append(MoveTemp(StagingData.SharedConditionTrees));
+    MasterMilestoneRegistry.Append(MoveTemp(StagingData.MasterMilestoneRegistry));
+    MasterThresholdRegistry.Append(MoveTemp(StagingData.MasterThresholdRegistry));
+    MasterPhysicsActorRegistry.Append(MoveTemp(StagingData.MasterPhysicsActorRegistry));
+    CharacterTemplatesRegistry.Append(MoveTemp(StagingData.CharacterTemplatesRegistry));
+    SkeletonMasterRegistry.Append(MoveTemp(StagingData.SkeletonMasterRegistry));
+    RelationshipTypeRegistry.Append(MoveTemp(StagingData.RelationshipTypeRegistry));
+    ProfessionMasterRegistry.Append(MoveTemp(StagingData.ProfessionMasterRegistry));
+    MasterAIAgentRegistry.Append(MoveTemp(StagingData.MasterAIAgentRegistry));
+    ConversionRegistry.Append(MoveTemp(StagingData.ConversionRegistry));
+    EvolutionMasterRegistry.Append(MoveTemp(StagingData.EvolutionMasterRegistry));
+    GeneticsMasterRegistry.Append(MoveTemp(StagingData.GeneticsMasterRegistry));
+    BiomeMasterRegistry.Append(MoveTemp(StagingData.BiomeMasterRegistry));
+    WeatherMasterRegistry.Append(MoveTemp(StagingData.WeatherMasterRegistry));
+    EvolutionProfilesRegistry.Append(MoveTemp(StagingData.EvolutionProfilesRegistry));
+    QuestMasterRegistry.Append(MoveTemp(StagingData.QuestMasterRegistry));
+    QuestGeneratorRules.Append(MoveTemp(StagingData.QuestGeneratorRules));
+    LanguageMasterRegistry.Append(MoveTemp(StagingData.LanguageMasterRegistry));
+    NameGenerationRulesRegistry.Append(MoveTemp(StagingData.NameGenerationRulesRegistry));
+    RecipeMasterRegistry.Append(MoveTemp(StagingData.RecipeMasterRegistry));
+
+    // 2. Append Gameplay Effects and pre-warm CDO cache for newly registered effects
+    if (StagingData.MasterEffectRegistry.Num() > 0)
+    {
+        for (auto& Pair : StagingData.MasterEffectRegistry)
+        {
+            MasterEffectRegistry.Add(Pair.Key, MoveTemp(Pair.Value));
+            GetOrCreateCachedEffectObject(Pair.Key);
+        }
+    }
+
+    // 3. Update single configuration blocks if provided
+    if (StagingData.bHasCalendarConfig)
+    {
+        CalendarConfig = StagingData.CalendarConfig;
+    }
+    if (StagingData.bHasPhysicsConfig)
+    {
+        SetPhysicsConfig(StagingData.PhysicsConfig);
+    }
+    else if (StagingData.bHasCalcSettings)
+    {
+        CalculationSettings = StagingData.CalcSettings;
+    }
+    if (StagingData.bHasAbilityScoreConfig)
+    {
+        SetAbilityScoreConfig(StagingData.AbilityScoreConfig);
+    }
+    if (StagingData.bHasEnvironmentConfig)
+    {
+        SetupDynamicEnvironment(StagingData.EnvironmentConfig);
+    }
+
+    // 4. Rebuild ability progression scores
+    RebuildAllAbilityScores();
 }

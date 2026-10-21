@@ -39,7 +39,6 @@ void UDynamicLifeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
     DOREPLIFETIME(UDynamicLifeComponent, ReplicatedGenome);
 }
 
-void FDynamicGenePairItem::PreReplicatedRemove(const FFastGenomeArray& InArrayOwner) {}
 void FDynamicGenePairItem::PostReplicatedAdd(const FFastGenomeArray& InArrayOwner) { if (InArrayOwner.OwningLifeComp) InArrayOwner.OwningLifeComp->HandleGeneReplicated(*this); }
 void FDynamicGenePairItem::PostReplicatedChange(const FFastGenomeArray& InArrayOwner) { if (InArrayOwner.OwningLifeComp) InArrayOwner.OwningLifeComp->HandleGeneReplicated(*this); }
 
@@ -101,6 +100,33 @@ void UDynamicLifeComponent::ServerEvaluateContinuousGrowth()
     ApplyLerpedGrowthState(GetNormalizedAge());
 }
 
+void UDynamicLifeComponent::EnsurePristineBaseMorphsSeeded()
+{
+    if (bBaseMorphsSeeded) return;
+
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!CharOwner || !GS) return;
+
+    UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent();
+    if (!CustComp) return;
+
+    // RESILIENCY FIX: Seed pristine base values directly from the Character Template JSON definition!
+    // Never read from runtime deformed morphs, preventing double-scaling when streaming into client relevancy.
+    FCharacterTemplateDef Def;
+    if (GS->GetCharacterTemplate(CustComp->ActiveCharacterTemplateTag, Def))
+    {
+        for (const FTagFloatPair& SliderPair : Def.DefaultBodyslideSliders)
+        {
+            if (SliderPair.KeyTag.IsValid())
+            {
+                PristineBaseMorphSliders.Add(SliderPair.KeyTag, SliderPair.Value);
+            }
+        }
+        bBaseMorphsSeeded = true;
+    }
+}
+
 void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
 {
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
@@ -115,18 +141,7 @@ void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
     if (!GS->GetCharacterTemplate(CustComp->ActiveCharacterTemplateTag, Def)) return;
     if (Def.AgingProfile.GrowthPhases.Num() == 0) return;
 
-    // Cache un-aged baseline slider values to stop drift
-    if (!bBaseMorphsCached)
-    {
-        for (const FTagFloatPair& SliderPair : Def.DefaultBodyslideSliders)
-        {
-            if (SliderPair.KeyTag.IsValid())
-            {
-                CachedBaseMorphSliders.Add(SliderPair.KeyTag, CustComp->GetMorphSliderValue(SliderPair.KeyTag));
-            }
-        }
-        bBaseMorphsCached = true;
-    }
+    EnsurePristineBaseMorphsSeeded();
 
     FContinuousGrowthKeyframe FrameA = Def.AgingProfile.GrowthPhases[0];
     FContinuousGrowthKeyframe FrameB = Def.AgingProfile.GrowthPhases.Last();
@@ -144,7 +159,7 @@ void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
         }
     }
 
-    // 1. Lerp Physical Mesh Scale
+    // 1. Physical Mesh Scale
     const float TargetScale = FMath::Lerp(FrameA.ScaleMultiplier, FrameB.ScaleMultiplier, LerpAlpha);
     if (CharOwner->GetMeshComponent())
     {
@@ -157,7 +172,7 @@ void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
         CurrentLocomotionAnimTag = FrameA.LocomotionAnimTag;
     }
 
-    // 3. Morph Slider Evaluation without Drift Accumulation
+    // 3. Morph Slider Evaluation: Applied strictly relative to pristine JSON defaults
     for (const FTagFloatPair& MorphA : FrameA.MorphTargetOffsets)
     {
         float ValB = MorphA.Value;
@@ -170,15 +185,14 @@ void UDynamicLifeComponent::ApplyLerpedGrowthState(float NormalizedAge)
             }
         }
         const float BlendedMorphOffset = FMath::Lerp(MorphA.Value, ValB, LerpAlpha);
+        const float BaseSliderValue = PristineBaseMorphSliders.FindRef(MorphA.KeyTag);
 
-        // Add offset strictly to pristine BaseSlide, avoiding compound accretion
-        const float BaseSlide = CachedBaseMorphSliders.FindRef(MorphA.KeyTag);
-        CustComp->ServerSetMorphSliderValue(MorphA.KeyTag, BaseSlide + BlendedMorphOffset);
+        // Apply clean delta to pristine baseline
+        CustComp->ServerSetMorphSliderValue(MorphA.KeyTag, BaseSliderValue + BlendedMorphOffset);
     }
 
     // 4. Update Physics Motors & Attributes
     const float TargetMotorMulti = FMath::Lerp(FrameA.PhysicsMotorMultiplier, FrameB.PhysicsMotorMultiplier, LerpAlpha);
-
     for (const FTagFloatPair& StatA : FrameA.StatModifiers)
     {
         float ValB = StatA.Value;

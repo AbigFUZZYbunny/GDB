@@ -1,15 +1,14 @@
-﻿#pragma once
+﻿// DynamicQuestComponent.h
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
 #include "DynamicGASTypes.h"
 #include "DynamicQuestComponent.generated.h"
 
-class ADynamicCharacter;
-class ADynamicPhysicsActor;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnQuestStateChangedSignature, const FGuid&, QuestGuid, FGameplayTag, QuestTag, EQuestStepState, NewState);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnQuestObjectiveUpdatedSignature, const FGuid&, QuestGuid, FGameplayTag, StepTag, FGameplayTag, ObjectiveTag, int32, CurrentProgress);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnQuestStateChangedSignature, const FGuid&, QuestInstanceGuid, FGameplayTag, QuestDefTag, EQuestStepState, NewState);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnQuestObjectiveProgressChangedSignature, const FGuid&, QuestInstanceGuid, FGameplayTag, ObjectiveTag, int32, CurrentProgress, int32, RequiredCount);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicQuestComponent : public UActorComponent
@@ -25,47 +24,54 @@ public:
     FOnQuestStateChangedSignature OnQuestStateChanged;
 
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Quest")
-    FOnQuestObjectiveUpdatedSignature OnQuestObjectiveUpdated;
+    FOnQuestObjectiveProgressChangedSignature OnObjectiveProgressChanged;
 
+    // High-level quest item states
     UPROPERTY(ReplicatedUsing = OnRep_ActiveQuests)
     FFastActiveQuestArray ReplicatedActiveQuests;
 
-    // Completed or failed quests history (persisted across sessions)
+    // Normalized objective array: updates only replicate tiny deltas per objective increment
+    UPROPERTY(ReplicatedUsing = OnRep_ActiveObjectives)
+    FFastActiveQuestObjectiveArray ReplicatedActiveObjectives;
+
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Quest")
     FGameplayTagContainer CompletedQuestTags;
 
     UFUNCTION() void OnRep_ActiveQuests();
+    UFUNCTION() void OnRep_ActiveObjectives();
 
-    void HandleQuestReplicated(const FDynamicActiveQuestItem& Item, bool bRemoved);
-
-    // --- Core Quest Actions ---
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
-    bool ServerAcceptQuest(FGameplayTag QuestDefTag, const FGuid& QuestGiverGuid);
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
-    bool ServerProgressObjective(const FGuid& QuestGuid, FGameplayTag ObjectiveTag, int32 ProgressAmount = 1);
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
-    bool ServerAdvanceStepBranch(const FGuid& QuestGuid, FGameplayTag ChosenBranchTag);
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
-    bool ServerAbandonQuest(const FGuid& QuestGuid);
-
-    // --- Dynamic Procedural Generation Endpoints ---
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest|Generation")
-    bool ServerGenerateEconomicSupplyQuest(AActor* GiverActor, FGameplayTag NeededMaterialTag, int32 QuantityNeeded, float UrgencyMultiplier = 1.0f);
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest|Generation")
-    bool ServerGenerateBountyDefenseQuest(AActor* GiverActor, FGameplayTag HostileFactionOrCreatureTag, int32 KillCount, FGameplayTag AreaLandmarkTag);
-
-    // --- Query Functions ---
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Quest")
-    bool CanAcceptQuest(FGameplayTag QuestDefTag, const AActor* GiverActor) const;
+    void HandleSingleQuestReplicated(const FDynamicActiveQuestItem& Item);
+    void HandleSingleObjectiveReplicated(const FDynamicActiveQuestObjectiveItem& Item);
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Quest")
-    bool GetActiveQuestData(const FGuid& QuestGuid, FDynamicActiveQuestItem& OutQuestItem) const;
+    bool IsQuestAvailable(FGameplayTag QuestDefTag, const AActor* QueryingActor, const FGuid& QuestGiverGuid) const;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
+    FGuid ServerAcceptQuest(FGameplayTag QuestDefTag, const FGuid& QuestGiverGuid);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
+    void ServerIncrementObjectiveProgress(FGameplayTag ObjectiveTag, int32 IncrementAmount = 1, FGameplayTag TargetEntityOrArchetypeTag = FGameplayTag());
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest")
+    bool ServerAbandonQuest(const FGuid& QuestInstanceGuid);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Quest")
+    bool GetQuestObjectiveProgress(const FGuid& QuestInstanceGuid, FGameplayTag ObjectiveTag, FDynamicActiveQuestObjectiveItem& OutObjective) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Quest")
+    TArray<FDynamicActiveQuestObjectiveItem> GetObjectivesForQuest(const FGuid& QuestInstanceGuid) const;
+
+    const FFastActiveQuestArray& GetActiveQuests() const { return ReplicatedActiveQuests; }
+    FFastActiveQuestArray& GetMutableActiveQuests() { return ReplicatedActiveQuests; }
+
+    const FFastActiveQuestObjectiveArray& GetActiveObjectives() const { return ReplicatedActiveObjectives; }
+    FFastActiveQuestObjectiveArray& GetMutableActiveObjectives() { return ReplicatedActiveObjectives; }
 
 private:
-    void ApplyRewardConsequences(const FQuestRewardConsequence& Consequences, const FGuid& GiverGuid);
+    void AdvanceQuestStep(int32 QuestIndex, FGameplayTag NextStepTag);
     void CompleteQuestInternal(int32 ItemIndex, bool bSuccess);
+    void ApplyRewardConsequences(const FQuestRewardConsequence& Consequences, const FGuid& QuestGiverGuid);
+
+    void InitializeStepObjectives(const FGuid& QuestGuid, const FQuestStepDef& StepDef);
+    void CleanUpObjectivesForQuest(const FGuid& QuestGuid);
 };

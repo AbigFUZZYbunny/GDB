@@ -55,6 +55,10 @@ public:
     UPROPERTY(ReplicatedUsing = OnRep_IsSuspendedForCloudAI, BlueprintReadOnly, Category = "Dynamic GAS|Cloud AI")
     bool bIsSuspendedForCloudAI = false;
 
+    // Hard ceiling for spatial memory entries replicated per NPC
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dynamic GAS|SpatialKnowledge|Limits")
+    int32 MaxRetainedKnownPlaces = 50;
+
     UFUNCTION() void OnRep_PersonalityProfile();
     UFUNCTION() void OnRep_RelationshipEdges();
     UFUNCTION() void OnRep_KnownPlaces();
@@ -74,18 +78,15 @@ public:
     void HandleKnownPlaceReplicated(const FDynamicKnownPlaceItem& Item, bool bRemoved = false);
     void HandleNeedStateReplicated(const FDynamicNeedStateItem& Item, bool bRemoved = false);
 
-    // Dynamic schema query: retrieves the decayed value of any metric defined in JSON
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")
     float GetDecayedRelationshipMetric(const FGuid& TargetGuid, FGameplayTag MetricTag) const;
 
-    // Dynamic schema query: retrieves all active metrics for a given edge
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")
     TArray<FTagFloatPair> GetAllDecayedRelationshipMetrics(const FGuid& TargetGuid) const;
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")
     FGameplayTag GetRelationshipType(const FGuid& TargetGuid) const;
 
-    // Modifies multiple metrics simultaneously using tag-float pairs
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social")
     void ServerRecordSocialInteraction(
         const FGuid& TargetGuid,
@@ -95,17 +96,16 @@ public:
         const TArray<FTagFloatPair>& MetricDeltas,
         const FGameplayTagContainer& AddedContextTags);
 
-    // Modifies a single metric dynamically
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social")
     void ServerModifyRelationshipMetric(const FGuid& TargetGuid, FGameplayTag MetricTag, float DeltaAmount);
 
-    // Evaluates every edge against its JSON definition: prunes edges when all metrics reach their decay target floor
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Cleanup")
     void ServerPruneDeadRelationships();
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Cleanup")
     bool ServerSeverRelationship(const FGuid& TargetGuid);
 
+    // Active memory decay and capacity management
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|SpatialKnowledge|Cleanup")
     void ServerPruneStalePlaces(float MinimumConfidenceThreshold = 0.05f);
 
@@ -150,12 +150,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Blocks")
     bool CanInitiateSocialInteraction(FGameplayTag InteractionType, ADynamicCharacter* TargetCharacter) const;
 
-    float EvaluateMetricDecay(float BaseVal, const FRelationshipMetricRule& Rule, double ElapsedSeconds) const;
-
-private:
+    float EvaluateMetricDecay(float BaseVal, const FRelationshipMetricRule& Rule, double ElapsedSeconds) const;    
+    
     void RebuildRelationshipCache();
     void RebuildPlaceCache();
     void RebuildNeedCache();
+
+private:
+    void EnforceKnownPlaceMemoryCap();
 
     TMap<FGuid, int32> GuidToEdgeIndexMap;
     TMap<FGameplayTag, int32> RoleToPlaceIndexMap;

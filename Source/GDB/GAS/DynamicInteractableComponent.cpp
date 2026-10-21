@@ -118,10 +118,21 @@ bool UDynamicInteractableComponent::ResolveKinematicTargetTransform(FGameplayTag
         if (Point.TargetPointTag == TargetPointTag)
         {
             AActor* BaseActor = Point.LinkedTargetActor.IsValid() ? Point.LinkedTargetActor.Get() : OwnerActor;
-            
-            // CRITICAL OPTIMIZATION: Prevents GC crashing mid-sweep if actor is pending kill.
             if (!IsValid(BaseActor) || BaseActor->IsActorBeingDestroyed()) return false;
 
+            // OPTIMIZATION: Check transient cached pointer first to bypass TInlineComponentArray and FName iterations
+            if (Point.CachedResolvedComponent.IsValid())
+            {
+                USceneComponent* CachedComp = Point.CachedResolvedComponent.Get();
+                OutTargetComponent = CachedComp;
+                const FTransform BaseTransform = (!Point.BoneOrSocketName.IsNone() && CachedComp->DoesSocketExist(Point.BoneOrSocketName))
+                    ? CachedComp->GetSocketTransform(Point.BoneOrSocketName, RTS_World)
+                    : CachedComp->GetComponentTransform();
+                OutWorldTransform = Point.LocalOffset * BaseTransform;
+                return true;
+            }
+
+            // Fallback for first resolution: resolve component once, then cache
             USceneComponent* ResolvedComp = BaseActor->GetRootComponent();
             if (!Point.ComponentName.IsNone())
             {
@@ -135,8 +146,10 @@ bool UDynamicInteractableComponent::ResolveKinematicTargetTransform(FGameplayTag
                     }
                 }
             }
+
             if (ResolvedComp)
             {
+                Point.CachedResolvedComponent = ResolvedComp; // Cache for all subsequent interactions
                 OutTargetComponent = ResolvedComp;
                 const FTransform BaseTransform = (!Point.BoneOrSocketName.IsNone() && ResolvedComp->DoesSocketExist(Point.BoneOrSocketName))
                     ? ResolvedComp->GetSocketTransform(Point.BoneOrSocketName, RTS_World)
@@ -146,6 +159,7 @@ bool UDynamicInteractableComponent::ResolveKinematicTargetTransform(FGameplayTag
             }
         }
     }
+
     return false;
 }
 

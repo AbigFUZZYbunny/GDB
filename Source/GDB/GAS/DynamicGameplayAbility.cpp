@@ -20,8 +20,9 @@
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
 {
+    // MMO SCALING: InstancedPerExecution eliminates 75,000 idle UObject instances in server memory
     ReplicationPolicy = EGameplayAbilityReplicationPolicy::ReplicateYes;
-    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerExecution;
 }
 
 void UDynamicGameplayAbility::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -31,19 +32,25 @@ void UDynamicGameplayAbility::GetLifetimeReplicatedProps(TArray<FLifetimePropert
     DOREPLIFETIME(UDynamicGameplayAbility, ActiveAbilityRegistryTag);
 }
 
-void UDynamicGameplayAbility::OnRep_ActiveAbilityRegistryTag()
+void UDynamicGameplayAbility::HydrateConfigFromRegistry(FGameplayTag AbilityTag)
 {
+    if (!AbilityTag.IsValid()) return;
     if (UWorld* World = GetWorld())
     {
         if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
         {
-            if (const FDynamicAbilityDef* Def = GS->AbilityMasterRegistry.Find(ActiveAbilityRegistryTag))
+            if (const FDynamicAbilityDef* Def = GS->AbilityMasterRegistry.Find(AbilityTag))
             {
                 AbilityConfig = *Def;
                 OnAbilityConfigChanged.Broadcast(AbilityConfig);
             }
         }
     }
+}
+
+void UDynamicGameplayAbility::OnRep_ActiveAbilityRegistryTag()
+{
+    HydrateConfigFromRegistry(ActiveAbilityRegistryTag);
 }
 
 bool UDynamicGameplayAbility::CanBypassComboGate(const FDynamicAbilityDef& DefToCheck, const UAbilitySystemComponent* CasterASC)
@@ -354,6 +361,12 @@ bool UDynamicGameplayAbility::TransitionIntoComboAbilityInternal(FGameplayTag Ne
 
 void UDynamicGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
+    // If tag is valid but config is unhydrated, fetch from the local GameState registry
+    if (AbilityConfig.ExecutionType == EAbilityExecutionType::Instant && ActiveAbilityRegistryTag.IsValid())
+    {
+        HydrateConfigFromRegistry(ActiveAbilityRegistryTag);
+    }
+
     CurrentPhase = EValidationPhase::Attempt;
     RuntimeTrackedChargeTime = 0.0f;
     PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -597,10 +610,75 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
     }
 }
 
+bool UDynamicGameplayAbility::IsValidTargetForSpatialDelivery(const FDynamicSpatialDeliveryDef& Delivery, const AActor* TargetActor) const
+{
+    if (!IsValid(TargetActor) || TargetActor->IsActorBeingDestroyed())
+    {
+        return false;
+    }
+
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+    if (TargetActor == Avatar)
+    {
+        return false; // Prevent self-hit
+    }
+
+    const UAbilitySystemComponent* TargetASC = TargetActor->FindComponentByClass<UAbilitySystemComponent>();
+    if (!TargetASC)
+    {
+        return false; // Target cannot receive GameplayEffects or GAS state tracking
+    }
+
+    FGameplayTagContainer TargetTags;
+    TargetASC->GetOwnedGameplayTags(TargetTags);
+
+    // 1. Mandatory Liveness & Invulnerability Check
+    static const FGameplayTag DeadTag = FGameplayTag::RequestGameplayTag(TEXT("State.Dead"), false);
+    static const FGameplayTag InvulnerableTag = FGameplayTag::RequestGameplayTag(TEXT("State.Invulnerable"), false);
+
+    if (DeadTag.IsValid() && TargetTags.HasTag(DeadTag))
+    {
+        return false; // Disallow damaging or applying AoE to dead entities
+    }
+    if (InvulnerableTag.IsValid() && TargetTags.HasTag(InvulnerableTag))
+    {
+        return false;
+    }
+
+    // 2. Data-Driven Blocked Tags Check
+    if (Delivery.BlockedTargetTags.Num() > 0 && TargetTags.HasAny(Delivery.BlockedTargetTags))
+    {
+        return false;
+    }
+
+    // 3. Data-Driven Required Target Tags Check
+    if (Delivery.RequiredTargetTags.Num() > 0 && !TargetTags.HasAll(Delivery.RequiredTargetTags))
+    {
+        return false;
+    }
+
+    // 4. Dedicated Target Validation Condition Tree (Opposing Faction, Line of Sight, etc.)
+    if (!Delivery.TargetValidationConditionTree.IsNone() && Avatar)
+    {
+        if (const FDynamicConditionTreeContainer* ConditionTree = UDynamicGASManagerComponent::GetConditionTreeByName(Avatar, Delivery.TargetValidationConditionTree))
+        {
+            const UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
+            FGameplayTagContainer SourceTags;
+            if (SourceASC) SourceASC->GetOwnedGameplayTags(SourceTags);
+
+            if (!UDynamicLogicEvaluator::EvaluateConditionTree(*ConditionTree, SourceASC, TargetASC, SourceTags, TargetTags))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
 {
     if (!HasAuthority(&CurrentActivationInfo)) return;
-
     AActor* Avatar = GetAvatarActorFromActorInfo();
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
@@ -609,6 +687,7 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
     const FDynamicSpatialDeliveryDef& Delivery = AbilityConfig.SpatialDelivery;
     UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
 
+    // Instant Attached Nova Sweep
     if (Delivery.MotionType == ESpatialDeliveryMotion::AttachedToCaster &&
         Delivery.ApplicationType == EAuraEffectApplicationType::SingleHit &&
         Delivery.Duration <= 0.25f)
@@ -622,17 +701,27 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
             TSet<AActor*> ProcessedActors;
             for (const FHitResult& Hit : HitResults)
             {
-                ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(Hit.GetActor());
-                if (!HitChar || HitChar == Avatar || ProcessedActors.Contains(HitChar)) continue;
-                ProcessedActors.Add(HitChar);
+                AActor* HitActor = Hit.GetActor();
+                if (!HitActor || ProcessedActors.Contains(HitActor)) continue;
+                ProcessedActors.Add(HitActor);
 
+                // Target Liveness & GAS Tag / Condition Validation
+                if (!IsValidTargetForSpatialDelivery(Delivery, HitActor))
+                {
+                    continue;
+                }
+
+                ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(HitActor);
                 const FName BoneName = (Hit.BoneName != NAME_None) ? Hit.BoneName : FName("pelvis");
-                const FVector OutwardNormal = (Avatar->GetActorLocation() - HitChar->GetActorLocation()).GetSafeNormal();
+                const FVector OutwardNormal = (Avatar->GetActorLocation() - HitActor->GetActorLocation()).GetSafeNormal();
                 const float ScaledImpulse = Delivery.KineticImpulseOnHit * ChargeAlpha;
 
-                HitChar->ServerProcessAuthoritativeLimbHit(HitChar, BoneName, ScaledImpulse, ChargeAlpha, HitChar->GetActorLocation(), OutwardNormal, Avatar);
+                if (HitChar)
+                {
+                    HitChar->ServerProcessAuthoritativeLimbHit(HitChar, BoneName, ScaledImpulse, ChargeAlpha, HitChar->GetActorLocation(), OutwardNormal, Avatar);
+                }
 
-                if (UAbilitySystemComponent* TargetASC = HitChar->GetAbilitySystemComponent())
+                if (UAbilitySystemComponent* TargetASC = HitActor->FindComponentByClass<UAbilitySystemComponent>())
                 {
                     const uint8 LimbId = GS->GetLimbIdForBone(BoneName);
                     for (const FGameplayTag& EffTag : Delivery.EffectsToApply)
@@ -643,7 +732,7 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                             FDynamicGameplayEffectContext* DynCtx = static_cast<FDynamicGameplayEffectContext*>(SpecHandle.Data->GetContext().Get());
                             if (DynCtx)
                             {
-                                DynCtx->SetAuthoritativePhysicsPayload(LimbId, ScaledImpulse, ChargeAlpha, OutwardNormal, HitChar->GetActorLocation());
+                                DynCtx->SetAuthoritativePhysicsPayload(LimbId, ScaledImpulse, ChargeAlpha, OutwardNormal, HitActor->GetActorLocation());
                                 DynCtx->SourcePassBackRules = AbilityConfig.SourcePassBackRules;
                             }
                             SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
@@ -655,6 +744,7 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
         return;
     }
 
+    // Continuous Projectile / Spatial Spawn Delivery
     UDynamicGASManagerComponent* Registry = Avatar->FindComponentByClass<UDynamicGASManagerComponent>();
     float BaseSpeed = Delivery.SpeedOrExpansionRate;
     if (Registry && Delivery.ArchetypeLinkTag.IsValid() && Delivery.SpeedMetricTag.IsValid())
@@ -662,12 +752,11 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
         const float ArchSpeed = Registry->ResolveMetric(Delivery.ArchetypeLinkTag, Delivery.SpeedMetricTag, Delivery.RuntimeMetricModifiers);
         if (ArchSpeed > 0.0f) BaseSpeed = ArchSpeed;
     }
-    const float FinalSpeed = BaseSpeed * (1.0f + (ChargeAlpha * AbilityConfig.ChargeProfile.CostScalingMultiplier));
 
+    const float FinalSpeed = BaseSpeed * (1.0f + (ChargeAlpha * AbilityConfig.ChargeProfile.CostScalingMultiplier));
     const int32 Count = FMath::Max(1, Delivery.SpawnCount);
     const float PowerMultiplierPerInstance = FMath::Pow(Delivery.PowerDecayPerAdditional, static_cast<float>(Count - 1)) * ChargeAlpha;
     const float TotalSpread = Delivery.SpreadAngleDegrees;
-
     const bool bIsAttached = (Delivery.MotionType == ESpatialDeliveryMotion::AttachedToCaster);
     const FVector BaseLoc = bIsAttached ? Avatar->GetActorLocation() : (Avatar->GetActorLocation() + Avatar->GetActorForwardVector() * 80.0f);
     const FRotator BaseRot = Avatar->GetActorRotation();

@@ -3,30 +3,34 @@
 #include "DynamicInteractableComponent.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicAttributeSet.h"
+#include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicEvolutionComponent::UDynamicEvolutionComponent()
 {
-    PrimaryComponentTick.bCanEverTick = true;
-    PrimaryComponentTick.TickInterval = 2.0f; // Optimized check interval for world objects
+    // ZERO TICK OVERHEAD: Fully decoupled from per-frame or polling tick loops
+    PrimaryComponentTick.bCanEverTick = false;
     SetIsReplicatedByDefault(true);
 }
 
 void UDynamicEvolutionComponent::BeginPlay()
 {
     Super::BeginPlay();
+
+    if (GetOwner() && GetOwner()->HasAuthority())
+    {
+        LastScheduledCalculationWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+        RecalculateEvolutionSchedule();
+    }
 }
 
-void UDynamicEvolutionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UDynamicEvolutionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
-
-    const float EnvMultiplier = CalculateEnvironmentalProgressMultiplier();
-    if (EnvMultiplier > 0.0f)
+    if (UWorld* World = GetWorld())
     {
-        ServerAddProgress(DeltaTime * EnvMultiplier);
+        World->GetTimerManager().ClearTimer(TimerHandle_StageAdvancement);
     }
+    Super::EndPlay(EndPlayReason);
 }
 
 void UDynamicEvolutionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -34,11 +38,36 @@ void UDynamicEvolutionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProp
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(UDynamicEvolutionComponent, CurrentProgressValue);
     DOREPLIFETIME(UDynamicEvolutionComponent, CurrentStageTag);
+    DOREPLIFETIME(UDynamicEvolutionComponent, TargetStageCompletionWorldTime);
 }
 
 void UDynamicEvolutionComponent::OnRep_EvolutionData()
 {
-    // Client-side synchronization update
+    // Visual and attribute sync for late-joining and proxy clients
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    const FEvolutionProfileDef* Profile = GS->EvolutionProfilesRegistry.Find(EvolutionProfileTag);
+    if (!Profile || Profile->ProgressionPhases.Num() == 0) return;
+
+    const float NormProgress = (Profile->TotalLifespanOrMaxXP > 0.0f) ? (CurrentProgressValue / Profile->TotalLifespanOrMaxXP) : 0.0f;
+    for (const FEvolutionStageKeyframe& Frame : Profile->ProgressionPhases)
+    {
+        if (Frame.StageTag == CurrentStageTag)
+        {
+            if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent()))
+            {
+                RootPrim->SetWorldScale3D(FVector(Frame.ScaleMultiplier));
+            }
+            OnEvolutionStageAdvanced.Broadcast(CurrentStageTag, NormProgress, Frame.ScaleMultiplier);
+            break;
+        }
+    }
+}
+
+void UDynamicEvolutionComponent::OnRep_TargetProgressTimestamp()
+{
+    // Clients can use this to smoothly interpolate growth visuals locally without server RPC spam
 }
 
 void UDynamicEvolutionComponent::ServerAddProgress(float DeltaAmount)
@@ -53,12 +82,87 @@ void UDynamicEvolutionComponent::ServerAddProgress(float DeltaAmount)
 
     CurrentProgressValue = FMath::Clamp(CurrentProgressValue + DeltaAmount, 0.0f, Profile->TotalLifespanOrMaxXP);
     EvaluateEvolution(CurrentProgressValue / Profile->TotalLifespanOrMaxXP);
+    RecalculateEvolutionSchedule();
+}
+
+void UDynamicEvolutionComponent::RecalculateEvolutionSchedule()
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
+    if (!GS) return;
+
+    const FEvolutionProfileDef* Profile = GS->EvolutionProfilesRegistry.Find(EvolutionProfileTag);
+    if (!Profile || Profile->ProgressionPhases.Num() == 0) return;
+
+    const double Now = World->GetTimeSeconds();
+
+    // 1. Account for progress accrued during previous interval
+    if (LastScheduledCalculationWorldTime > 0.0 && LastScheduledCalculationWorldTime < Now)
+    {
+        const float ElapsedSecs = static_cast<float>(Now - LastScheduledCalculationWorldTime);
+        const float RateMultiplier = CalculateEnvironmentalProgressMultiplier();
+        if (RateMultiplier > 0.0f)
+        {
+            CurrentProgressValue = FMath::Clamp(CurrentProgressValue + (ElapsedSecs * RateMultiplier), 0.0f, Profile->TotalLifespanOrMaxXP);
+            EvaluateEvolution(CurrentProgressValue / Profile->TotalLifespanOrMaxXP);
+        }
+    }
+    LastScheduledCalculationWorldTime = Now;
+
+    // 2. Identify the next milestone keyframe
+    const float CurrentNorm = (Profile->TotalLifespanOrMaxXP > 0.0f) ? (CurrentProgressValue / Profile->TotalLifespanOrMaxXP) : 0.0f;
+    const FEvolutionStageKeyframe* NextKeyframe = nullptr;
+
+    for (const FEvolutionStageKeyframe& Frame : Profile->ProgressionPhases)
+    {
+        if (Frame.NormalizedProgress > CurrentNorm)
+        {
+            NextKeyframe = &Frame;
+            break;
+        }
+    }
+
+    World->GetTimerManager().ClearTimer(TimerHandle_StageAdvancement);
+
+    // If fully evolved, retire the timer
+    if (!NextKeyframe)
+    {
+        TargetStageCompletionWorldTime = 0.0;
+        return;
+    }
+
+    // 3. Compute duration to next milestone
+    const float EffectiveRate = CalculateEnvironmentalProgressMultiplier();
+    if (EffectiveRate <= 0.0f)
+    {
+        // Stagnant / Dormant: Do not schedule a timer; will re-awaken when biome/environment changes
+        TargetStageCompletionWorldTime = -1.0;
+        return;
+    }
+
+    const float ProgressNeeded = (NextKeyframe->NormalizedProgress * Profile->TotalLifespanOrMaxXP) - CurrentProgressValue;
+    const float SecondsUntilNextStage = FMath::Max(0.1f, ProgressNeeded / EffectiveRate);
+
+    TargetStageCompletionWorldTime = Now + SecondsUntilNextStage;
+
+    // 4. Schedule single low-cost wake-up timer
+    World->GetTimerManager().SetTimer(TimerHandle_StageAdvancement, this, &UDynamicEvolutionComponent::HandleScheduledStageReached, SecondsUntilNextStage, false);
+}
+
+void UDynamicEvolutionComponent::HandleScheduledStageReached()
+{
+    RecalculateEvolutionSchedule();
 }
 
 void UDynamicEvolutionComponent::EvaluateEvolution(float NormalizedProgress)
 {
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
+
     const FEvolutionProfileDef* Profile = GS->EvolutionProfilesRegistry.Find(EvolutionProfileTag);
     if (!Profile || Profile->ProgressionPhases.Num() == 0) return;
 
@@ -75,13 +179,11 @@ void UDynamicEvolutionComponent::EvaluateEvolution(float NormalizedProgress)
     {
         CurrentStageTag = ActiveFrame.StageTag;
 
-        // 1. Apply physical mesh scale
         if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent()))
         {
             RootPrim->SetWorldScale3D(FVector(ActiveFrame.ScaleMultiplier));
         }
 
-        // 2. Apply Stage Tags to Interactable Component if present
         if (UDynamicInteractableComponent* Interactable = GetOwner()->FindComponentByClass<UDynamicInteractableComponent>())
         {
             for (const FGameplayTag& Tag : ActiveFrame.TagsToApply)
@@ -90,7 +192,6 @@ void UDynamicEvolutionComponent::EvaluateEvolution(float NormalizedProgress)
             }
         }
 
-        // 3. Apply Stage Attribute Modifiers
         if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(GetOwner()))
         {
             if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(PhysActor->GetDynamicAttributeSet()))
@@ -122,7 +223,6 @@ float UDynamicEvolutionComponent::CalculateEnvironmentalProgressMultiplier() con
 
     for (const FEnvironmentalRateModifier& Mod : Profile->EnvironmentalModifiers)
     {
-        // Query world cell value + any local container/appliance offset (e.g., -25C inside an Icebox)
         float MetricVal = GS->GetEnvironmentMetricAtLocation(WorldLoc, Mod.EnvironmentMetricTag);
         if (const float* LocalOffset = LocalEnvironmentOffsets.LocalLookupMap.Find(Mod.EnvironmentMetricTag))
         {
@@ -131,13 +231,12 @@ float UDynamicEvolutionComponent::CalculateEnvironmentalProgressMultiplier() con
 
         if (Mod.bPauseOutsideRange && (MetricVal < Mod.MinThreshold || MetricVal > Mod.MaxThreshold))
         {
-            return 0.0f; // Completely halted (e.g. plant frozen dormant)
+            return 0.0f;
         }
 
         const float Alpha = FMath::GetRangePct(Mod.MinThreshold, Mod.MaxThreshold, MetricVal);
         const float ClampedAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
         const float ModFactor = FMath::Lerp(Mod.MinRateMultiplier, Mod.MaxRateMultiplier, ClampedAlpha);
-
         CombinedMultiplier *= ModFactor;
     }
 

@@ -1,5 +1,8 @@
 ﻿// DynamicCloudAISubsystem.cpp
 #include "DynamicCloudAISubsystem.h"
+#include "DynamicGameState.h"
+#include "DynamicDataSerializer.h"
+#include "GameplayTagsManager.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Serialization/JsonSerializer.h"
@@ -37,8 +40,7 @@ FGuid UDynamicCloudAISubsystem::DispatchRemoteAIRequest(AActor* RequestingAgent,
 
     PendingRequests.Add(NewGuid, Record);
 
-    // In a production backend, this ships over HTTP POST or WebSockets to the LLM / Coin Miner cluster.
-    // For local validation, we schedule a mock loopback task after a brief latency window.
+    // Mock loopback for testing LLM response integration
     if (UWorld* World = GetWorld())
     {
         FTimerHandle MockTimer;
@@ -46,11 +48,10 @@ FGuid UDynamicCloudAISubsystem::DispatchRemoteAIRequest(AActor* RequestingAgent,
         {
             if (!PendingRequests.Contains(NewGuid)) return;
 
-            // Mocked LLM response JSON conforming to FCloudAICommandOutput schema
             FString MockResponseJson;
             if (RequestType == ECloudAIRequestType::ComplexDecision)
             {
-                MockResponseJson = TEXT("{\"Commands\": [{\"CommandActionTag\": \"Action.Converse.Greet\", \"TargetEntityOrPlaceRoleTag\": \"Role.Place.Tavern\", \"UtteranceText\": \"Hail, traveler! Have you seen the strange weather lately?\", \"PriorityWeight\": 120.0}]}");
+                MockResponseJson = TEXT("{\"Commands\": [{\"CommandActionTag\": \"Action.Converse.Greet\", \"TargetEntityOrPlaceRoleTag\": \"Role.Place.Tavern\", \"UtteranceText\": \"Hail, traveler!\", \"PriorityWeight\": 120.0}]}");
             }
             else
             {
@@ -62,6 +63,37 @@ FGuid UDynamicCloudAISubsystem::DispatchRemoteAIRequest(AActor* RequestingAgent,
     }
 
     return NewGuid;
+}
+
+bool UDynamicCloudAISubsystem::ValidateActionSpaceCommand(const FCloudAICommandOutput& InCommand, FCloudAICommandOutput& OutSanitizedCommand) const
+{
+    OutSanitizedCommand = InCommand;
+
+    // 1. Tag must exist in native GameplayTags dictionary
+    if (!InCommand.CommandActionTag.IsValid() || !UGameplayTagsManager::Get().ValidateTagCreation(InCommand.CommandActionTag.GetTagName()))
+    {
+        return false;
+    }
+
+    // 2. Enforce Action-Space boundaries (strip hallucinated tags)
+    static const FGameplayTag RootAction = FGameplayTag::RequestGameplayTag(TEXT("Action"), false);
+    static const FGameplayTag RootSchedule = FGameplayTag::RequestGameplayTag(TEXT("Schedule"), false);
+    static const FGameplayTag RootSocial = FGameplayTag::RequestGameplayTag(TEXT("Social"), false);
+    static const FGameplayTag RootAbility = FGameplayTag::RequestGameplayTag(TEXT("Ability"), false);
+
+    const bool bIsAuthorizedCategory = InCommand.CommandActionTag.MatchesTag(RootAction) ||
+                                       InCommand.CommandActionTag.MatchesTag(RootSchedule) ||
+                                       InCommand.CommandActionTag.MatchesTag(RootSocial) ||
+                                       InCommand.CommandActionTag.MatchesTag(RootAbility);
+
+    if (!bIsAuthorizedCategory)
+    {
+        return false;
+    }
+
+    // 3. Clamp priority bounds
+    OutSanitizedCommand.PriorityWeight = FMath::Clamp(InCommand.PriorityWeight, 0.0f, 1000.0f);
+    return true;
 }
 
 void UDynamicCloudAISubsystem::InjectRemoteAIResponse(const FGuid& RequestGuid, const FString& ResponseJson)
@@ -79,7 +111,7 @@ void UDynamicCloudAISubsystem::InjectRemoteAIResponse(const FGuid& RequestGuid, 
         return;
     }
 
-    TArray<FCloudAICommandOutput> ParsedCommands;
+    TArray<FCloudAICommandOutput> ValidatedCommands;
     if (RootObj->HasField(TEXT("Commands")))
     {
         for (const auto& Val : RootObj->GetArrayField(TEXT("Commands")))
@@ -87,25 +119,103 @@ void UDynamicCloudAISubsystem::InjectRemoteAIResponse(const FGuid& RequestGuid, 
             TSharedPtr<FJsonObject> CmdObj = Val->AsObject();
             if (!CmdObj.IsValid()) continue;
 
-            FCloudAICommandOutput Cmd;
-            Cmd.CommandActionTag = FGameplayTag::RequestGameplayTag(FName(*CmdObj->GetStringField(TEXT("CommandActionTag"))), false);
+            FCloudAICommandOutput RawCmd;
+            RawCmd.CommandActionTag = FGameplayTag::RequestGameplayTag(FName(*CmdObj->GetStringField(TEXT("CommandActionTag"))), false);
             if (CmdObj->HasField(TEXT("TargetEntityOrPlaceRoleTag")))
             {
-                Cmd.TargetEntityOrPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName(*CmdObj->GetStringField(TEXT("TargetEntityOrPlaceRoleTag"))), false);
+                RawCmd.TargetEntityOrPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName(*CmdObj->GetStringField(TEXT("TargetEntityOrPlaceRoleTag"))), false);
             }
             if (CmdObj->HasField(TEXT("UtteranceText")))
             {
-                Cmd.UtteranceText = CmdObj->GetStringField(TEXT("UtteranceText"));
+                RawCmd.UtteranceText = CmdObj->GetStringField(TEXT("UtteranceText"));
             }
             if (CmdObj->HasField(TEXT("PriorityWeight")))
             {
-                Cmd.PriorityWeight = static_cast<float>(CmdObj->GetNumberField(TEXT("PriorityWeight")));
+                RawCmd.PriorityWeight = static_cast<float>(CmdObj->GetNumberField(TEXT("PriorityWeight")));
             }
-            ParsedCommands.Add(Cmd);
+
+            FCloudAICommandOutput SanitizedCmd;
+            if (ValidateActionSpaceCommand(RawCmd, SanitizedCmd))
+            {
+                ValidatedCommands.Add(SanitizedCmd);
+            }
         }
     }
 
-    OnRemoteAIResponseReceived.Broadcast(RequestGuid, ParsedCommands);
+    OnRemoteAIResponseReceived.Broadcast(RequestGuid, ValidatedCommands);
+}
+
+bool UDynamicCloudAISubsystem::ValidateConditionNodeTreeAcyclic(const FDynamicConditionTreeContainer& Tree) const
+{
+    if (Tree.FlatNodes.Num() == 0) return true;
+
+    TSet<int32> Visited;
+    TArray<int32> TraversalStack;
+    TraversalStack.Push(0);
+
+    while (TraversalStack.Num() > 0)
+    {
+        const int32 Current = TraversalStack.Pop();
+        if (Visited.Contains(Current))
+        {
+            return false; // Detected cyclic reference
+        }
+        Visited.Add(Current);
+
+        if (!Tree.FlatNodes.IsValidIndex(Current))
+        {
+            return false; // Invalid node index
+        }
+
+        for (int32 ChildIdx : Tree.FlatNodes[Current].ChildIndices)
+        {
+            if (!Tree.FlatNodes.IsValidIndex(ChildIdx) || ChildIdx == Current)
+            {
+                return false;
+            }
+            TraversalStack.Push(ChildIdx);
+        }
+    }
+
+    return true;
+}
+
+bool UDynamicCloudAISubsystem::InjectDynamicConditionTreeFromJson(FName TreeName, const FString& ConditionTreeJson)
+{
+    if (TreeName.IsNone() || ConditionTreeJson.IsEmpty()) return false;
+
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ConditionTreeJson);
+    TSharedPtr<FJsonObject> RootObj;
+    if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid()) return false;
+
+    // Build temporary test container via deserializer
+    FDynamicConditionTreeContainer NewContainer;
+    TSharedRef<FJsonObject> Wrapper = MakeShareable(new FJsonObject());
+    Wrapper->SetObjectField(TreeName.ToString(), RootObj);
+
+    FString TempJson;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&TempJson);
+    FJsonSerializer::Serialize(Wrapper, Writer);
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return false;
+
+    // Use deserializer helper to populate flat nodes
+    TSharedPtr<FJsonObject> DeserializedWrapper;
+    TSharedRef<TJsonReader<>> WrapReader = TJsonReaderFactory<>::Create(TempJson);
+    FJsonSerializer::Deserialize(WrapReader, DeserializedWrapper);
+
+    if (!DeserializedWrapper.IsValid() || !DeserializedWrapper->HasField(TreeName.ToString())) return false;
+
+    // Validate acyclic structure and legal indices
+    if (!ValidateConditionNodeTreeAcyclic(NewContainer))
+    {
+        return false;
+    }
+
+    // Safely register directly into GameState runtime registry
+    GS->SharedConditionTrees.Add(TreeName, NewContainer);
+    return true;
 }
 
 bool UDynamicCloudAISubsystem::IsRequestPending(const FGuid& RequestGuid) const
@@ -131,7 +241,6 @@ void UDynamicCloudAISubsystem::CheckPendingRequestTimeouts()
     for (const FGuid& DeadGuid : TimedOutGuids)
     {
         PendingRequests.Remove(DeadGuid);
-        // Broadcast empty command array signaling a timeout
         OnRemoteAIResponseReceived.Broadcast(DeadGuid, TArray<FCloudAICommandOutput>());
     }
 }

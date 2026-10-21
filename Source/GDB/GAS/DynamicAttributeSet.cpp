@@ -142,13 +142,19 @@ void FDynamicAttributeItem::PostReplicatedChange(const FFastAttributeArray& InAr
 
 void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, float NewVal, uint8 LimbId)
 {
+    SetDynamicAttributeValueInternal(AttributeTag, NewVal, LimbId, ActiveThresholdEvaluationKeys);
+}
+
+void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag AttributeTag, float NewVal, uint8 LimbId, TSet<uint64>& InOutEvaluationStack)
+{
     if (!AttributeTag.IsValid()) return;
 
-    // Enforce thread-local recursion depth guards to block infinite cascading threshold loops
-    static thread_local int32 ThresholdEvaluationDepth = 0;
-    if (ThresholdEvaluationDepth > 4)
+    const uint64 CompositeKey = MakeCompositeKey(LimbId, AttributeTag);
+
+    // Call-stack cycle detector: Explicit stack tracking prevents infinite loops across all threads
+    if (InOutEvaluationStack.Contains(CompositeKey))
     {
-        UE_LOG(LogTemp, Error, TEXT("DynamicAttributeSet: Aborted recursive threshold escalation for Tag %s on Limb %d"), *AttributeTag.ToString(), LimbId);
+        UE_LOG(LogTemp, Warning, TEXT("DynamicAttributeSet: Aborted recursive cycle on Tag %s (Limb %d)"), *AttributeTag.ToString(), LimbId);
         return;
     }
 
@@ -156,11 +162,11 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
 
-    const uint64 CompositeKey = MakeCompositeKey(LimbId, AttributeTag);
     const bool bIsNewAttribute = !FastCompositeLookupMap.Contains(CompositeKey);
     const float OldVal = FastCompositeLookupMap.FindRef(CompositeKey);
     float Delta = NewVal - OldVal;
 
+    // 1. Threshold rules check (if registered)
     if (GS && !FMath::IsNearlyZero(Delta))
     {
         if (FDynamicThresholdContainer* Container = GS->MasterThresholdRegistry.Find(AttributeTag))
@@ -225,11 +231,19 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
         }
     }
 
-    if (OwningActor)
+    // 2. High-Performance Milestone Evaluation:
+    // Only evaluate milestones when crossing an integer boundary AND the tag actually exists in the registry
+    if (OwningActor && GS && GS->MasterMilestoneRegistry.Contains(AttributeTag))
     {
-        EvaluateMilestoneChanges(AttributeTag, OldVal, NewVal, OwningActor, LimbId);
+        const int32 OldInt = FMath::FloorToInt(OldVal);
+        const int32 NewInt = FMath::FloorToInt(NewVal);
+        if (OldInt != NewInt)
+        {
+            EvaluateMilestoneChanges(AttributeTag, OldVal, NewVal, OwningActor, LimbId);
+        }
     }
 
+    // 3. Threshold Progression Escalation (Level-up wrap-around)
     if (GS)
     {
         if (FDynamicThresholdContainer* Container = GS->MasterThresholdRegistry.Find(AttributeTag))
@@ -241,12 +255,11 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
                 {
                     if (Rule.TriggerBehavior == EThresholdTriggerType::LevelUpAttribute)
                     {
-                        ++ThresholdEvaluationDepth;
+                        InOutEvaluationStack.Add(CompositeKey);
 
-                        // Carry over overflow progress rather than discarding progression
                         const float RemainingProgress = NewVal - MaxCapValue;
-                        SetDynamicAttributeValue(Rule.MonitoredAttributeTag, RemainingProgress, LimbId);
-                        SetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, GetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, LimbId) + 1.0f, LimbId);
+                        SetDynamicAttributeValueInternal(Rule.MonitoredAttributeTag, RemainingProgress, LimbId, InOutEvaluationStack);
+                        SetDynamicAttributeValueInternal(Rule.TargetEvolvedAttributeTag, GetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, LimbId) + 1.0f, LimbId, InOutEvaluationStack);
 
                         if (Rule.BroadcastEventTag.IsValid())
                         {
@@ -259,7 +272,7 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
                             }
                         }
 
-                        --ThresholdEvaluationDepth;
+                        InOutEvaluationStack.Remove(CompositeKey);
                     }
                 }
             }
@@ -276,7 +289,6 @@ void UDynamicAttributeSet::EvaluateMilestoneChanges(FGameplayTag AttributeTag, f
 
     const int32 OldInt = FMath::FloorToInt(OldValue);
     const int32 NewInt = FMath::FloorToInt(NewValue);
-    if (OldInt == NewInt) return;
 
     if (FDynamicMilestoneContainer* Container = GS->MasterMilestoneRegistry.Find(AttributeTag))
     {

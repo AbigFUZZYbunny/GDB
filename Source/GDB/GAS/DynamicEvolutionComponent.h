@@ -8,42 +8,61 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnEvolutionStageAdvancedSignature, FGameplayTag, NewStageTag, float, CurrentProgress, float, CurrentScale);
 
+/**
+ * Event-Driven Evolution Component.
+ * Completely eliminates frame/interval polling ticks across thousands of world actors.
+ * Uses predictive completion timestamps and wakes up strictly on stage milestones or environmental shifts.
+ */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicEvolutionComponent : public UActorComponent
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	UDynamicEvolutionComponent();
+    UDynamicEvolutionComponent();
 
-	virtual void BeginPlay() override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Evolution")
-	FOnEvolutionStageAdvancedSignature OnEvolutionStageAdvanced;
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Evolution")
+    FOnEvolutionStageAdvancedSignature OnEvolutionStageAdvanced;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
-	FGameplayTag EvolutionProfileTag;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FGameplayTag EvolutionProfileTag;
 
-	UPROPERTY(ReplicatedUsing = OnRep_EvolutionData, BlueprintReadOnly, Category = "Dynamic GAS|Evolution")
-	float CurrentProgressValue = 0.0f;
+    UPROPERTY(ReplicatedUsing = OnRep_EvolutionData, BlueprintReadOnly, Category = "Dynamic GAS|Evolution")
+    float CurrentProgressValue = 0.0f;
 
-	UPROPERTY(ReplicatedUsing = OnRep_EvolutionData, BlueprintReadOnly, Category = "Dynamic GAS|Evolution")
-	FGameplayTag CurrentStageTag;
+    UPROPERTY(ReplicatedUsing = OnRep_EvolutionData, BlueprintReadOnly, Category = "Dynamic GAS|Evolution")
+    FGameplayTag CurrentStageTag;
 
-	UFUNCTION()
-	void OnRep_EvolutionData();
+    UPROPERTY(ReplicatedUsing = OnRep_TargetProgressTimestamp, BlueprintReadOnly, Category = "Dynamic GAS|Evolution")
+    double TargetStageCompletionWorldTime = 0.0;
 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Evolution")
-	void ServerAddProgress(float DeltaAmount);
+    UFUNCTION()
+    void OnRep_EvolutionData();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
-	FDynamicTagFloatMapWrapper LocalEnvironmentOffsets;
+    UFUNCTION()
+    void OnRep_TargetProgressTimestamp();
 
-	UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Evolution")
-	float CalculateEnvironmentalProgressMultiplier() const;
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Evolution")
+    void ServerAddProgress(float DeltaAmount);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Evolution")
+    FDynamicTagFloatMapWrapper LocalEnvironmentOffsets;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Evolution")
+    float CalculateEnvironmentalProgressMultiplier() const;
+
+    // Recalculates expected completion time and schedules the next wake-up timer
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Evolution")
+    void RecalculateEvolutionSchedule();
 
 private:
-	void EvaluateEvolution(float NewProgress);
+    void HandleScheduledStageReached();
+    void EvaluateEvolution(float NormalizedProgress);
+
+    FTimerHandle TimerHandle_StageAdvancement;
+    double LastScheduledCalculationWorldTime = 0.0;
 };

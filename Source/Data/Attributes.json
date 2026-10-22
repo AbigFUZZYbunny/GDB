@@ -158,7 +158,8 @@
           { "KeyTag": "Localization.Name", "Value": "Strength Stat Points Available" },
           { "KeyTag": "Localization.Description", "Value": "Spend these points on the %Stat Skill Tree%{Link::SkillTreeWidget.Stat} to increase your abilities" }
         ]
-      },
+      }
+    },
     "Attribute.Stat.Strength.Max": {
       "AttributeTag": "Attribute.Stat.Strength.Max",
       "DefaultValue": 1000.0,
@@ -359,4 +360,4 @@
       ]
     }
   }
-},
+}

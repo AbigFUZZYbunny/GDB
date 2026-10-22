@@ -115,12 +115,12 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
 
     if (!HasAuthority()) return;
 
-    UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get());
-    if (MutableAttr)
+    // Optimization C: Clean mutable access without const_cast
+    if (AttributeSet)
     {
         for (const FTagFloatPair& Pair : Def->DefaultGlobalAttributes.ReplicatedEntries)
         {
-            if (Pair.KeyTag.IsValid()) MutableAttr->SetDynamicAttributeValue(Pair.KeyTag, Pair.Value, 0);
+            if (Pair.KeyTag.IsValid()) AttributeSet->SetDynamicAttributeValue(Pair.KeyTag, Pair.Value, 0);
         }
 
         for (const auto& Pair : LocalLimbLookupMap)
@@ -131,7 +131,7 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
                 {
                     if (AttrPair.KeyTag.IsValid())
                     {
-                        MutableAttr->SetDynamicAttributeValue(AttrPair.KeyTag, AttrPair.Value, Pair.Key);
+                        AttributeSet->SetDynamicAttributeValue(AttrPair.KeyTag, AttrPair.Value, Pair.Key);
                     }
                 }
             }
@@ -142,7 +142,6 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
     if (InteractableComponent)
     {
         InteractableComponent->KinematicTargetPoints = Def->KinematicTargetPoints;
-        // Invalidate transient caches on the freshly assigned target point records
         InteractableComponent->InvalidateAllKinematicCaches();
 
         for (const FGameplayTag& StateTag : Def->InitialInteractableStateTags)
@@ -240,17 +239,17 @@ void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerS
 {
     if (!HasAuthority()) return;
 
-    if (UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get()))
+    // Optimization C: Clean mutable access without const_cast
+    if (AttributeSet)
     {
         for (const FDynamicAttributeItem& SavedAttr : Snapshot.SavedAttributeState)
         {
-            if (SavedAttr.AttributeTag.IsValid()) MutableAttr->SetDynamicAttributeValue(SavedAttr.AttributeTag, SavedAttr.Value, SavedAttr.LimbId);
+            if (SavedAttr.AttributeTag.IsValid()) AttributeSet->SetDynamicAttributeValue(SavedAttr.AttributeTag, SavedAttr.Value, SavedAttr.LimbId);
         }
     }
 
     if (InteractableComponent && Snapshot.SavedInteractableStates.Num() > 0)
     {
-        // Copy to avoid iterator invalidation during mutation
         const FGameplayTagContainer OldTags = InteractableComponent->GetCurrentStateTags();
         for (const FGameplayTag& OldTag : OldTags)
         {
@@ -279,12 +278,12 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
         AbilitySystemComponent->RemoveAllGameplayCues();
     }
 
-    // 2. Dynamic Attribute Set: reset fast array items
-    if (UDynamicAttributeSet* MutableAttr = const_cast<UDynamicAttributeSet*>(AttributeSet.Get()))
+    // 2. Dynamic Attribute Set: reset fast array items (Optimization C: No const_cast needed)
+    if (AttributeSet)
     {
-        MutableAttr->FastAttributes.Items.Empty();
-        MutableAttr->FastAttributes.MarkArrayDirty();
-        MutableAttr->OnRep_FastAttributes();
+        AttributeSet->FastAttributes.Items.Empty();
+        AttributeSet->FastAttributes.MarkArrayDirty();
+        AttributeSet->OnRep_FastAttributes();
     }
 
     // 3. Dynamic Force Component: clear pending impulses

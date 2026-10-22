@@ -4,7 +4,10 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "HAL/PlatformProcess.h"
+#include "Interfaces/IHttpRequest.h"
 #include "DynamicServerHostSubsystem.generated.h"
+
+class ADynamicCharacter;
 
 USTRUCT(BlueprintType)
 struct FLocalServerSpoolConfig
@@ -20,7 +23,6 @@ struct FLocalServerSpoolConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Server Spooling")
     int32 MaxPlayers = 5;
 
-    // AI routing strategy passed via command line to the child process: "heuristic", "ollama", or "cloud"
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Server Spooling")
     FString CloudAiMode = TEXT("heuristic");
 
@@ -40,29 +42,43 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
-    /**
-     * Spools up a dedicated server binary from the local host client.
-     * @param Config Startup configuration options including map, port, and AI pipeline.
-     * @param OutProcessId Platform process ID of the spawned server.
-     * @return True if the process successfully executed.
-     */
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Server Hosting")
     bool SpoolLocalDedicatedServer(const FLocalServerSpoolConfig& Config, int32& OutProcessId);
 
-    // Checks whether the spooled background server process is alive
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Server Hosting")
     bool IsLocalDedicatedServerRunning() const;
 
-    // Terminates the background server process if currently running
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Server Hosting")
     void TerminateLocalDedicatedServer();
 
-    // Directs the local player controller to connect to the spooled server (127.0.0.1:Port)
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Server Hosting")
     void ConnectLocalPlayerToServer(int32 Port = 7777);
 
+    // --- Tokenized Snapshot Management ---
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
+    FGuid StoreHandoffSnapshotWithToken(const FString& SnapshotJson);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
+    bool ConsumeHandoffSnapshotByToken(const FString& TokenStr, FString& OutSnapshotJson);
+
+    UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
+    bool HasHandoffToken(const FString& TokenStr) const;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
+    void InitiatePlayerServerHandoff(APlayerController* PlayerController, const FString& TargetServerIP, int32 TargetServerPort, const FString& TargetServerApiSecret);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
+    bool IngestPlayerHandoffPayload(const FGuid& PlayerGuid, const FString& JsonPayload);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
+    ADynamicCharacter* ClaimHandoffCharacter(const FGuid& PlayerGuid, const FTransform& SpawnTransform, AController* NewOwner);
+
 private:
-    // Marked mutable so const BlueprintPure queries can pass non-const FProcHandle& references to FPlatformProcess
     mutable FProcHandle ActiveServerProcessHandle;
     uint32 ActiveServerProcessId = 0;
+
+    TMap<FGuid, FString> PendingHandoffSnapshots;
+
+    void HandleHandoffIPCResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully, TWeakObjectPtr<APlayerController> WeakPC, const FString& TravelURL);
 };

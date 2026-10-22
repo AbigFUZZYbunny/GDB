@@ -112,12 +112,13 @@ enum class ELogicOperator : uint8
 };
 
 UENUM(BlueprintType)
-enum class EConditionType : uint8 
-{ 
-    LogicalGateOnly, 
-    TagExists, 
-    TagValuePair, 
-    AttributeValue 
+enum class EConditionType : uint8
+{
+    LogicalGateOnly,
+    TagExists,
+    TagValuePair,
+    AttributeValue,
+    AttributeComparedToWorldTime
 };
 
 UENUM(BlueprintType)
@@ -642,48 +643,7 @@ struct TStructOpsTypeTraits<FFastInteractableStateArray> : public TStructOpsType
     enum { WithNetDeltaSerializer = true };
 };
 
-// ============================================================================
-// REPLICATED PHYSICS HIT PAYLOAD BUFFER
-// ============================================================================
 
-USTRUCT(BlueprintType)
-struct FFastPhysicsHitRepItem : public FFastArraySerializerItem
-{
-    GENERATED_BODY()
-
-    UPROPERTY() uint8 TargetLimbId = 0;
-    UPROPERTY() uint16 PackedImpulseMagnitude = 0;
-    UPROPERTY() FVector_NetQuantizeNormal HitNormal = FVector_NetQuantizeNormal::ZeroVector;
-    UPROPERTY() FVector_NetQuantize10 HitLocation = FVector_NetQuantize10::ZeroVector;
-    UPROPERTY() uint8 ReactionState = 0;
-
-    void PreReplicatedRemove(const struct FFastPhysicsHitRepArray& InArrayOwner) {}
-    void PostReplicatedAdd(const struct FFastPhysicsHitRepArray& InArrayOwner);
-    void PostReplicatedChange(const struct FFastPhysicsHitRepArray& InArrayOwner);
-};
-
-USTRUCT(BlueprintType)
-struct FFastPhysicsHitRepArray : public FFastArraySerializer
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    TArray<FFastPhysicsHitRepItem> Items;
-
-    UPROPERTY(NotReplicated)
-    UDynamicForceComponent* OwnerForceComponent = nullptr;
-
-    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
-    {
-        return FFastArraySerializer::FastArrayDeltaSerialize<FFastPhysicsHitRepItem, FFastPhysicsHitRepArray>(Items, DeltaParms, *this);
-    }
-};
-
-template<>
-struct TStructOpsTypeTraits<FFastPhysicsHitRepArray> : public TStructOpsTypeTraitsBase2<FFastPhysicsHitRepArray>
-{
-    enum { WithNetDeltaSerializer = true };
-};
 
 // ============================================================================
 // ITEM & CONTAINER GRID SYSTEM
@@ -2799,6 +2759,92 @@ struct TStructOpsTypeTraits<FFastRelationshipEdgeArray> : public TStructOpsTypeT
     enum { WithNetDeltaSerializer = true };
 };
 
+// ============================================================================
+// SOCIAL FAST ARRAYS (RELATIONSHIPS, NEEDS, KNOWN PLACES)
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicRelationshipItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGuid TargetPersistentGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTag RelationshipTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FDynamicTagFloatMapWrapper Metrics;
+
+    void PreReplicatedRemove(const struct FDynamicRelationshipFastArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FDynamicRelationshipFastArray& InArrayOwner);
+    void PostReplicatedChange(const struct FDynamicRelationshipFastArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicRelationshipFastArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicRelationshipItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicRelationshipItem, FDynamicRelationshipFastArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FDynamicRelationshipFastArray> : public TStructOpsTypeTraitsBase2<FDynamicRelationshipFastArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+
+USTRUCT(BlueprintType)
+struct FDynamicNeedAndMoodItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FGameplayTag NeedOrMoodTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    float CurrentValue = 0.0f;
+
+    void PreReplicatedRemove(const struct FDynamicNeedAndMoodFastArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FDynamicNeedAndMoodFastArray& InArrayOwner);
+    void PostReplicatedChange(const struct FDynamicNeedAndMoodFastArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicNeedAndMoodFastArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicNeedAndMoodItem> Items;
+
+    UPROPERTY(NotReplicated)
+    UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicNeedAndMoodItem, FDynamicNeedAndMoodFastArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FDynamicNeedAndMoodFastArray> : public TStructOpsTypeTraitsBase2<FDynamicNeedAndMoodFastArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
 USTRUCT(BlueprintType)
 struct FDynamicKnownPlaceItem : public FFastArraySerializerItem
 {
@@ -2822,7 +2868,7 @@ struct FDynamicKnownPlaceItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
     double LastVisitedWorldTime = 0.0;
 
-    void PreReplicatedRemove(const struct FFastKnownPlaceArray& InArrayOwner);
+    void PreReplicatedRemove(const struct FFastKnownPlaceArray& InArrayOwner) {}
     void PostReplicatedAdd(const struct FFastKnownPlaceArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastKnownPlaceArray& InArrayOwner);
 };
@@ -3518,9 +3564,42 @@ struct TStructOpsTypeTraits<FFastKnownWordArray> : public TStructOpsTypeTraitsBa
 };
 
 USTRUCT(BlueprintType)
+struct FDraggedPhysicsActorSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGuid ActorPersistentGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGameplayTag ActorArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FTransform WorldTransform = FTransform::Identity;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FVector LinearVelocity = FVector::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FVector AngularVelocity = FVector::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicAttributeItem> SavedAttributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGameplayTagContainer SavedInteractableStates;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDynamicContainerSlotItem> ContainerInventory;
+};
+
+USTRUCT(BlueprintType)
 struct FPlayerPersistenceSnapshot
 {
     GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    FGuid CharacterGuid;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     FGameplayTag CharacterTemplateTag;
@@ -3562,9 +3641,6 @@ struct FPlayerPersistenceSnapshot
     TArray<FDynamicKnownWordItem> KnownWords;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
-    FGuid CharacterGuid;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     TArray<FDynamicRelationshipEdgeItem> Relationships;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
@@ -3572,6 +3648,10 @@ struct FPlayerPersistenceSnapshot
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
     TArray<FDynamicKnownPlaceItem> KnownPlaces;
+    
+    // Tethered or dragged world actors traversing the server boundary
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Persistence")
+    TArray<FDraggedPhysicsActorSnapshot> DraggedPhysicsActors;
 };
 
 USTRUCT(BlueprintType)

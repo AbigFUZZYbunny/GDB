@@ -6,8 +6,14 @@
       "Category": "DynamicEconomic",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Title", "Value": "Supplies for the Workshop" },
-          { "KeyTag": "Localization.Description", "Value": "The village woodworker has received an influx of furniture orders and is running critically low on timber logs." }
+          {
+            "KeyTag": "Localization.Title",
+            "Value": "Supplies for the Workshop"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "The village woodworker has received an influx of furniture orders and is running critically low on timber logs."
+          }
         ]
       },
       "PrerequisiteConditionTreeName": "None",
@@ -23,8 +29,14 @@
           "StepTag": "QuestStep.GatherPineTimber",
           "Localization": {
             "ReplicatedEntries": [
-              { "KeyTag": "Localization.Name", "Value": "Deliver Timber to Sawmill" },
-              { "KeyTag": "Localization.Description", "Value": "Chop down mature pine trees or buy timber logs and deliver them to the woodworker's workshop storage." }
+              {
+                "KeyTag": "Localization.Name",
+                "Value": "Deliver Timber to Sawmill"
+              },
+              {
+                "KeyTag": "Localization.Description",
+                "Value": "Chop down mature pine trees or buy timber logs and deliver them to the woodworker's workshop storage."
+              }
             ]
           },
           "bAutoAdvanceOnObjectivesCompleted": true,
@@ -49,10 +61,18 @@
                 "TrustDelta": 0.25,
                 "DebtDelta": 0.0,
                 "ItemRewards": [
-                  { "ArchetypeTag": "Actor.Tool.WoodPlane", "RequiredQuantity": 1, "bConsume": false }
+                  {
+                    "ArchetypeTag": "Actor.Tool.WoodPlane",
+                    "RequiredQuantity": 1,
+                    "bConsume": false
+                  }
                 ],
                 "AttributeModifiers": [
-                  { "TargetAttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry", "ModifierOp": "Additive", "Magnitude": 2.0 }
+                  {
+                    "TargetAttributeTag": "GDB_Crafting.Attribute.Mastery.Carpentry",
+                    "ModifierOp": "Additive",
+                    "Magnitude": 2.0
+                  }
                 ]
               }
             }
@@ -65,8 +85,14 @@
       "Category": "DynamicBounty",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Title", "Value": "Jaws in the Timberland" },
-          { "KeyTag": "Localization.Description", "Value": "A pack of feral grey wolves has encroached upon the timber felling perimeter, injuring loggers and halting lumber operations." }
+          {
+            "KeyTag": "Localization.Title",
+            "Value": "Jaws in the Timberland"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "A pack of feral grey wolves has encroached upon the timber felling perimeter, injuring loggers and halting lumber operations."
+          }
         ]
       },
       "PrerequisiteConditionTreeName": "None",
@@ -82,8 +108,14 @@
           "StepTag": "QuestStep.CullWolfPack",
           "Localization": {
             "ReplicatedEntries": [
-              { "KeyTag": "Localization.Name", "Value": "Cull the Forest Pack" },
-              { "KeyTag": "Localization.Description", "Value": "Hunt down and eliminate the wolves preying on the logging trails." }
+              {
+                "KeyTag": "Localization.Name",
+                "Value": "Cull the Forest Pack"
+              },
+              {
+                "KeyTag": "Localization.Description",
+                "Value": "Hunt down and eliminate the wolves preying on the logging trails."
+              }
             ]
           },
           "bAutoAdvanceOnObjectivesCompleted": true,
@@ -107,8 +139,16 @@
                 "AffinityDelta": 0.30,
                 "TrustDelta": 0.35,
                 "AttributeModifiers": [
-                  { "TargetAttributeTag": "Attribute.Resource.Experience", "ModifierOp": "Additive", "Magnitude": 150.0 },
-                  { "TargetAttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting", "ModifierOp": "Additive", "Magnitude": 5.0 }
+                  {
+                    "TargetAttributeTag": "Attribute.Resource.Experience",
+                    "ModifierOp": "Additive",
+                    "Magnitude": 150.0
+                  },
+                  {
+                    "TargetAttributeTag": "GDB_Crafting.Attribute.Mastery.Hunting",
+                    "ModifierOp": "Additive",
+                    "Magnitude": 5.0
+                  }
                 ]
               }
             }
@@ -121,8 +161,14 @@
       "Category": "DynamicBounty",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Title", "Value": "The Cellar Scourge" },
-          { "KeyTag": "Localization.Description", "Value": "Grain storage cellars have been overrun by burrowing rodents contaminating vital food provisions." }
+          {
+            "KeyTag": "Localization.Title",
+            "Value": "The Cellar Scourge"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "Grain storage cellars have been overrun by burrowing rodents contaminating vital food provisions."
+          }
         ]
       },
       "PrerequisiteConditionTreeName": "None",
@@ -138,8 +184,14 @@
           "StepTag": "QuestStep.ClearGranaryPests",
           "Localization": {
             "ReplicatedEntries": [
-              { "KeyTag": "Localization.Name", "Value": "Exterminate Granary Rodents" },
-              { "KeyTag": "Localization.Description", "Value": "Enter the town cellars and destroy the pest swarm." }
+              {
+                "KeyTag": "Localization.Name",
+                "Value": "Exterminate Granary Rodents"
+              },
+              {
+                "KeyTag": "Localization.Description",
+                "Value": "Enter the town cellars and destroy the pest swarm."
+              }
             ]
           },
           "bAutoAdvanceOnObjectivesCompleted": true,
@@ -163,7 +215,11 @@
                 "AffinityDelta": 0.20,
                 "TrustDelta": 0.15,
                 "ItemRewards": [
-                  { "ArchetypeTag": "Item.Food.Bread", "RequiredQuantity": 4, "bConsume": false }
+                  {
+                    "ArchetypeTag": "Item.Food.Bread",
+                    "RequiredQuantity": 4,
+                    "bConsume": false
+                  }
                 ]
               }
             }
@@ -176,8 +232,14 @@
       "Category": "Story",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Title", "Value": "The Shadow Over Raven Ridge" },
-          { "KeyTag": "Localization.Description", "Value": "An organized bandit syndicate has blockaded the mountain pass, demanding tribute from the village magistrate or threatening to raze the settlement." }
+          {
+            "KeyTag": "Localization.Title",
+            "Value": "The Shadow Over Raven Ridge"
+          },
+          {
+            "KeyTag": "Localization.Description",
+            "Value": "An organized bandit syndicate has blockaded the mountain pass, demanding tribute from the village magistrate or threatening to raze the settlement."
+          }
         ]
       },
       "PrerequisiteConditionTreeName": "None",
@@ -193,8 +255,14 @@
           "StepTag": "QuestStep.InvestigatePass",
           "Localization": {
             "ReplicatedEntries": [
-              { "KeyTag": "Localization.Name", "Value": "Scout the Ridge Outpost" },
-              { "KeyTag": "Localization.Description", "Value": "Travel to Raven Ridge Pass and assess the bandit warlord's strength." }
+              {
+                "KeyTag": "Localization.Name",
+                "Value": "Scout the Ridge Outpost"
+              },
+              {
+                "KeyTag": "Localization.Description",
+                "Value": "Travel to Raven Ridge Pass and assess the bandit warlord's strength."
+              }
             ]
           },
           "bAutoAdvanceOnObjectivesCompleted": false,
@@ -213,8 +281,14 @@
               "NextStepTag": "QuestStep.AssaultBanditCamp",
               "Localization": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Localization.Name", "Value": "Assault the Stronghold" },
-                  { "KeyTag": "Localization.Description", "Value": "Refuse all parley and wipe out the bandit leadership with armed force." }
+                  {
+                    "KeyTag": "Localization.Name",
+                    "Value": "Assault the Stronghold"
+                  },
+                  {
+                    "KeyTag": "Localization.Description",
+                    "Value": "Refuse all parley and wipe out the bandit leadership with armed force."
+                  }
                 ]
               },
               "BranchConsequences": {}
@@ -224,8 +298,14 @@
               "NextStepTag": "QuestStep.NegotiateTribute",
               "Localization": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Localization.Name", "Value": "Parley with the Warlord" },
-                  { "KeyTag": "Localization.Description", "Value": "Approach the warlord to negotiate a trade tribute or alternative pact." }
+                  {
+                    "KeyTag": "Localization.Name",
+                    "Value": "Parley with the Warlord"
+                  },
+                  {
+                    "KeyTag": "Localization.Description",
+                    "Value": "Approach the warlord to negotiate a trade tribute or alternative pact."
+                  }
                 ]
               },
               "BranchConsequences": {}
@@ -236,8 +316,14 @@
           "StepTag": "QuestStep.AssaultBanditCamp",
           "Localization": {
             "ReplicatedEntries": [
-              { "KeyTag": "Localization.Name", "Value": "Slay the Outlaw Warlord" },
-              { "KeyTag": "Localization.Description", "Value": "Eliminate the bandit warlord and his elite brigands to secure the village." }
+              {
+                "KeyTag": "Localization.Name",
+                "Value": "Slay the Outlaw Warlord"
+              },
+              {
+                "KeyTag": "Localization.Description",
+                "Value": "Eliminate the bandit warlord and his elite brigands to secure the village."
+              }
             ]
           },
           "bAutoAdvanceOnObjectivesCompleted": true,
@@ -260,12 +346,22 @@
                 "CurrencyReward": 500.0,
                 "AffinityDelta": 0.50,
                 "TrustDelta": 0.60,
-                "GrantedTags": [ "Title.DefenderOfRavenRidge" ],
+                "GrantedTags": [
+                  "Title.DefenderOfRavenRidge"
+                ],
                 "ItemRewards": [
-                  { "ArchetypeTag": "Actor.Combat.Weapon.Sword.SteelClaymore", "RequiredQuantity": 1, "bConsume": false }
+                  {
+                    "ArchetypeTag": "Actor.Combat.Weapon.Sword.SteelClaymore",
+                    "RequiredQuantity": 1,
+                    "bConsume": false
+                  }
                 ],
                 "AttributeModifiers": [
-                  { "TargetAttributeTag": "Attribute.Resource.Experience", "ModifierOp": "Additive", "Magnitude": 450.0 }
+                  {
+                    "TargetAttributeTag": "Attribute.Resource.Experience",
+                    "ModifierOp": "Additive",
+                    "Magnitude": 450.0
+                  }
                 ]
               }
             }
@@ -275,8 +371,14 @@
           "StepTag": "QuestStep.NegotiateTribute",
           "Localization": {
             "ReplicatedEntries": [
-              { "KeyTag": "Localization.Name", "Value": "Confront the Bandit Warlord" },
-              { "KeyTag": "Localization.Description", "Value": "Speak with Warlord Douglas. Decide whether to pay them off, intimidate them, or betray the town." }
+              {
+                "KeyTag": "Localization.Name",
+                "Value": "Confront the Bandit Warlord"
+              },
+              {
+                "KeyTag": "Localization.Description",
+                "Value": "Speak with Warlord Douglas. Decide whether to pay them off, intimidate them, or betray the town."
+              }
             ]
           },
           "bAutoAdvanceOnObjectivesCompleted": false,
@@ -297,15 +399,23 @@
               "bMarkedAsSuccess": true,
               "Localization": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Localization.Name", "Value": "Pay Mountain Tribute" },
-                  { "KeyTag": "Localization.Description", "Value": "Pay 200 gold from village coffer reserves to secure peace." }
+                  {
+                    "KeyTag": "Localization.Name",
+                    "Value": "Pay Mountain Tribute"
+                  },
+                  {
+                    "KeyTag": "Localization.Description",
+                    "Value": "Pay 200 gold from village coffer reserves to secure peace."
+                  }
                 ]
               },
               "BranchConsequences": {
                 "CurrencyReward": -200.0,
                 "AffinityDelta": 0.15,
                 "TrustDelta": 0.10,
-                "GrantedTags": [ "State.Faction.BanditNonAggression" ]
+                "GrantedTags": [
+                  "State.Faction.BanditNonAggression"
+                ]
               }
             },
             {
@@ -315,188 +425,226 @@
               "bMarkedAsSuccess": true,
               "Localization": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Localization.Name", "Value": "Betray the Town" },
-                  { "KeyTag": "Localization.Description", "Value": "Provide the bandits with the backdoor armory keys to pillage the town." }
+                  {
+                    "KeyTag": "Localization.Name",
+                    "Value": "Betray the Town"
+                  },
+                  {
+                    "KeyTag": "Localization.Description",
+                    "Value": "Provide the bandits with the backdoor armory keys to pillage the town."
+                  }
                 ]
               },
               "BranchConsequences": {
                 "CurrencyReward": 800.0,
                 "AffinityDelta": -0.80,
                 "TrustDelta": -1.0,
-                "GrantedTags": [ "State.Wanted.OutlawSyndicate", "Title.TheBetrayer" ],
-                "RemovedTags": [ "State.Civilization.CitizenInGoodStanding" ]
+                "GrantedTags": [
+                  "State.Wanted.OutlawSyndicate",
+                  "Title.TheBetrayer"
+                ],
+                "RemovedTags": [
+                  "State.Civilization.CitizenInGoodStanding"
+                ]
               }
             }
           ]
         }
       ]
-    }
-  },
-  "Quest.Story.RomanceOrBounty": {
-    "QuestTag": "Quest.Story.RomanceOrBounty",
-    "Category": "Story",
-    "Localization": {
-      "ReplicatedEntries": [
-        { "KeyTag": "Localization.Text.en", "Value": "A Matter of the Heart" },
-        { "KeyTag": "Localization.Text.es", "Value": "Cuestión de Corazón" }
-      ]
     },
-    "PrerequisiteConditionTreeName": "ConditionTree.DefaultTrue",
-    "MinimumRelationshipMetricRequirements": [
-      {
-        "KeyTag": "Relationship.Metric.Affinity",
-        "Value": 25.0
-      },
-      {
-        "KeyTag": "Relationship.Metric.Attraction",
-        "Value": 40.0
-      },
-      {
-        "KeyTag": "Relationship.Metric.Jealousy",
-        "Value": 10.0
-      }
-    ],
-    "InitialStepTag": "Quest.Step.Romance.Talk",
-    "Steps": [
-      {
-        "StepTag": "Quest.Step.Romance.Talk",
-        "Localization": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Localization.Text.en", "Value": "Speak with your prospective partner in the tavern." }
-          ]
-        },
-        "Objectives": [
+    "Quest.Story.RomanceOrBounty": {
+      "QuestTag": "Quest.Story.RomanceOrBounty",
+      "Category": "Story",
+      "Localization": {
+        "ReplicatedEntries": [
           {
-            "ObjectiveTag": "Objective.Romance.Conversation",
-            "Localization": {
-              "ReplicatedEntries": [
-                { "KeyTag": "Localization.Text.en", "Value": "Express your feelings." }
-              ]
-            },
-            "ObjectiveType": "InteractWithActor",
-            "TargetEntityOrArchetypeTag": "Actor.NPC.Humanoid",
-            "TargetLocationOrLandmarkTag": "Landmark.Tavern",
-            "RequiredCount": 1
-          }
-        ],
-        "bAutoAdvanceOnObjectivesCompleted": true,
-        "StepBranches": [
+            "KeyTag": "Localization.Text.en",
+            "Value": "A Matter of the Heart"
+          },
           {
-            "BranchTag": "Branch.Romance.Success",
-            "Localization": {
-              "ReplicatedEntries": [
-                { "KeyTag": "Localization.Text.en", "Value": "Partnership Accepted" }
-              ]
-            },
-            "NextStepTag": "None",
-            "bConcludesQuest": true,
-            "bMarkedAsSuccess": true,
-            "BranchConsequences": {
-              "CurrencyReward": 100.0,
-              "AffinityDelta": 25.0,
-              "TrustDelta": 15.0,
-              "GrantedTags": [
-                "State.Player.Partnered"
-              ],
-              "GrantedAbilities": [
-                "Ability.Magic.Support.EmpathyShield"
-              ]
-            }
+            "KeyTag": "Localization.Text.es",
+            "Value": "Cuestión de Corazón"
           }
         ]
-      }
-    ],
-    "FinalRewards": {
-      "CurrencyReward": 250.0,
-      "AffinityDelta": 35.0,
-      "TrustDelta": 25.0
-    }
-  },
-  "Quest.DynamicEconomic.MerchantEscort": {
-    "QuestTag": "Quest.DynamicEconomic.MerchantEscort",
-    "Category": "DynamicEconomic",
-    "Localization": {
-      "ReplicatedEntries": [
-        { "KeyTag": "Localization.Text.en", "Value": "Caravan Security Detail" }
-      ]
-    },
-    "MinimumRelationshipMetricRequirements": [
-      {
-        "KeyTag": "Relationship.Metric.ProfessionalRespect",
-        "Value": 20.0
       },
-      {
-        "KeyTag": "Relationship.Metric.Trust",
-        "Value": 10.0
-      }
-    ],
-    "InitialStepTag": "Quest.Step.Escort.Meet",
-    "Steps": [
-      {
-        "StepTag": "Quest.Step.Escort.Meet",
-        "Localization": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Localization.Text.en", "Value": "Meet the merchant guildmaster at the city gates." }
-          ]
+      "PrerequisiteConditionTreeName": "ConditionTree.DefaultTrue",
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.Affinity",
+          "Value": 25.0
         },
-        "Objectives": [
-          {
-            "ObjectiveTag": "Objective.Escort.Rendezvous",
-            "ObjectiveType": "EscortNPC",
-            "TargetEntityOrArchetypeTag": "Actor.NPC.Merchant",
-            "TargetLocationOrLandmarkTag": "Landmark.CityGates",
-            "RequiredCount": 1
-          }
-        ],
-        "bAutoAdvanceOnObjectivesCompleted": true,
-        "StepBranches": []
+        {
+          "KeyTag": "Relationship.Metric.Attraction",
+          "Value": 40.0
+        },
+        {
+          "KeyTag": "Relationship.Metric.Jealousy",
+          "Value": 10.0
+        }
+      ],
+      "InitialStepTag": "Quest.Step.Romance.Talk",
+      "Steps": [
+        {
+          "StepTag": "Quest.Step.Romance.Talk",
+          "Localization": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Localization.Text.en",
+                "Value": "Speak with your prospective partner in the tavern."
+              }
+            ]
+          },
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.Romance.Conversation",
+              "Localization": {
+                "ReplicatedEntries": [
+                  {
+                    "KeyTag": "Localization.Text.en",
+                    "Value": "Express your feelings."
+                  }
+                ]
+              },
+              "ObjectiveType": "InteractWithActor",
+              "TargetEntityOrArchetypeTag": "Actor.NPC.Humanoid",
+              "TargetLocationOrLandmarkTag": "Landmark.Tavern",
+              "RequiredCount": 1
+            }
+          ],
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "StepBranches": [
+            {
+              "BranchTag": "Branch.Romance.Success",
+              "Localization": {
+                "ReplicatedEntries": [
+                  {
+                    "KeyTag": "Localization.Text.en",
+                    "Value": "Partnership Accepted"
+                  }
+                ]
+              },
+              "NextStepTag": "None",
+              "bConcludesQuest": true,
+              "bMarkedAsSuccess": true,
+              "BranchConsequences": {
+                "CurrencyReward": 100.0,
+                "AffinityDelta": 25.0,
+                "TrustDelta": 15.0,
+                "GrantedTags": [
+                  "State.Player.Partnered"
+                ],
+                "GrantedAbilities": [
+                  "Ability.Magic.Support.EmpathyShield"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "FinalRewards": {
+        "CurrencyReward": 250.0,
+        "AffinityDelta": 35.0,
+        "TrustDelta": 25.0
       }
-    ],
-    "FinalRewards": {
-      "CurrencyReward": 500.0,
-      "AffinityDelta": 10.0,
-      "TrustDelta": 20.0,
-      "DebtDelta": 150.0
-    }
-  },
-  "Quest.DynamicBounty.EliminateRival": {
-    "QuestTag": "Quest.DynamicBounty.EliminateRival",
-    "Category": "DynamicBounty",
-    "Localization": {
-      "ReplicatedEntries": [
-        { "KeyTag": "Localization.Text.en", "Value": "Eliminate the Bandits' Hostility" }
-      ]
     },
-    "MinimumRelationshipMetricRequirements": [
-      {
-        "KeyTag": "Relationship.Metric.Hostility",
-        "Value": 50.0
-      }
-    ],
-    "InitialStepTag": "Quest.Step.Bounty.Cull",
-    "Steps": [
-      {
-        "StepTag": "Quest.Step.Bounty.Cull",
-        "Localization": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Localization.Text.en", "Value": "Reduce the rival faction's threat level in the region." }
-          ]
-        },
-        "Objectives": [
+    "Quest.DynamicEconomic.MerchantEscort": {
+      "QuestTag": "Quest.DynamicEconomic.MerchantEscort",
+      "Category": "DynamicEconomic",
+      "Localization": {
+        "ReplicatedEntries": [
           {
-            "ObjectiveTag": "Objective.Bounty.CullTargets",
-            "ObjectiveType": "CullTargets",
-            "TargetEntityOrArchetypeTag": "Actor.Enemy.Bandit",
-            "RequiredCount": 5
+            "KeyTag": "Localization.Text.en",
+            "Value": "Caravan Security Detail"
           }
-        ],
-        "bAutoAdvanceOnObjectivesCompleted": true,
-        "StepBranches": []
+        ]
+      },
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.ProfessionalRespect",
+          "Value": 20.0
+        },
+        {
+          "KeyTag": "Relationship.Metric.Trust",
+          "Value": 10.0
+        }
+      ],
+      "InitialStepTag": "Quest.Step.Escort.Meet",
+      "Steps": [
+        {
+          "StepTag": "Quest.Step.Escort.Meet",
+          "Localization": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Localization.Text.en",
+                "Value": "Meet the merchant guildmaster at the city gates."
+              }
+            ]
+          },
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.Escort.Rendezvous",
+              "ObjectiveType": "EscortNPC",
+              "TargetEntityOrArchetypeTag": "Actor.NPC.Merchant",
+              "TargetLocationOrLandmarkTag": "Landmark.CityGates",
+              "RequiredCount": 1
+            }
+          ],
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "StepBranches": []
+        }
+      ],
+      "FinalRewards": {
+        "CurrencyReward": 500.0,
+        "AffinityDelta": 10.0,
+        "TrustDelta": 20.0,
+        "DebtDelta": 150.0
       }
-    ],
-    "FinalRewards": {
-      "CurrencyReward": 400.0,
-      "AffinityDelta": -5.0
+    },
+    "Quest.DynamicBounty.EliminateRival": {
+      "QuestTag": "Quest.DynamicBounty.EliminateRival",
+      "Category": "DynamicBounty",
+      "Localization": {
+        "ReplicatedEntries": [
+          {
+            "KeyTag": "Localization.Text.en",
+            "Value": "Eliminate the Bandits' Hostility"
+          }
+        ]
+      },
+      "MinimumRelationshipMetricRequirements": [
+        {
+          "KeyTag": "Relationship.Metric.Hostility",
+          "Value": 50.0
+        }
+      ],
+      "InitialStepTag": "Quest.Step.Bounty.Cull",
+      "Steps": [
+        {
+          "StepTag": "Quest.Step.Bounty.Cull",
+          "Localization": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Localization.Text.en",
+                "Value": "Reduce the rival faction's threat level in the region."
+              }
+            ]
+          },
+          "Objectives": [
+            {
+              "ObjectiveTag": "Objective.Bounty.CullTargets",
+              "ObjectiveType": "CullTargets",
+              "TargetEntityOrArchetypeTag": "Actor.Enemy.Bandit",
+              "RequiredCount": 5
+            }
+          ],
+          "bAutoAdvanceOnObjectivesCompleted": true,
+          "StepBranches": []
+        }
+      ],
+      "FinalRewards": {
+        "CurrencyReward": 400.0,
+        "AffinityDelta": -5.0
+      }
     }
   }
 }

@@ -5,12 +5,40 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "GameplayTagContainer.h"
 #include "DynamicGASTypes.h"
-#include "Interfaces/IHttpRequest.h"
 #include "DynamicCloudAISubsystem.generated.h"
 
-class IHttpResponse;
+class ADynamicCharacter;
+class FJsonObject;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCloudAIResponseReceivedSignature, const FGuid&, RequestGuid, const TArray<FCloudAICommandOutput>&, Commands);
+USTRUCT(BlueprintType)
+struct FCloudAICommand
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag CommandActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag TargetEntityOrPlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FString UtteranceText;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    float PriorityWeight = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FCloudAIDirectiveResponse
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    TArray<FCloudAICommand> Commands;
+};
+
+// Standard C++ Delegate supporting BindLambda
+DECLARE_DELEGATE_TwoParams(FOnCloudAIDirectiveReceived, bool, const FCloudAIDirectiveResponse&);
 DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
 
 UCLASS()
@@ -22,89 +50,38 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
-    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Cloud AI")
-    FOnCloudAIResponseReceivedSignature OnRemoteAIResponseReceived;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
+    ECloudAIExecutionBackend ActiveBackend = ECloudAIExecutionBackend::LocalRuleBasedFallback;
 
-    // Active execution strategy
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Cloud AI|Config")
-    ECloudAIExecutionBackend ExecutionBackend = ECloudAIExecutionBackend::LocalRuleBasedFallback;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
+    FString EndpointUrl = TEXT("http://127.0.0.1:8000/v1/chat/completions");
 
-    // Remote MMO Cloud / Miner node dispatch endpoint
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Cloud AI|Config")
-    FString RemoteCloudEndpointUrl = TEXT("https://cloud.mmo-backend.internal/api/v1/ai/dispatch");
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
+    FString ApiKey = TEXT("");
 
-    // Local host or LAN node endpoint (Ollama, llama.cpp, or local dedicated miner process)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Cloud AI|Config")
-    FString LocalNodeEndpointUrl = TEXT("http://127.0.0.1:11434/api/generate");
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
+    FString ModelName = TEXT("default-model");
 
-    // Optional authentication bearer token for miner networks
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Cloud AI|Config")
-    FString CloudAuthBearerToken = TEXT("");
+    void RequestCloudAIDirective(ADynamicCharacter* Character, const FString& ContextPrompt, FOnCloudAIDirectiveReceived OnCompleted);
 
-    // Fallback switch: Automatically generate rule-based decisions if HTTP requests drop or timeout
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Cloud AI|Config")
-    bool bFallbackToLocalHeuristicOnHttpFailure = true;
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Cloud AI")
-    void SetExecutionBackend(ECloudAIExecutionBackend NewBackend) { ExecutionBackend = NewBackend; }
-
-    // Blueprint dispatch entry point
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Cloud AI")
-    FGuid DispatchRemoteAIRequest(
-        AActor* RequestingAgent,
-        ECloudAIRequestType RequestType,
-        const FString& SerializedAgentContextJson,
-        float RequestTimeoutSeconds = 8.0f
-    );
-
-    // Native C++ dispatch entry point with direct O(1) callback registration
     FGuid DispatchRemoteAIRequestNative(
-        AActor* RequestingAgent,
+        APawn* AgentPawn,
         ECloudAIRequestType RequestType,
-        const FString& SerializedAgentContextJson,
-        float RequestTimeoutSeconds,
+        const FString& ContextJsonPrompt,
+        float TimeoutSeconds,
         FOnCloudAIResponseDirectCallback DirectCallback
     );
 
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Cloud AI")
-    bool CancelRemoteAIRequest(const FGuid& RequestGuid);
+    UFUNCTION(BlueprintCallable, Category = "Cloud AI")
+    void CancelRemoteAIRequest(const FGuid& RequestGuid);
 
-    // Ingests raw JSON returned by external LLM, strips Markdown fences, sanitizes action space, and routes to agent
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Cloud AI")
-    void InjectRemoteAIResponse(const FGuid& RequestGuid, const FString& ResponseJson);
+    UFUNCTION(BlueprintPure, Category = "Cloud AI")
+    static FString SanitizeMarkdownJson(const FString& RawResponse);
 
-    // Strips ```json ... ``` markdown delimiters and trailing chat wraps
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Cloud AI|Sanitization")
-    static FString CleanMarkdownJsonString(const FString& InRawJson);
+    TSharedPtr<FJsonObject> GenerateCloudAIJsonSchema() const;
 
-    // Validates a raw command against the strict GameplayTag dictionary and authorized categories
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Cloud AI")
-    bool ValidateActionSpaceCommand(const FCloudAICommandOutput& InCommand, FCloudAICommandOutput& OutSanitizedCommand) const;
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Cloud AI")
-    bool InjectDynamicConditionTreeFromJson(FName TreeName, const FString& ConditionTreeJson);
-
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Cloud AI")
-    bool IsRequestPending(const FGuid& RequestGuid) const;
+    void ExecuteRuleBasedFallback(ADynamicCharacter* Character, FCloudAIDirectiveResponse& OutFallbackResponse);
 
 private:
-    struct FPendingRemoteRequest
-    {
-        FGuid RequestGuid;
-        TWeakObjectPtr<AActor> RequesterActor;
-        ECloudAIRequestType RequestType;
-        double DispatchWorldTime = 0.0;
-        float TimeoutDuration = 8.0f;
-        TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> HttpRequest;
-        FOnCloudAIResponseDirectCallback DirectCallback;
-    };
-
-    TMap<FGuid, FPendingRemoteRequest> PendingRequests;
-    FTimerHandle TimerHandle_RequestWatchdog;
-
-    void CheckPendingRequestTimeouts();
-    bool ValidateConditionNodeTreeAcyclic(const FDynamicConditionTreeContainer& Tree) const;
-
-    void HandleHttpResponse(const FGuid& RequestGuid, TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request, TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
-    void ExecuteLocalHeuristicDecision(const FGuid& RequestGuid, AActor* RequesterActor, ECloudAIRequestType RequestType, const FString& SerializedContextJson);
+    TMap<FGuid, FOnCloudAIResponseDirectCallback> ActiveDirectCallbacks;
 };

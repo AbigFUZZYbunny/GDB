@@ -1,10 +1,13 @@
 ﻿// DynamicDataSerializer.cpp
 #include "DynamicDataSerializer.h"
 #include "DynamicCharacter.h"
+#include "DynamicPhysicsActor.h"          // <-- Fixes undefined ADynamicPhysicsActor
+#include "EngineUtils.h"                  // <-- Fixes undefined TActorIterator
 #include "DynamicCustomizationComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicEquipmentComponent.h"
 #include "DynamicContainerComponent.h"
+#include "DynamicInteractableComponent.h"
 #include "DynamicLifeComponent.h"
 #include "DynamicSocialComponent.h"
 #include "DynamicLanguageComponent.h"
@@ -858,6 +861,42 @@ bool UDynamicDataSerializer::DeserializeContainerSlots(const FString& InJsonStri
     return false;
 }
 
+// Helper function to restore container inventory slots on a deserialized dynamic physics actor
+static void RestoreDraggedActorContainers(ADynamicPhysicsActor* SpawnedActor, const TArray<FDynamicContainerSlotItem>& SavedInventorySlots)
+{
+    if (!SpawnedActor || SavedInventorySlots.Num() == 0) return;
+
+    UDynamicContainerComponent* PrimaryContainer = SpawnedActor->GetContainerComponent();
+    if (PrimaryContainer)
+    {
+        PrimaryContainer->GetMutableReplicatedSlots().Items = SavedInventorySlots;
+        PrimaryContainer->GetMutableReplicatedSlots().MarkArrayDirty();
+        PrimaryContainer->OnRep_ReplicatedSlots();
+        return;
+    }
+
+    TArray<UDynamicContainerComponent*> AllContainers;
+    SpawnedActor->GetComponents<UDynamicContainerComponent>(AllContainers);
+
+    if (AllContainers.Num() > 0)
+    {
+        AllContainers[0]->GetMutableReplicatedSlots().Items = SavedInventorySlots;
+        AllContainers[0]->GetMutableReplicatedSlots().MarkArrayDirty();
+        AllContainers[0]->OnRep_ReplicatedSlots();
+    }
+    else
+    {
+        UDynamicContainerComponent* NewContainer = NewObject<UDynamicContainerComponent>(SpawnedActor);
+        NewContainer->SetIsReplicated(true);
+        NewContainer->RegisterComponent();
+        SpawnedActor->AddInstanceComponent(NewContainer);
+
+        NewContainer->GetMutableReplicatedSlots().Items = SavedInventorySlots;
+        NewContainer->GetMutableReplicatedSlots().MarkArrayDirty();
+        NewContainer->OnRep_ReplicatedSlots();
+    }
+}
+
 bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload)
 {
     if (!InCharacter || !InCharacter->HasAuthority()) return false;
@@ -905,7 +944,7 @@ bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharact
         Snapshot.InventorySlots = Container->GetReplicatedSlots().Items;
     }
 
-    // 6. Quests (Normalized Quests & Objectives)
+    // 6. Quests
     if (const UDynamicQuestComponent* QuestComp = InCharacter->FindComponentByClass<UDynamicQuestComponent>())
     {
         Snapshot.ActiveQuests = QuestComp->ReplicatedActiveQuests.Items;
@@ -925,6 +964,52 @@ bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharact
         Snapshot.Relationships = Social->ReplicatedRelationships.Items;
         Snapshot.Needs = Social->ReplicatedNeedsAndMoods.Items;
         Snapshot.KnownPlaces = Social->ReplicatedKnownPlaces.Items;
+    }
+
+    // 9. Serializing Dragged / Tethered World Physics Actors
+    for (TActorIterator<ADynamicPhysicsActor> It(InCharacter->GetWorld()); It; ++It)
+    {
+        ADynamicPhysicsActor* PhysActor = *It;
+        if (PhysActor && !PhysActor->IsPendingKillPending())
+        {
+            const float DistSq = FVector::DistSquared(PhysActor->GetActorLocation(), InCharacter->GetActorLocation());
+            const bool bIsAttached = PhysActor->GetAttachParentActor() == InCharacter;
+
+            if (bIsAttached || DistSq <= FMath::Square(600.0f))
+            {
+                FDraggedPhysicsActorSnapshot ActorSnapshot;
+                ActorSnapshot.ActorArchetypeTag = PhysActor->GetActorArchetypeTag();
+                ActorSnapshot.WorldTransform = PhysActor->GetActorTransform();
+
+                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                {
+                    ActorSnapshot.LinearVelocity = Prim->GetPhysicsLinearVelocity();
+                    ActorSnapshot.AngularVelocity = Prim->GetPhysicsAngularVelocityInDegrees();
+                }
+
+                if (const UDynamicAttributeSet* AttrSet = PhysActor->GetDynamicAttributeSet())
+                {
+                    ActorSnapshot.SavedAttributes = AttrSet->FastAttributes.Items;
+                }
+
+                if (const UDynamicInteractableComponent* Interactable = PhysActor->GetInteractableComponent())
+                {
+                    ActorSnapshot.SavedInteractableStates = Interactable->GetCurrentStateTags();
+                }
+
+                if (const UDynamicContainerComponent* Container = PhysActor->GetContainerComponent())
+                {
+                    ActorSnapshot.ContainerInventory = Container->GetReplicatedSlots().Items;
+                }
+
+                Snapshot.DraggedPhysicsActors.Add(ActorSnapshot);
+
+                if (ADynamicGameState* GS = InCharacter->GetWorld()->GetGameState<ADynamicGameState>())
+                {
+                    GS->ReleasePhysicsActorToPool(PhysActor);
+                }
+            }
+        }
     }
 
     TSharedPtr<FJsonObject> JsonObj = FJsonObjectConverter::UStructToJsonObject(Snapshot);
@@ -960,7 +1045,7 @@ bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter
     }
 
     // 2. Attributes
-    if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(TargetCharacter->GetDynamicAttributeSet()))
+    if (UDynamicAttributeSet* AttrSet = TargetCharacter->GetDynamicAttributeSet())
     {
         for (const FDynamicAttributeItem& SavedAttr : Snapshot.Attributes)
         {
@@ -992,7 +1077,7 @@ bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter
         Container->OnRep_ReplicatedSlots();
     }
 
-    // 6. Quests & Objectives
+    // 6. Quests
     if (UDynamicQuestComponent* QuestComp = TargetCharacter->FindComponentByClass<UDynamicQuestComponent>())
     {
         QuestComp->ReplicatedActiveQuests.Items = Snapshot.ActiveQuests;
@@ -1016,14 +1101,55 @@ bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter
         Social->ReplicatedRelationships.Items = Snapshot.Relationships;
         Social->ReplicatedRelationships.MarkArrayDirty();
         Social->RebuildRelationshipCache();
-
         Social->ReplicatedNeedsAndMoods.Items = Snapshot.Needs;
         Social->ReplicatedNeedsAndMoods.MarkArrayDirty();
         Social->RebuildNeedCache();
-
         Social->ReplicatedKnownPlaces.Items = Snapshot.KnownPlaces;
         Social->ReplicatedKnownPlaces.MarkArrayDirty();
         Social->RebuildPlaceCache();
+    }
+
+    // 9. Re-spawning & Re-hydrating Dragged Physics Actors
+    ADynamicGameState* GS = TargetCharacter->GetWorld() ? TargetCharacter->GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (GS)
+    {
+        for (const FDraggedPhysicsActorSnapshot& ActorSnap : Snapshot.DraggedPhysicsActors)
+        {
+            if (ActorSnap.ActorArchetypeTag.IsValid())
+            {
+                ADynamicPhysicsActor* SpawnedActor = GS->AcquirePhysicsActor(ActorSnap.ActorArchetypeTag, ActorSnap.WorldTransform, TargetCharacter, TargetCharacter);
+                if (SpawnedActor)
+                {
+                    if (UDynamicAttributeSet* AttrSet = SpawnedActor->GetDynamicAttributeSet())
+                    {
+                        for (const FDynamicAttributeItem& Attr : ActorSnap.SavedAttributes)
+                        {
+                            if (Attr.AttributeTag.IsValid())
+                            {
+                                AttrSet->SetDynamicAttributeValue(Attr.AttributeTag, Attr.Value, Attr.LimbId);
+                            }
+                        }
+                    }
+
+                    if (UDynamicInteractableComponent* Interactable = SpawnedActor->GetInteractableComponent())
+                    {
+                        for (const FGameplayTag& SavedStateTag : ActorSnap.SavedInteractableStates)
+                        {
+                            Interactable->AddStateTag(SavedStateTag);
+                        }
+                    }
+
+                    RestoreDraggedActorContainers(SpawnedActor, ActorSnap.ContainerInventory);
+
+                    if (UPrimitiveComponent* Prim = SpawnedActor->GetActivePhysicsPrimitive())
+                    {
+                        Prim->SetSimulatePhysics(true);
+                        Prim->SetPhysicsLinearVelocity(ActorSnap.LinearVelocity);
+                        Prim->SetPhysicsAngularVelocityInDegrees(ActorSnap.AngularVelocity);
+                    }
+                }
+            }
+        }
     }
 
     return true;

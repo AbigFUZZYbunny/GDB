@@ -25,6 +25,7 @@ class GDB_API ADynamicPhysicsActor : public AActor, public IAbilitySystemInterfa
 
 public:
     ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer);
+
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -35,9 +36,13 @@ public:
     UStaticMeshComponent* GetStaticMeshComponent() const { return StaticMeshComponent; }
     UPrimitiveComponent* GetActivePhysicsPrimitive() const;
     UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
-    const UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
+
+    // Optimization C: Non-const AttributeSet accessor eliminates const_cast throughout codebase
+    UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
+
     UDynamicInteractableComponent* GetInteractableComponent() const { return InteractableComponent; }
     UDynamicContainerComponent* GetContainerComponent(FGameplayTag ContainerIdentifierTag = FGameplayTag::EmptyTag) const;
+
     FGameplayTag GetActorArchetypeTag() const { return ActorArchetypeTag; }
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|PhysicsActor")
@@ -45,6 +50,7 @@ public:
 
     void RestoreFromContainerSnapshot(const FDynamicContainerSlotItem& Snapshot);
     void DeactivateAndReturnToPool();
+
     void ServerProcessAuthoritativeLimbHit(const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor);
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
@@ -83,8 +89,9 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities")
     TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
+    // Optimization C: Direct mutable subobject pointer
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Abilities")
-    TObjectPtr<const UDynamicAttributeSet> AttributeSet;
+    TObjectPtr<UDynamicAttributeSet> AttributeSet;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities")
     TObjectPtr<UDynamicGASManagerComponent> DynamicGASManager;

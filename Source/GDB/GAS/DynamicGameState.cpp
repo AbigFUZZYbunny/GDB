@@ -1,6 +1,7 @@
 ﻿// DynamicGameState.cpp
 #include "DynamicGameState.h"
 #include "DynamicSpatialActor.h"
+#include "DynamicDataSerializer.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicEffectFactory.h"
 #include "AIController.h"
@@ -27,8 +28,36 @@ void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 void ADynamicGameState::BeginPlay()
 {
     Super::BeginPlay();
+
     if (HasAuthority())
     {
+        // 1. Hydrate Base Data Registries from Content/Data
+        const FString DataDir = FPaths::ProjectContentDir() / TEXT("Data");
+        TArray<FString> ShippedJsonFiles;
+        IFileManager::Get().FindFiles(ShippedJsonFiles, *(DataDir / TEXT("*.json")), true, false);
+        for (const FString& FileName : ShippedJsonFiles)
+        {
+            FString FileContent;
+            if (FFileHelper::LoadFileToString(FileContent, *(DataDir / FileName)))
+            {
+                UDynamicDataSerializer::DeserializeMasterRegistry(FileContent, this);
+            }
+        }
+
+        // 2. Hydrate Modded Profiles from Saved/DynamicModules
+        const FString ModDir = FPaths::ProjectSavedDir() / TEXT("DynamicModules");
+        TArray<FString> ModFiles;
+        IFileManager::Get().FindFiles(ModFiles, *(ModDir / TEXT("*.json")), true, false);
+        for (const FString& ModFile : ModFiles)
+        {
+            FString ModContent;
+            if (FFileHelper::LoadFileToString(ModContent, *(ModDir / ModFile)))
+            {
+                UDynamicDataSerializer::DeserializeMasterRegistry(ModContent, this);
+            }
+        }
+
+        // 3. Initialize Environmental Grid and Spatial Chunks
         SpawnServerEnvironmentChunks();
     }
 }
@@ -459,7 +488,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
         }
 
-        // Pass C: GameThread completion - O(1) buffer swap, delta flush, and watchdog reset
+        // Pass C: GameThread completion - O(1) buffer swap, bounded delta flush, and watchdog reset
         Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim, CapturedEnvConfig]()
         {
             if (!IsValid(this))
@@ -472,13 +501,14 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             // Swap buffers: write buffer becomes authoritative read buffer
             Swap(EnvironmentReadBuffer, EnvironmentWriteBuffer);
 
-            // Flush modifications that occurred on the GameThread while the worker was simulating
             FEnvironmentManaModificationRecord PendingMod;
             TSet<int32> PostSwapModifiedCells;
             PostSwapModifiedCells.Reserve(ModifiedIndices.Num());
             PostSwapModifiedCells.Append(ModifiedIndices);
 
-            while (PendingManaModifications.Dequeue(PendingMod))
+            // Bounded flush: Drain up to 1000 records to prevent GameThread starvation during heavy combat
+            int32 MaxDrain = 1000;
+            while (MaxDrain-- > 0 && PendingManaModifications.Dequeue(PendingMod))
             {
                 if (EnvironmentReadBuffer.IsValidIndex(PendingMod.CellIndex))
                 {
@@ -501,7 +531,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             {
                 if (!EnvironmentReadBuffer.IsValidIndex(CellIdx)) continue;
 
-                // Sync write buffer so the next simulation cycle reads congruent values
                 if (EnvironmentWriteBuffer.IsValidIndex(CellIdx))
                 {
                     EnvironmentWriteBuffer[CellIdx] = EnvironmentReadBuffer[CellIdx];
@@ -967,13 +996,18 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
             PooledActor->SetActorEnableCollision(true);
             PooledActor->ResetToDefaultPoolState();
 
+            // Optimization B: Restore Mover Component movement ticks after repositioning
+            if (UMoverComponent* Mover = PooledActor->FindComponentByClass<UMoverComponent>())
+            {
+                Mover->Activate(true);
+            }
+
             // Initialize identity, bodyslide morphs, and mesh from the requested template tag
             if (UDynamicCustomizationComponent* Cust = PooledActor->GetCustomizationComponent())
             {
                 Cust->InitializeCustomization(TemplateTag, ECharacterGender::Neutral);
             }
 
-            // Fix E: Data-driven AI controller binding
             SpawnConfiguredAIController(PooledActor, TemplateTag);
             return PooledActor;
         }
@@ -992,7 +1026,6 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
             Cust->InitializeCustomization(TemplateTag, ECharacterGender::Neutral);
         }
 
-        // Fix E: Data-driven AI controller binding
         SpawnConfiguredAIController(NewCharacter, TemplateTag);
     }
     return NewCharacter;

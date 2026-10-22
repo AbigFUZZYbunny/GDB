@@ -46,9 +46,12 @@ void ADynamicEnvironmentChunkActor::GetLifetimeReplicatedProps(TArray<FLifetimeP
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-    DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkCoord);
-    DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkDimX);
-    DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkDimY);
+    // Optimization A: Replicate static coordinate configuration once on spawn
+    DOREPLIFETIME_CONDITION(ADynamicEnvironmentChunkActor, ChunkCoord, COND_InitialOnly);
+    DOREPLIFETIME_CONDITION(ADynamicEnvironmentChunkActor, ChunkDimX, COND_InitialOnly);
+    DOREPLIFETIME_CONDITION(ADynamicEnvironmentChunkActor, ChunkDimY, COND_InitialOnly);
+
+    // Cells update and replicate dynamically via Net Delta Serialize
     DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkCells);
 }
 
@@ -136,9 +139,6 @@ void ADynamicEnvironmentChunkActor::HandleSingleCellReplicated(const FEnvironmen
     }
 }
 
-// ============================================================================
-// FEnvironmentGridCellItem Fast Array Replication Hooks (Resolves Linker Errors)
-// ============================================================================
 void FEnvironmentGridCellItem::PostReplicatedAdd(const FFastEnvironmentGridArray& InArrayOwner)
 {
     if (InArrayOwner.OwningChunkActor)

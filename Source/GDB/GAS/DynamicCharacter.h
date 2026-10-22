@@ -18,7 +18,6 @@ class UDynamicGASManagerComponent;
 class UDynamicForceComponent;
 class UDynamicCustomizationComponent;
 
-// Server-side lag compensation snapshot
 USTRUCT()
 struct FCharacterTransformHistorySnapshot
 {
@@ -51,7 +50,9 @@ public:
     USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
     USkeletalMeshComponent* GetMesh() const { return MeshComponent; }
     UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
-    const UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
+
+    // Optimization C: Non-const AttributeSet accessor eliminates const_cast throughout codebase
+    UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
 
     // IDynamicPoolScrubbableInterface implementation
     virtual void ResetToDefaultPoolState() override;
@@ -63,7 +64,10 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
     void RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren = true);
-    
+
+    UFUNCTION(BlueprintNativeEvent, Category = "DynamicGAS|Physics")
+    void ApplyJointMotorMultipliers(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier);
+
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "DynamicGAS|Interaction")
     void AlignLimbToInteractionTarget(FName EffectorBoneName, const FTransform& TargetWorldTransform, USceneComponent* TargetComponent);
 
@@ -81,22 +85,6 @@ public:
 
     void RewindToHistoricalSnapshot(double TargetTimestamp);
     void RestoreFromHistoricalSnapshot();
-    
-    UFUNCTION(BlueprintNativeEvent, Category = "DynamicGAS|Physics")
-    void ApplyJointMotorMultipliers(
-        FName BoneName, 
-        uint8 JointChainIndex, 
-        float AngularSpringMultiplier, 
-        float LinearSpringMultiplier, 
-        float DampingMultiplier
-    );
-    virtual void ApplyJointMotorMultipliers_Implementation(
-        FName BoneName, 
-        uint8 JointChainIndex, 
-        float AngularSpringMultiplier, 
-        float LinearSpringMultiplier, 
-        float DampingMultiplier
-    );
 
 protected:
     virtual void BeginPlay() override;
@@ -124,8 +112,9 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
     UAbilitySystemComponent* AbilitySystemComponent;
 
+    // Optimization C: Direct mutable subobject pointer
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Abilities")
-    const UDynamicAttributeSet* AttributeSet;
+    TObjectPtr<UDynamicAttributeSet> AttributeSet;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
     UDynamicGASManagerComponent* DynamicGASManager;
@@ -138,7 +127,6 @@ private:
     bool bAttributesInitializedOnServer = false;
     TMap<uint8, double> ServerLastLimbHitTimestamp;
 
-    // Fixed-size pre-allocated circular history buffer (replaces O(N) array shifting)
     static constexpr int32 HistoryRingBufferSize = 128;
     static constexpr double MaxHistorySeconds = 0.5;
 

@@ -12,11 +12,6 @@ class UAT_WaitChargeTime;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FDynamicAbilityConfigChangedSignature, const FDynamicAbilityDef&, NewConfig);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FDynamicComboWindowChangedSignature, FGameplayTag, AvailableComboAbilityTag, bool, bIsOpen);
 
-/**
- * MMO Memory Optimized Dynamic Ability:
- * Shifted from InstancedPerActor to InstancedPerExecution.
- * 75,000 idle abilities on 5,000 NPCs consume ZERO permanent UObject heap allocations.
- */
 UCLASS()
 class GDB_API UDynamicGameplayAbility : public UGameplayAbility
 {
@@ -31,7 +26,6 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Dynamic Ability|Combo")
     FDynamicComboWindowChangedSignature OnComboWindowChanged;
 
-    // Ephemeral config hydrated per execution cast
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic Configuration")
     FDynamicAbilityDef AbilityConfig;
 
@@ -43,7 +37,11 @@ public:
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, OUT FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
+    
+    // Cooldown lifecycle methods
     virtual bool CheckCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const override;
+    virtual void ApplyCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const override;
+
     virtual bool CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const override;
     virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
     virtual void InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) override;
@@ -62,6 +60,7 @@ public:
     void Server_TryTriggerComboTransition(FGameplayTag NextComboAbilityTag);
 
     static bool CanBypassComboGate(const FDynamicAbilityDef& DefToCheck, const UAbilitySystemComponent* CasterASC);
+
     EValidationPhase GetCurrentPhase() const { return CurrentPhase; }
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Delivery|Validation")
@@ -90,7 +89,6 @@ protected:
 
 private:
     void HydrateConfigFromRegistry(FGameplayTag AbilityTag);
-
     float RuntimeTrackedChargeTime = 0.0f;
     double PhaseStartWorldTime = 0.0;
     bool bServerApprovedActivation = false;

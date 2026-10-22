@@ -3,7 +3,6 @@
 #include "DynamicCharacter.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicGameState.h"
-#include "Net/UnrealNetwork.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
 #include "DefaultMovementSet/LayeredMoves/LaunchMove.h"
@@ -11,26 +10,18 @@
 UDynamicForceComponent::UDynamicForceComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
+    SetIsReplicatedByDefault(true);
     PendingImpulseVector = FVector::ZeroVector;
     bHasPendingImpulse = false;
-    ReplicatedHitBuffer.OwnerForceComponent = this;
 }
 
 void UDynamicForceComponent::BeginPlay()
 {
     Super::BeginPlay();
-    ReplicatedHitBuffer.OwnerForceComponent = this;
-
     if (AActor* Owner = GetOwner())
     {
         CachedMoverComp = Owner->FindComponentByClass<UMoverComponent>();
     }
-}
-
-void UDynamicForceComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME(UDynamicForceComponent, ReplicatedHitBuffer);
 }
 
 void UDynamicForceComponent::QueueInstantMovementImpulse(FVector ImpulseDirection, float Intensity)
@@ -43,8 +34,6 @@ void UDynamicForceComponent::QueueInstantMovementImpulse(FVector ImpulseDirectio
     AActor* OwnerActor = GetOwner();
     APawn* PawnOwner = Cast<APawn>(OwnerActor);
 
-    // 1. Locally Controlled Autonomous Client:
-    // Execute QueueLayeredMove immediately on local MoverComponent for client prediction
     if (PawnOwner && PawnOwner->IsLocallyControlled())
     {
         if (CachedMoverComp.IsValid())
@@ -55,7 +44,6 @@ void UDynamicForceComponent::QueueInstantMovementImpulse(FVector ImpulseDirectio
             CachedMoverComp->QueueLayeredMove(LaunchMove);
         }
 
-        // Send input intent to server
         if (!OwnerActor->HasAuthority())
         {
             Server_QueueInstantMovementImpulse(NormalizedDir, Intensity);
@@ -63,7 +51,6 @@ void UDynamicForceComponent::QueueInstantMovementImpulse(FVector ImpulseDirectio
         return;
     }
 
-    // 2. Server Authority Execution:
     if (OwnerActor && OwnerActor->HasAuthority())
     {
         if (CachedMoverComp.IsValid())
@@ -74,7 +61,6 @@ void UDynamicForceComponent::QueueInstantMovementImpulse(FVector ImpulseDirectio
             CachedMoverComp->QueueLayeredMove(LaunchMove);
         }
 
-        // If target is a remote client player, sync matching predicted move
         if (PawnOwner && PawnOwner->IsPlayerControlled() && !PawnOwner->IsLocallyControlled())
         {
             Client_ReceivePredictedLaunch(LaunchVel);
@@ -96,84 +82,61 @@ void UDynamicForceComponent::ServerApplyLimbForce(uint8 LimbId, const FName& Bon
     AActor* Owner = GetOwner();
     if (!Owner || !Owner->HasAuthority()) return;
 
-    ADynamicGameState* DynamicGS = GetWorld()->GetGameState<ADynamicGameState>();
+    ADynamicGameState* DynamicGS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     const FPhysicsLimbConfig* LimbData = DynamicGS ? DynamicGS->GetLimbData(LimbId) : nullptr;
-    const float ImpulseMult = LimbData ? LimbData->ImpulseMultiplier : 1.0f;
-    uint8 ResolvedState = 0;
 
+    uint8 ResolvedState = 0;
     if (ClampedImpulse >= (LimbData ? LimbData->BreakRagdollThreshold : 1600.0f)) ResolvedState = 2;
     else if (ClampedImpulse >= (LimbData ? LimbData->StumbleThreshold : 800.0f)) ResolvedState = 1;
 
-    if (ADynamicCharacter* CharacterOwner = Cast<ADynamicCharacter>(Owner))
-    {
-        if (ResolvedState == 2)
-        {
-            CharacterOwner->StartRagdoll();
-        }
+    // 1. Execute locally on server
+    ApplyHitReactionLocal(LimbId, BoneName, ClampedImpulse, HitLocation, HitNormal, ResolvedState);
 
-        if (USkeletalMeshComponent* MeshComp = CharacterOwner->GetMeshComponent())
-        {
-            MeshComp->AddImpulseAtLocation((-HitNormal) * (ClampedImpulse * ImpulseMult), HitLocation, BoneName);
-        }
-    }
-    else if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Owner))
-    {
-        if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
-        {
-            Prim->AddImpulseAtLocation((-HitNormal) * (ClampedImpulse * ImpulseMult), HitLocation, BoneName);
-        }
-    }
-
-    FFastPhysicsHitRepItem NewHit;
-    NewHit.TargetLimbId = LimbId;
-    NewHit.PackedImpulseMagnitude = static_cast<uint16>(FMath::Clamp(FMath::RoundToInt(ClampedImpulse), 0, 65535));
-    NewHit.HitNormal = HitNormal;
-    NewHit.HitLocation = HitLocation;
-    NewHit.ReactionState = ResolvedState;
-
-    if (ReplicatedHitBuffer.Items.Num() < MaxReplicatedHitBufferSize)
-    {
-        FFastPhysicsHitRepItem& Added = ReplicatedHitBuffer.Items.Add_GetRef(NewHit);
-        ReplicatedHitBuffer.MarkItemDirty(Added);
-    }
-    else
-    {
-        FFastPhysicsHitRepItem& Existing = ReplicatedHitBuffer.Items[WriteIndex];
-        Existing = NewHit;
-        ReplicatedHitBuffer.MarkItemDirty(Existing);
-    }
-    WriteIndex = (WriteIndex + 1) % MaxReplicatedHitBufferSize;
+    // 2. Broadcast transient event to all relevancy proxies
+    Multicast_PlayLimbHit(LimbId, BoneName, ClampedImpulse, HitLocation, HitNormal, ResolvedState);
 }
 
-void UDynamicForceComponent::OnClientReceiveAuthoritativeHit(const FFastPhysicsHitRepItem& HitItem)
+void UDynamicForceComponent::Multicast_PlayLimbHit_Implementation(uint8 LimbId, const FName& BoneName, float ImpulseMagnitude, const FVector& HitLocation, const FVector& HitNormal, uint8 ReactionState)
+{
+    // Authority has already applied the physics forces locally
+    if (GetOwner() && !GetOwner()->HasAuthority())
+    {
+        ApplyHitReactionLocal(LimbId, BoneName, ImpulseMagnitude, HitLocation, HitNormal, ReactionState);
+    }
+}
+
+void UDynamicForceComponent::ApplyHitReactionLocal(uint8 LimbId, const FName& BoneName, float ImpulseMagnitude, const FVector& HitLocation, const FVector& HitNormal, uint8 ReactionState)
 {
     AActor* Owner = GetOwner();
-    if (!Owner || Owner->HasAuthority()) return;
+    if (!Owner) return;
+
+    ADynamicGameState* DynamicGS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    const FPhysicsLimbConfig* LimbData = DynamicGS ? DynamicGS->GetLimbData(LimbId) : nullptr;
+    const float ImpulseMult = LimbData ? LimbData->ImpulseMultiplier : 1.0f;
+    const FVector DirectedImpulse = (-HitNormal) * (ImpulseMagnitude * ImpulseMult);
 
     if (ADynamicCharacter* CharacterOwner = Cast<ADynamicCharacter>(Owner))
     {
-        if (HitItem.ReactionState == 2)
+        if (ReactionState == 2)
         {
             CharacterOwner->StartRagdoll();
         }
-
-        if (CharacterOwner->IsLocallyControlled() && HitItem.ReactionState < 2)
+        else if (CharacterOwner->IsLocallyControlled())
         {
+            // Locally predicted clients ignore external non-ragdoll skeletal impulses to prevent jitter
             return;
         }
 
         if (USkeletalMeshComponent* MeshComp = CharacterOwner->GetMeshComponent())
         {
-            const FVector DirectedImpulse = (-FVector(HitItem.HitNormal)) * static_cast<float>(HitItem.PackedImpulseMagnitude);
-            MeshComp->AddImpulseAtLocation(DirectedImpulse, FVector(HitItem.HitLocation));
+            MeshComp->AddImpulseAtLocation(DirectedImpulse, HitLocation, BoneName);
         }
     }
     else if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Owner))
     {
         if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
         {
-            const FVector DirectedImpulse = (-FVector(HitItem.HitNormal)) * static_cast<float>(HitItem.PackedImpulseMagnitude);
-            Prim->AddImpulseAtLocation(DirectedImpulse, FVector(HitItem.HitLocation));
+            Prim->AddImpulseAtLocation(DirectedImpulse, HitLocation, BoneName);
         }
     }
 }
@@ -228,7 +191,6 @@ void UDynamicForceComponent::ApplyPredictiveLimbImpulse(const FName& BoneName, f
             LaunchMove->DurationMs = 150.0f;
             CachedMoverComp->QueueLayeredMove(LaunchMove);
         }
-
         if (USkeletalMeshComponent* MeshComp = CharacterOwner->GetMeshComponent())
         {
             MeshComp->AddImpulseAtLocation(ImpulseVector, HitLocation, BoneName);
@@ -240,21 +202,5 @@ void UDynamicForceComponent::ApplyPredictiveLimbImpulse(const FName& BoneName, f
         {
             Prim->AddImpulseAtLocation(ImpulseVector, HitLocation, BoneName);
         }
-    }
-}
-
-void FFastPhysicsHitRepItem::PostReplicatedAdd(const FFastPhysicsHitRepArray& InArrayOwner)
-{
-    if (InArrayOwner.OwnerForceComponent)
-    {
-        InArrayOwner.OwnerForceComponent->OnClientReceiveAuthoritativeHit(*this);
-    }
-}
-
-void FFastPhysicsHitRepItem::PostReplicatedChange(const FFastPhysicsHitRepArray& InArrayOwner)
-{
-    if (InArrayOwner.OwnerForceComponent)
-    {
-        InArrayOwner.OwnerForceComponent->OnClientReceiveAuthoritativeHit(*this);
     }
 }

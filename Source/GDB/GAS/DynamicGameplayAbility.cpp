@@ -135,8 +135,69 @@ bool UDynamicGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
 bool UDynamicGameplayAbility::CheckCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const
 {
     if (!Super::CheckCooldown(Handle, ActorInfo, OptionalRelevantTags)) return false;
-    FGameplayTag TargetTag = (CurrentPhase == EValidationPhase::Attempt) ? AbilityConfig.LifeCycleRequirements.AttemptCooldownConditionTag : AbilityConfig.LifeCycleRequirements.ReleaseCooldownConditionTag;
-    return EvaluateDynamicRule(TargetTag, ActorInfo);
+
+    // 1. Evaluate Data-Driven Condition Tree (e.g. AttemptCooldownConditionTag)
+    const FGameplayTag TargetTag = (CurrentPhase == EValidationPhase::Attempt)
+        ? AbilityConfig.LifeCycleRequirements.AttemptCooldownConditionTag
+        : AbilityConfig.LifeCycleRequirements.ReleaseCooldownConditionTag;
+
+    static const FGameplayTag NoneTag = FGameplayTag::RequestGameplayTag(TEXT("None"), false);
+    if (TargetTag.IsValid() && TargetTag != NoneTag)
+    {
+        return EvaluateDynamicRule(TargetTag, ActorInfo);
+    }
+
+    // 2. Default Cooldown Check: Evaluates Attribute.Cooldown.<AbilityTag> <= CurrentWorldTime
+    if (ActorInfo && ActiveAbilityRegistryTag.IsValid())
+    {
+        const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+        const UDynamicAttributeSet* AttrSet = ASC ? Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())) : nullptr;
+        if (AttrSet)
+        {
+            const FString CooldownTagStr = FString::Printf(TEXT("Attribute.Cooldown.%s"), *ActiveAbilityRegistryTag.ToString());
+            const FGameplayTag CooldownTag = FGameplayTag::RequestGameplayTag(FName(*CooldownTagStr), false);
+            if (CooldownTag.IsValid())
+            {
+                const float CooldownExpiry = AttrSet->GetDynamicAttributeValue(CooldownTag, 0);
+                const UWorld* World = GetWorld();
+                const float CurrentWorldTime = World ? World->GetTimeSeconds() : 0.0f;
+                if (CooldownExpiry > CurrentWorldTime)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+void UDynamicGameplayAbility::ApplyCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const
+{
+    Super::ApplyCooldown(Handle, ActorInfo, ActivationInfo);
+
+    if (!HasAuthority(&ActivationInfo) || !ActorInfo) return;
+
+    const float Duration = AbilityConfig.LifeCycleRequirements.BaseCooldownDuration * AbilityConfig.ChargeProfile.CooldownScalingMultiplier;
+    if (Duration <= 0.0f) return;
+
+    UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+    if (!ASC) return;
+
+    UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())));
+    if (!AttrSet || !ActiveAbilityRegistryTag.IsValid()) return;
+
+    const UWorld* World = GetWorld();
+    const float CurrentWorldTime = World ? World->GetTimeSeconds() : 0.0f;
+    const float ExpirationTimestamp = CurrentWorldTime + Duration;
+
+    const FString CooldownTagStr = FString::Printf(TEXT("Attribute.Cooldown.%s"), *ActiveAbilityRegistryTag.ToString());
+    const FGameplayTag CooldownTag = FGameplayTag::RequestGameplayTag(FName(*CooldownTagStr), false);
+
+    if (CooldownTag.IsValid())
+    {
+        AttrSet->SetDynamicAttributeValue(CooldownTag, ExpirationTimestamp, 0);
+    }
 }
 
 bool UDynamicGameplayAbility::CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, OUT FGameplayTagContainer* OptionalRelevantTags) const

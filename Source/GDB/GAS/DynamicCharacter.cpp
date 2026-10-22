@@ -119,8 +119,8 @@ void ADynamicCharacter::InitializeAbilitySystem()
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
     }
 
-    UDynamicAttributeSet* MutableAttrSet = const_cast<UDynamicAttributeSet*>(AttributeSet);
-    if (!MutableAttrSet) return;
+    // Optimization C: Direct access without const_cast
+    if (!AttributeSet) return;
 
     if (HasAuthority() && !bAttributesInitializedOnServer)
     {
@@ -128,15 +128,15 @@ void ADynamicCharacter::InitializeAbilitySystem()
         {
             for (const auto& AttrPair : GS->AttributeMasterRegistry)
             {
-                MutableAttrSet->SetDynamicAttributeValue(AttrPair.Key, AttrPair.Value.DefaultValue, 0);
+                AttributeSet->SetDynamicAttributeValue(AttrPair.Key, AttrPair.Value.DefaultValue, 0);
             }
-            MutableAttrSet->InitializeLimbAttributesFromConfig(GS->GetLimbLookupMap());
+            AttributeSet->InitializeLimbAttributesFromConfig(GS->GetLimbLookupMap());
             bAttributesInitializedOnServer = true;
         }
     }
     else
     {
-        MutableAttrSet->OnRep_FastAttributes();
+        AttributeSet->OnRep_FastAttributes();
     }
 }
 
@@ -493,6 +493,12 @@ void ADynamicCharacter::ResetToDefaultPoolState()
     if (ForceComponent)
     {
         ForceComponent->ConsumePendingImpulse();
+    }
+
+    // Optimization B: Deactivate MoverComponent to stop WorldTickGroup simulation while in pool
+    if (MoverComponent)
+    {
+        MoverComponent->Deactivate();
     }
 
     // 3. Dismantle equipped gear and containers without dropping physical actors into the world

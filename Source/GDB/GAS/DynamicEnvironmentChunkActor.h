@@ -10,7 +10,7 @@ class ADynamicGameState;
 
 /**
  * Spatialized actor representing an 8x8 slice of the environmental grid.
- * Replicates strictly via proximity NetCullDistance, preventing initial MMO replication bottlenecks.
+ * Replicates coordinates on initial spawn only, and grid cells via NetCullDistance proximity.
  */
 UCLASS()
 class GDB_API ADynamicEnvironmentChunkActor : public AInfo
@@ -24,7 +24,6 @@ public:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-    // Fix C: ReplicatedUsing OnRep_ChunkCoord to avoid (0, 0) client registration overwrite
     UPROPERTY(ReplicatedUsing = OnRep_ChunkCoord, BlueprintReadOnly, Category = "Dynamic GAS|Environment")
     FIntPoint ChunkCoord = FIntPoint::ZeroValue;
 

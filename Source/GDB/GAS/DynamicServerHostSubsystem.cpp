@@ -165,7 +165,7 @@ void UDynamicServerHostSubsystem::InitiatePlayerServerHandoff(APlayerController*
     HttpRequest->SetHeader(TEXT("X-Player-Guid"), PlayerGuid.ToString());
     HttpRequest->SetContentAsString(SerializedPayload);
 
-    const FString TravelURL = FString::Printf(TEXT("%s:%d"), *TargetServerIP, TargetServerPort);
+    const FString TravelURL = FString::Printf(TEXT("%s:%d?Token=%s"), *TargetServerIP, TargetServerPort, *PlayerGuid.ToString());
     TWeakObjectPtr<APlayerController> WeakPC(PlayerController);
     TWeakObjectPtr<UDynamicServerHostSubsystem> WeakSubsystem(this);
 
@@ -252,25 +252,91 @@ FGuid UDynamicServerHostSubsystem::StoreHandoffSnapshotWithToken(const FString& 
 {
     const FGuid NewToken = FGuid::NewGuid();
     PendingHandoffSnapshots.Add(NewToken, SnapshotJson);
+
+    // Save to disk for cross-process local server spooling
+    const FString HandoffDir = FPaths::ProjectSavedDir() / TEXT("Handoffs");
+    IFileManager::Get().MakeDirectory(*HandoffDir, true);
+    const FString FilePath = HandoffDir / FString::Printf(TEXT("%s.json"), *NewToken.ToString());
+    FFileHelper::SaveStringToFile(SnapshotJson, *FilePath);
+
     return NewToken;
 }
 
 bool UDynamicServerHostSubsystem::ConsumeHandoffSnapshotByToken(const FString& TokenStr, FString& OutSnapshotJson)
 {
     FGuid TokenGuid;
-    if (FGuid::Parse(TokenStr, TokenGuid))
+    if (!FGuid::Parse(TokenStr, TokenGuid))
     {
-        return PendingHandoffSnapshots.RemoveAndCopyValue(TokenGuid, OutSnapshotJson);
+        return false;
     }
+
+    // 1. Check in-memory cache (Remote MMO HTTP Ingest path)
+    if (PendingHandoffSnapshots.RemoveAndCopyValue(TokenGuid, OutSnapshotJson))
+    {
+        return true;
+    }
+
+    // 2. Fall back to local file cache (Cross-process local server spool path)
+    const FString FilePath = FPaths::ProjectSavedDir() / TEXT("Handoffs") / FString::Printf(TEXT("%s.json"), *TokenStr);
+    if (FPaths::FileExists(FilePath))
+    {
+        if (FFileHelper::LoadFileToString(OutSnapshotJson, *FilePath))
+        {
+            IFileManager::Get().Delete(*FilePath); // Delete file once consumed
+            return true;
+        }
+    }
+
     return false;
 }
 
 bool UDynamicServerHostSubsystem::HasHandoffToken(const FString& TokenStr) const
 {
     FGuid TokenGuid;
-    if (FGuid::Parse(TokenStr, TokenGuid))
+    if (!FGuid::Parse(TokenStr, TokenGuid))
     {
-        return PendingHandoffSnapshots.Contains(TokenGuid);
+        return false;
     }
-    return false;
+
+    if (PendingHandoffSnapshots.Contains(TokenGuid))
+    {
+        return true;
+    }
+
+    const FString FilePath = FPaths::ProjectSavedDir() / TEXT("Handoffs") / FString::Printf(TEXT("%s.json"), *TokenStr);
+    return FPaths::FileExists(FilePath);
+}
+
+void UDynamicServerHostSubsystem::PushSnapshotToTargetServer(const FString& TargetEndpoint, const FGuid& Token, const FString& JsonPayload, TFunction<void(bool)> OnComplete)
+{
+    // 1. Store snapshot locally for cross-process local server spooling
+    StoreHandoffSnapshotWithToken(JsonPayload);
+
+    // 2. Transmit via HTTP if pointing to an external dedicated server endpoint
+    if (!TargetEndpoint.IsEmpty() && TargetEndpoint.Contains(TEXT(":")))
+    {
+        const FString Url = FString::Printf(TEXT("http://%s/api/handoff/ingest"), *TargetEndpoint);
+        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+        HttpRequest->SetURL(Url);
+        HttpRequest->SetVerb(TEXT("POST"));
+        HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+        HttpRequest->SetHeader(TEXT("X-Handoff-Token"), Token.ToString());
+        HttpRequest->SetContentAsString(JsonPayload);
+
+        HttpRequest->OnProcessRequestComplete().BindLambda([OnComplete](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+        {
+            const bool bSuccess = bConnectedSuccessfully && Response.IsValid() && (Response->GetResponseCode() >= 200 && Response->GetResponseCode() < 300);
+            if (OnComplete)
+            {
+                OnComplete(bSuccess);
+            }
+        });
+        HttpRequest->ProcessRequest();
+        return;
+    }
+
+    if (OnComplete)
+    {
+        OnComplete(true);
+    }
 }

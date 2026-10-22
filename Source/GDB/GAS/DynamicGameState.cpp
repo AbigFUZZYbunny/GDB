@@ -8,10 +8,12 @@
 #include "DynamicCharacter.h"
 #include "DynamicCustomizationComponent.h"
 #include "DynamicEnvironmentChunkActor.h"
-#include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "UObject/UnrealType.h"
 #include "Async/Async.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
 
 ADynamicGameState::ADynamicGameState()
 {
@@ -740,9 +742,78 @@ ADynamicPhysicsActor* ADynamicGameState::AcquirePhysicsActor(FGameplayTag Archet
     return NewActor;
 }
 
+void ADynamicGameState::RegisterSpatialRoleActor(AActor* TargetActor, const FGameplayTagContainer& RoleTags)
+{
+    if (!HasAuthority() || !IsValid(TargetActor) || RoleTags.IsEmpty()) return;
+
+    TWeakObjectPtr<AActor> WeakTarget(TargetActor);
+
+    // Unregister stale roles if this actor is re-registering with new tags
+    UnregisterSpatialRoleActor(TargetActor);
+
+    TArray<FGameplayTag>& TrackedRoles = ActorToRegisteredRolesMap.FindOrAdd(WeakTarget);
+
+    for (const FGameplayTag& RoleTag : RoleTags)
+    {
+        if (RoleTag.IsValid())
+        {
+            TArray<TWeakObjectPtr<AActor>>& RoleBucket = SpatialRoleActorRegistry.FindOrAdd(RoleTag);
+            RoleBucket.AddUnique(WeakTarget);
+            TrackedRoles.AddUnique(RoleTag);
+        }
+    }
+}
+
+void ADynamicGameState::UnregisterSpatialRoleActor(AActor* TargetActor)
+{
+    if (!HasAuthority() || !TargetActor) return;
+
+    TWeakObjectPtr<AActor> WeakTarget(TargetActor);
+    TArray<FGameplayTag> RemovedRoles;
+    if (ActorToRegisteredRolesMap.RemoveAndCopyValue(WeakTarget, RemovedRoles))
+    {
+        for (const FGameplayTag& RoleTag : RemovedRoles)
+        {
+            if (TArray<TWeakObjectPtr<AActor>>* RoleBucket = SpatialRoleActorRegistry.Find(RoleTag))
+            {
+                RoleBucket->Remove(WeakTarget);
+                if (RoleBucket->IsEmpty())
+                {
+                    SpatialRoleActorRegistry.Remove(RoleTag);
+                }
+            }
+        }
+    }
+}
+
+void ADynamicGameState::GetActorsWithRoleTag(FGameplayTag RoleTag, TArray<AActor*>& OutActors) const
+{
+    OutActors.Reset();
+    if (!RoleTag.IsValid()) return;
+
+    if (const TArray<TWeakObjectPtr<AActor>>* FoundList = SpatialRoleActorRegistry.Find(RoleTag))
+    {
+        OutActors.Reserve(FoundList->Num());
+        for (const TWeakObjectPtr<AActor>& WeakActor : *FoundList)
+        {
+            if (AActor* RawActor = WeakActor.Get())
+            {
+                if (IsValid(RawActor) && !RawActor->IsPendingKillPending())
+                {
+                    OutActors.Add(RawActor);
+                }
+            }
+        }
+    }
+}
+
 void ADynamicGameState::ReleasePhysicsActorToPool(ADynamicPhysicsActor* ActorToReturn)
 {
     if (!HasAuthority() || !IsValid(ActorToReturn)) return;
+
+    // Purge from active spatial role indexing before pool storage
+    UnregisterSpatialRoleActor(ActorToReturn);
+
     InactivePhysicsActorPool.AddUnique(ActorToReturn);
 }
 

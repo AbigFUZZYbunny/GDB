@@ -5,9 +5,7 @@
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Name.h"
 #include "BehaviorTree/Blackboard/BlackboardKeyType_String.h"
 #include "DynamicSocialComponent.h"
-#include "DynamicSpatialLandmark.h"
-#include "DynamicPhysicsActor.h"
-#include "EngineUtils.h"
+#include "DynamicGameState.h"
 
 UBTTask_ResolveSpatialRoleToLocation::UBTTask_ResolveSpatialRoleToLocation()
 {
@@ -32,6 +30,7 @@ EBTNodeResult::Type UBTTask_ResolveSpatialRoleToLocation::ExecuteTask(UBehaviorT
         return EBTNodeResult::Failed;
     }
 
+    // 1. Extract Role Tag Name safely using key type reflection
     FName RoleName = NAME_None;
     const FBlackboard::FKey KeyID = BB->GetKeyID(RoleTagKey.SelectedKeyName);
 
@@ -68,6 +67,7 @@ EBTNodeResult::Type UBTTask_ResolveSpatialRoleToLocation::ExecuteTask(UBehaviorT
 
     UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>();
 
+    // 2. Query Agent Social Knowledge Cache First
     if (bCheckSocialKnowledgeFirst && SocialComp)
     {
         FDynamicKnownPlaceItem KnownPlace;
@@ -78,34 +78,34 @@ EBTNodeResult::Type UBTTask_ResolveSpatialRoleToLocation::ExecuteTask(UBehaviorT
         }
     }
 
+    // 3. O(1) Spatial Registry Query via GameState
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS)
+    {
+        return EBTNodeResult::Failed;
+    }
+
+    TArray<AActor*> CandidateActors;
+    GS->GetActorsWithRoleTag(RoleTag, CandidateActors);
+
+    if (CandidateActors.IsEmpty())
+    {
+        return EBTNodeResult::Failed;
+    }
+
     const FVector PawnLoc = ControlledPawn->GetActorLocation();
     AActor* BestTargetActor = nullptr;
     float BestDistSq = FMath::Square(MaxSearchRadius);
 
-    for (TActorIterator<ADynamicSpatialLandmark> It(GetWorld()); It; ++It)
+    for (AActor* Candidate : CandidateActors)
     {
-        ADynamicSpatialLandmark* Landmark = *It;
-        if (Landmark && Landmark->HasRoleTag(RoleTag))
+        if (IsValid(Candidate))
         {
-            const float DistSq = FVector::DistSquared(PawnLoc, Landmark->GetActorLocation());
+            const float DistSq = FVector::DistSquared(PawnLoc, Candidate->GetActorLocation());
             if (DistSq < BestDistSq)
             {
                 BestDistSq = DistSq;
-                BestTargetActor = Landmark;
-            }
-        }
-    }
-
-    for (TActorIterator<ADynamicPhysicsActor> It(GetWorld()); It; ++It)
-    {
-        ADynamicPhysicsActor* PhysActor = *It;
-        if (PhysActor && PhysActor->GetActorArchetypeTag().MatchesTag(RoleTag))
-        {
-            const float DistSq = FVector::DistSquared(PawnLoc, PhysActor->GetActorLocation());
-            if (DistSq < BestDistSq)
-            {
-                BestDistSq = DistSq;
-                BestTargetActor = PhysActor;
+                BestTargetActor = Candidate;
             }
         }
     }
@@ -115,6 +115,7 @@ EBTNodeResult::Type UBTTask_ResolveSpatialRoleToLocation::ExecuteTask(UBehaviorT
         return EBTNodeResult::Failed;
     }
 
+    // 4. Update Blackboard and Agent Memory
     const FVector ResolvedLocation = BestTargetActor->GetActorLocation();
     BB->SetValueAsVector(TargetLocationKey.SelectedKeyName, ResolvedLocation);
 

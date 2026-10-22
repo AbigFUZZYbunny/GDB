@@ -5,6 +5,11 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "HAL/PlatformProcess.h"
 #include "Interfaces/IHttpRequest.h"
+
+// 1. Declare the native C++ delegate BEFORE the .generated.h include
+//DECLARE_DELEGATE_OneParam(FOnSnapshotPushComplete, bool);
+
+// 2. The generated.h MUST be the LAST header include in the file
 #include "DynamicServerHostSubsystem.generated.h"
 
 class ADynamicCharacter;
@@ -55,7 +60,6 @@ public:
     void ConnectLocalPlayerToServer(int32 Port = 7777);
 
     // --- Tokenized Snapshot Management ---
-
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
     FGuid StoreHandoffSnapshotWithToken(const FString& SnapshotJson);
 
@@ -74,10 +78,12 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Handoff")
     ADynamicCharacter* ClaimHandoffCharacter(const FGuid& PlayerGuid, const FTransform& SpawnTransform, AController* NewOwner);
 
+    // Native C++ handoff dispatch (NO UFUNCTION - avoids UHT delegate reflection error)
+    void PushSnapshotToTargetServer(const FString& TargetEndpoint, const FGuid& Token, const FString& JsonPayload, TFunction<void(bool)> OnComplete);
+
 private:
     mutable FProcHandle ActiveServerProcessHandle;
     uint32 ActiveServerProcessId = 0;
-
     TMap<FGuid, FString> PendingHandoffSnapshots;
 
     void HandleHandoffIPCResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully, TWeakObjectPtr<APlayerController> WeakPC, const FString& TravelURL);

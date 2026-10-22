@@ -37,9 +37,7 @@ public:
     UPrimitiveComponent* GetActivePhysicsPrimitive() const;
     UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
 
-    // Optimization C: Non-const AttributeSet accessor eliminates const_cast throughout codebase
     UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
-
     UDynamicInteractableComponent* GetInteractableComponent() const { return InteractableComponent; }
     UDynamicContainerComponent* GetContainerComponent(FGameplayTag ContainerIdentifierTag = FGameplayTag::EmptyTag) const;
 
@@ -64,6 +62,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UFUNCTION()
     void OnServerPrimitiveHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
@@ -73,6 +72,8 @@ protected:
 
     UFUNCTION()
     void OnRep_IsActiveInWorld();
+
+    void ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
     TObjectPtr<USkeletalMeshComponent> SkeletalMeshComponent;
@@ -89,7 +90,6 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities")
     TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
-    // Optimization C: Direct mutable subobject pointer
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Abilities")
     TObjectPtr<UDynamicAttributeSet> AttributeSet;
 
@@ -109,8 +109,6 @@ protected:
     bool bIsActiveInWorld = true;
 
 private:
-    void ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def);
-
     TMap<uint8, const FPhysicsLimbConfig*> LocalLimbLookupMap;
     TMap<FName, uint8> LocalBoneToLimbMap;
     TMap<uint8, double> ServerLastLimbHitTimestamp;

@@ -119,16 +119,13 @@ public:
     FComputedAbilityScoreInfo EvaluateAbilityScore(FGameplayTag AbilityTag, const FDynamicAbilityDef& AbilityDef) const;
     bool GetComputedAbilityScore(FGameplayTag AbilityTag, FComputedAbilityScoreInfo& OutScoreInfo) const;
     void RebuildAllAbilityScores();
-
     bool GetCharacterTemplate(FGameplayTag TemplateTag, FCharacterTemplateDef& OutTemplate) const;
 
     // Pooling API
     ADynamicSpatialActor* AcquireSpatialActor(const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleaseSpatialActorToPool(ADynamicSpatialActor* ActorToReturn);
-
     ADynamicPhysicsActor* AcquirePhysicsActor(FGameplayTag ArchetypeTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleasePhysicsActorToPool(ADynamicPhysicsActor* ActorToReturn);
-
     ADynamicCharacter* AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn);
 
@@ -138,6 +135,16 @@ public:
     const FPhysicsJointNodeConfig* GetBoneJointData(const FName& BoneName) const;
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
     const FPhysicsCalculationSettings& GetCalculationSettings() const { return CalculationSettings; }
+
+    // --- Spatial Role Fast-Lookup API ---
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|SpatialRole")
+    void RegisterSpatialRoleActor(AActor* TargetActor, const FGameplayTagContainer& RoleTags);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|SpatialRole")
+    void UnregisterSpatialRoleActor(AActor* TargetActor);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|SpatialRole")
+    void GetActorsWithRoleTag(FGameplayTag RoleTag, TArray<AActor*>& OutActors) const;
 
 private:
     void SpawnServerEnvironmentChunks();
@@ -159,9 +166,12 @@ private:
 
     TMap<FGameplayTag, int32> TrackedElementsMap;
     TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
-
     TArray<float> AdvectionDeltaScratchpad;
-    
+
+    // Spatial Role Partitions
+    TMap<FGameplayTag, TArray<TWeakObjectPtr<AActor>>> SpatialRoleActorRegistry;
+    TMap<TWeakObjectPtr<AActor>, TArray<FGameplayTag>> ActorToRegisteredRolesMap;
+
     // In-flight thread-safe queue holding modifications applied during active worker passes
     TQueue<FEnvironmentManaModificationRecord, EQueueMode::Mpsc> PendingManaModifications;
 
@@ -169,6 +179,5 @@ private:
     bool bIsSimulationTaskRunning = false;
     double SimulationTaskStartTimestamp = 0.0;
     static constexpr double SimulationTaskTimeoutSeconds = 45.0;
-
     float AccumulatedUnsimulatedHours = 0.0f;
 };

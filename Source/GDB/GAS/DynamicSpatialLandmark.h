@@ -11,7 +11,7 @@ class USphereComponent;
 
 /**
  * Concrete world anchor representing a village building, workplace, tavern, home, or point of interest.
- * Queriable by EQS and AI Behavior Trees via dynamic gameplay role tags.
+ * Indexes into ADynamicGameState for O(1) role queries by EQS and AI Behavior Trees.
  */
 UCLASS()
 class GDB_API ADynamicSpatialLandmark : public AActor
@@ -21,6 +21,8 @@ class GDB_API ADynamicSpatialLandmark : public AActor
 public:
 	ADynamicSpatialLandmark();
 
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Landmark")

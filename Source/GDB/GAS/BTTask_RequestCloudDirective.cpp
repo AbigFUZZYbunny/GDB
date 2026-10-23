@@ -36,18 +36,11 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
 
     AAIController* AICon = OwnerComp.GetAIOwner();
     APawn* ControlledPawn = AICon ? AICon->GetPawn() : nullptr;
-    if (!ControlledPawn || !ControlledPawn->HasAuthority())
-    {
-        return EBTNodeResult::Failed;
-    }
+    if (!ControlledPawn || !ControlledPawn->HasAuthority()) return EBTNodeResult::Failed;
 
     UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>();
-    UWorld* World = ControlledPawn->GetWorld();
-    UDynamicCloudAISubsystem* CloudSubsystem = World ? World->GetSubsystem<UDynamicCloudAISubsystem>() : nullptr;
-    if (!SocialComp || !CloudSubsystem)
-    {
-        return EBTNodeResult::Failed;
-    }
+    UDynamicCloudAISubsystem* CloudSubsystem = ControlledPawn->GetWorld()->GetSubsystem<UDynamicCloudAISubsystem>();
+    if (!SocialComp || !CloudSubsystem) return EBTNodeResult::Failed;
 
     CachedCloudSubsystem = CloudSubsystem;
     SocialComp->ServerSetCloudAISuspension(true);
@@ -56,42 +49,25 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
     TWeakObjectPtr<UBTTask_RequestCloudDirective> WeakThis(this);
     TWeakObjectPtr<UBehaviorTreeComponent> WeakOwnerComp(&OwnerComp);
 
-    FCloudAIQueuedTask::FOnTokenStream StreamCallback;
-    StreamCallback.BindLambda([WeakThis, WeakOwnerComp](const FString& Chunk)
-    {
-        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get())
-        {
-            StrongThis->HandleTokenStream(Chunk, WeakOwnerComp);
-        }
+    // Bind using the updated global delegates
+    FOnCloudAITokenStream StreamCallback;
+    StreamCallback.BindLambda([WeakThis, WeakOwnerComp](const FString& Chunk) {
+        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get()) StrongThis->HandleTokenStream(Chunk, WeakOwnerComp);
     });
 
     FOnCloudAIResponseDirectCallback DirectCallback;
-    DirectCallback.BindLambda([WeakThis, WeakOwnerComp](const TArray<FCloudAICommandOutput>& Commands)
-    {
-        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get())
-        {
-            StrongThis->HandleDirectCloudResponse(WeakOwnerComp, Commands);
-        }
+    DirectCallback.BindLambda([WeakThis, WeakOwnerComp](const TArray<FCloudAICommandOutput>& Commands) {
+        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get()) StrongThis->HandleDirectCloudResponse(WeakOwnerComp, Commands);
     });
 
-    FCloudAIQueuedTask::FOnTaskAssigned AssignedCallback;
-    AssignedCallback.BindLambda([WeakThis](float EstimatedLatency)
-    {
-        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get())
-        {
-            StrongThis->HandleTaskAssigned(EstimatedLatency);
-        }
+    FOnCloudAITaskAssigned AssignedCallback;
+    AssignedCallback.BindLambda([WeakThis](float EstimatedLatency) {
+        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get()) StrongThis->HandleTaskAssigned(EstimatedLatency);
     });
 
     ActiveRequestGuid = CloudSubsystem->DispatchDistributedAIRequest(
-        ControlledPawn,
-        RequestType,
-        TaskPriority,
-        ContextJson,
-        BaseRequestTimeoutSeconds,
-        StreamCallback,
-        DirectCallback,
-        AssignedCallback
+        ControlledPawn, RequestType, TaskPriority, ContextJson, BaseRequestTimeoutSeconds, 
+        StreamCallback, DirectCallback, AssignedCallback
     );
 
     return EBTNodeResult::InProgress;

@@ -11,7 +11,10 @@ class ADynamicCharacter;
 class UDynamicAILinkComponent;
 class FJsonObject;
 
+// 1. Declare Delegates Globally to avoid USTRUCT macro scope resolution failures
 DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
+DECLARE_DELEGATE_OneParam(FOnCloudAITokenStream, const FString&);
+DECLARE_DELEGATE_OneParam(FOnCloudAITaskAssigned, float /*EstimatedLatency*/);
 
 USTRUCT(BlueprintType)
 struct FCloudAICommand
@@ -45,54 +48,29 @@ struct GDB_API FCloudAIQueuedTask
 {
     GENERATED_BODY()
 
-    DECLARE_DELEGATE_OneParam(FOnTokenStream, const FString&);
-    DECLARE_DELEGATE_OneParam(FOnTaskAssigned, float /*EstimatedLatencySeconds*/);
+    UPROPERTY() FGuid TaskId;
+    UPROPERTY() ECloudAITaskPriority Priority = ECloudAITaskPriority::Medium;
+    UPROPERTY() FString ContextPrompt;
+    UPROPERTY() double TimeQueued = 0.0;
+    UPROPERTY() float TimeoutSeconds = 8.0f;
 
-    UPROPERTY()
-    FGuid TaskId;
+    UPROPERTY() TWeakObjectPtr<class UDynamicAILinkComponent> PrimaryMiner;
+    UPROPERTY() TWeakObjectPtr<class UDynamicAILinkComponent> ValidatorMiner;
 
-    UPROPERTY()
-    ECloudAITaskPriority Priority = ECloudAITaskPriority::Medium;
+    UPROPERTY() FString PrimaryAccumulatedJson;
+    UPROPERTY() FString ValidatorAccumulatedJson;
 
-    UPROPERTY()
-    FString ContextPrompt;
+    UPROPERTY() bool bPrimaryFinished = false;
+    UPROPERTY() bool bValidatorFinished = false;
 
-    UPROPERTY()
-    double TimeQueued = 0.0;
+    UPROPERTY() bool bStartedStreamingUtterance = false;
+    UPROPERTY() int32 UtteranceStartIndex = 0;
+    UPROPERTY() int32 LastBroadcastedLength = 0;
 
-    UPROPERTY()
-    float TimeoutSeconds = 8.0f;
-
-    UPROPERTY()
-    TWeakObjectPtr<class UDynamicAILinkComponent> PrimaryMiner;
-
-    UPROPERTY()
-    TWeakObjectPtr<class UDynamicAILinkComponent> ValidatorMiner;
-
-    UPROPERTY()
-    FString PrimaryAccumulatedJson;
-
-    UPROPERTY()
-    FString ValidatorAccumulatedJson;
-
-    UPROPERTY()
-    bool bPrimaryFinished = false;
-
-    UPROPERTY()
-    bool bValidatorFinished = false;
-
-    UPROPERTY()
-    bool bStartedStreamingUtterance = false;
-
-    UPROPERTY()
-    int32 UtteranceStartIndex = 0;
-
-    UPROPERTY()
-    int32 LastBroadcastedLength = 0;
-
+    // Use the globally declared delegates
     FOnCloudAIResponseDirectCallback FinalCompletionDelegate;
-    FOnTokenStream TokenStreamDelegate;
-    FOnTaskAssigned TaskAssignedDelegate;
+    FOnCloudAITokenStream TokenStreamDelegate;
+    FOnCloudAITaskAssigned TaskAssignedDelegate;
 };
 
 UCLASS()
@@ -130,9 +108,9 @@ public:
         ECloudAITaskPriority Priority,
         const FString& ContextJsonPrompt,
         float TimeoutSeconds,
-        FCloudAIQueuedTask::FOnTokenStream TokenStreamCallback,
+        FOnCloudAITokenStream TokenStreamCallback,
         FOnCloudAIResponseDirectCallback DirectCallback,
-        FCloudAIQueuedTask::FOnTaskAssigned AssignedCallback
+        FOnCloudAITaskAssigned AssignedCallback
     );
 
     UFUNCTION(BlueprintCallable, Category = "Cloud AI")

@@ -59,7 +59,7 @@ void UDynamicAILinkComponent::Client_AssignAITask_Implementation(const FGuid& Ta
 
     TSharedRef<FJsonObject> RootPayload = MakeShareable(new FJsonObject());
     RootPayload->SetStringField(TEXT("model"), Model);
-    RootPayload->SetBoolField(TEXT("stream"), false); // Non-streaming fallback ensures rock-solid consensus stability
+    RootPayload->SetBoolField(TEXT("stream"), true); // Reactivate streaming
 
     TArray<TSharedPtr<FJsonValue>> Messages;
     TSharedRef<FJsonObject> UserMessage = MakeShareable(new FJsonObject());
@@ -73,13 +73,23 @@ void UDynamicAILinkComponent::Client_AssignAITask_Implementation(const FGuid& Ta
     FJsonSerializer::Serialize(RootPayload, Writer);
     Request->SetContentAsString(OutputString);
 
+    // Bind using UE5's updated 64-bit progress event
+    Request->OnRequestProgress64().BindUObject(this, &UDynamicAILinkComponent::OnStreamProgress64);
     Request->OnProcessRequestComplete().BindUObject(this, &UDynamicAILinkComponent::OnStreamComplete);
     Request->ProcessRequest();
 }
 
-void UDynamicAILinkComponent::OnStreamProgress(FHttpRequestPtr Request, int32 BytesSent, int32 BytesReceived)
+void UDynamicAILinkComponent::OnStreamProgress64(FHttpRequestPtr Request, uint64 BytesSent, uint64 BytesReceived)
 {
-    // Unused when streaming is handled via standard completion payloads
+    if (!Request.IsValid() || !Request->GetResponse().IsValid()) return;
+
+    const FString FullResponse = Request->GetResponse()->GetContentAsString();
+    if (FullResponse.Len() <= LastParsedSseIndex) return;
+
+    const FString NewChunk = FullResponse.Right(FullResponse.Len() - LastParsedSseIndex);
+    LastParsedSseIndex = FullResponse.Len();
+
+    Server_SubmitTokenChunk(ActiveTaskId, NewChunk);
 }
 
 void UDynamicAILinkComponent::OnStreamComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)

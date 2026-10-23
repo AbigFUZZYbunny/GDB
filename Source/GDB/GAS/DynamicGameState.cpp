@@ -296,10 +296,12 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
     const int32 CapturedGridHeight = GridHeight;
     const int32 CapturedChunkDim = ChunkDimension;
     const FDynamicEnvironmentSystemConfig CapturedEnvConfig = EnvironmentConfig;
-    const TMap<FGameplayTag, int32> CapturedElementMap = TrackedElementsMap;
-    const TMap<FGameplayTag, FDynamicBiomeDef> CapturedBiomeRegistry = BiomeMasterRegistry;
 
-    Async(EAsyncExecution::ThreadPool, [this, HoursToSimulate, TotalCells, CapturedGridWidth, CapturedGridHeight, CapturedChunkDim, CapturedEnvConfig, CapturedElementMap, CapturedBiomeRegistry]()
+    // OPTIMIZATION: Capture registries and maps by pointer to eliminate deep-copy overhead on the GameThread
+    const TMap<FGameplayTag, int32>* ElementMapPtr = &TrackedElementsMap;
+    const TMap<FGameplayTag, FDynamicBiomeDef>* BiomeRegistryPtr = &BiomeMasterRegistry;
+
+    Async(EAsyncExecution::ThreadPool, [this, HoursToSimulate, TotalCells, CapturedGridWidth, CapturedGridHeight, CapturedChunkDim, CapturedEnvConfig, ElementMapPtr, BiomeRegistryPtr]()
     {
         const int32 NumElements = CapturedEnvConfig.TrackedElementalTags.Num();
         const int32 ScratchpadSize = NumElements * TotalCells;
@@ -325,6 +327,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             const FEnvironmentGridCellItem& Cell = ReadCells[i];
             const int32 X = i % CapturedGridWidth;
             const int32 Y = i / CapturedGridWidth;
+
             const int32 StepX = FMath::RoundToInt(Cell.WindDirection.X);
             const int32 StepY = FMath::RoundToInt(Cell.WindDirection.Y);
 
@@ -357,6 +360,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 {
                     const float Density = (static_cast<float>(Cell.PackedElementalDensities[e]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
                     const float DensityMoved = Density * TransferRatio;
+
                     if (bBleedOffMap)
                     {
                         Deltas[e * TotalCells + i] -= DensityMoved * BorderDissipation;
@@ -377,6 +381,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
         {
             const FEnvironmentGridCellItem& ReadCell = ReadCells[i];
             FEnvironmentGridCellItem& WriteCell = WriteCells[i];
+
             WriteCell.CellIndex = ReadCell.CellIndex;
             WriteCell.CurrentBiomeTag = ReadCell.CurrentBiomeTag;
             WriteCell.TargetShiftBiomeTag = ReadCell.TargetShiftBiomeTag;
@@ -399,12 +404,14 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 }
             }
 
-            if (const FDynamicBiomeDef* BiomeDef = CapturedBiomeRegistry.Find(WriteCell.CurrentBiomeTag))
+            // Dereference the Biome Registry pointer safely
+            if (const FDynamicBiomeDef* BiomeDef = BiomeRegistryPtr->Find(WriteCell.CurrentBiomeTag))
             {
                 float MaxDeviation = 0.0f;
                 for (const FTagFloatPair& Eq : BiomeDef->DefaultElementalEquilibrium)
                 {
-                    if (const int32* ElemIdxPtr = CapturedElementMap.Find(Eq.KeyTag))
+                    // Dereference the Element Map pointer safely
+                    if (const int32* ElemIdxPtr = ElementMapPtr->Find(Eq.KeyTag))
                     {
                         const int32 ElemIdx = *ElemIdxPtr;
                         if (WriteCell.PackedElementalDensities.IsValidIndex(ElemIdx))
@@ -452,7 +459,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 float MetricAccum = Formula.BaseConstant;
                 for (const auto& WP : Formula.ElementWeights.LocalLookupMap)
                 {
-                    if (const int32* EIdxPtr = CapturedElementMap.Find(WP.Key))
+                    if (const int32* EIdxPtr = ElementMapPtr->Find(WP.Key))
                     {
                         const int32 EIdx = *EIdxPtr;
                         if (WriteCell.PackedElementalDensities.IsValidIndex(EIdx))
@@ -472,7 +479,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
         }
 
         // Pass C: GameThread completion using dynamic time-sliced budget (2ms cap)
-        Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim, CapturedEnvConfig]()
+        Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim, CapturedEnvConfig, HoursToSimulate]()
         {
             if (!IsValid(this))
             {
@@ -488,7 +495,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             PostSwapModifiedCells.Reserve(ModifiedIndices.Num());
             PostSwapModifiedCells.Append(ModifiedIndices);
 
-            // Time-sliced drain replacing hardcoded count
             const double DrainStartTime = FPlatformTime::Seconds();
             constexpr double MaxDrainBudgetSeconds = 0.002;
 
@@ -509,6 +515,9 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 }
             }
 
+            // Execute the newly integrated Network Graph Solver update
+            EvaluateNetworkGraphs(HoursToSimulate * 3600.0f);
+
             for (const int32 CellIdx : PostSwapModifiedCells)
             {
                 if (!EnvironmentReadBuffer.IsValidIndex(CellIdx)) continue;
@@ -516,9 +525,11 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 {
                     EnvironmentWriteBuffer[CellIdx] = EnvironmentReadBuffer[CellIdx];
                 }
+
                 const int32 CellX = CellIdx % CapturedGridWidth;
                 const int32 CellY = CellIdx / CapturedGridWidth;
                 const FIntPoint ChunkCoord(CellX / CapturedChunkDim, CellY / CapturedChunkDim);
+
                 if (TObjectPtr<ADynamicEnvironmentChunkActor>* FoundChunk = ActiveChunkMap.Find(ChunkCoord))
                 {
                     if (FoundChunk->Get())
@@ -1206,10 +1217,10 @@ void ADynamicGameState::RebuildNetworkGraphs()
             Queue.Add(RootNode);
             Visited.Add(RootNode);
 
-            while (Queue.Num() > 0)
+            int32 QueueIndex = 0; // Advancing index avoids O(N) array shifts
+            while (QueueIndex < Queue.Num())
             {
-                UDynamicNetworkComponent* Node = Queue[0];
-                Queue.RemoveAt(0, EAllowShrinking::No);
+                UDynamicNetworkComponent* Node = Queue[QueueIndex++];
 
                 const FDynamicNetworkNodeDef* NodeDef = Node->GetNodeDefinition();
                 if (NodeDef)

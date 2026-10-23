@@ -63,19 +63,24 @@ FGuid UDynamicCloudAISubsystem::DispatchDistributedAIRequest(
     ECloudAITaskPriority Priority,
     const FString& ContextJsonPrompt,
     float TimeoutSeconds,
-    FCloudAIQueuedTask::FOnTokenStream TokenStreamCallback,
+    FOnCloudAITokenStream TokenStreamCallback,
     FOnCloudAIResponseDirectCallback DirectCallback,
-    FCloudAIQueuedTask::FOnTaskAssigned AssignedCallback)
+    FOnCloudAITaskAssigned AssignedCallback)
 {
     UWorld* World = AgentPawn ? AgentPawn->GetWorld() : this->GetWorld();
     const double CurrentTime = World ? World->GetTimeSeconds() : 0.0;
 
     FCloudAIQueuedTask NewTask;
+    NewTask.PrimaryAccumulatedJson.Reserve(2048);
+    NewTask.ValidatorAccumulatedJson.Reserve(2048);
+    
     NewTask.TaskId = FGuid::NewGuid();
     NewTask.Priority = Priority;
     NewTask.ContextPrompt = ContextJsonPrompt;
     NewTask.TimeQueued = CurrentTime;
     NewTask.TimeoutSeconds = TimeoutSeconds;
+    
+    // Bind to the updated global delegates
     NewTask.TokenStreamDelegate = TokenStreamCallback;
     NewTask.FinalCompletionDelegate = DirectCallback;
     NewTask.TaskAssignedDelegate = AssignedCallback;
@@ -175,19 +180,15 @@ FString UDynamicCloudAISubsystem::ParseSseDeltaToJsonString(const FString& SsePa
     {
         if (Line.StartsWith(TEXT("data: ")) && !Line.Contains(TEXT("[DONE]")))
         {
-            const FString JsonStr = Line.Mid(6);
-            TSharedPtr<FJsonObject> JsonObj;
-            if (FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(JsonStr), JsonObj) && JsonObj.IsValid())
+            // Rapid inline extraction bypassing JSON DOM allocation overhead
+            const int32 ContentIdx = Line.Find(TEXT("\"content\":\""));
+            if (ContentIdx != INDEX_NONE)
             {
-                const TArray<TSharedPtr<FJsonValue>>* Choices;
-                if (JsonObj->TryGetArrayField(TEXT("choices"), Choices) && Choices->Num() > 0)
+                const int32 StartIdx = ContentIdx + 11; // Length of "content":"
+                const int32 EndIdx = Line.Find(TEXT("\""), ESearchCase::IgnoreCase, ESearchDir::FromStart, StartIdx);
+                if (EndIdx != INDEX_NONE)
                 {
-                    TSharedPtr<FJsonObject> DeltaObj = (*Choices)[0]->AsObject()->GetObjectField(TEXT("delta"));
-                    FString ContentStr;
-                    if (DeltaObj->TryGetStringField(TEXT("content"), ContentStr))
-                    {
-                        ExtractedText += ContentStr;
-                    }
+                    ExtractedText += Line.Mid(StartIdx, EndIdx - StartIdx);
                 }
             }
         }

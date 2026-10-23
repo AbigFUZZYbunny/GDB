@@ -2,6 +2,8 @@
 #include "DynamicSocialComponent.h"
 #include "DynamicGameState.h"
 #include "DynamicCharacter.h"
+#include "DynamicAttributeSet.h"
+#include "AbilitySystemComponent.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "Dom/JsonObject.h"
@@ -427,7 +429,7 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
 
     // 5. Contextual Token Replacement
     OutUtterance = FormatDialogueTokens(ChosenEntry->UtteranceTemplate, TargetActor);
-    OutMontage = ChosenEntry->GestureMontage;
+    //OutMontage = ChosenEntry->GestureMontage;
     OutVoiceCueTag = ChosenEntry->VoiceCueTag;
 
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
@@ -609,4 +611,97 @@ void FDynamicNeedAndMoodItem::PostReplicatedChange(const FDynamicNeedAndMoodFast
     {
         InArrayOwner.OwningSocialComp->RebuildNeedCache();
     }
+}
+
+bool UDynamicSocialComponent::SelectBestUtterance(const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances, FDynamicDialogueUtteranceDef& OutSelectedUtterance) const
+{
+    if (CandidateUtterances.Num() == 0) return false;
+
+    AActor* OwnerActor = GetOwner();
+    const UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+    const UDynamicAttributeSet* AttrSet = ASC ? Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())) : nullptr;
+
+    struct FEligibleUtterance
+    {
+        const FDynamicDialogueUtteranceDef* Def = nullptr;
+        float ComputedWeight = 0.0f;
+    };
+
+    TArray<FEligibleUtterance> ValidOptions;
+    float TotalWeight = 0.0f;
+
+    for (const FDynamicDialogueUtteranceDef& Option : CandidateUtterances)
+    {
+        bool bPassesRequirements = true;
+
+        // 1. Evaluate Absolute Attribute Range Requirements
+        for (const FCharacterAttributeRangeDef& Req : Option.AttributeRequirements)
+        {
+            if (!Req.AttributeTag.IsValid()) continue;
+
+            float Val = 0.0f;
+            if (AttrSet)
+            {
+                Val = AttrSet->GetDynamicAttributeValue(Req.AttributeTag, 0);
+            }
+            if (FMath::IsNearlyZero(Val))
+            {
+                GetNeedValue(Req.AttributeTag, Val);
+            }
+
+            if (Val < Req.MinValue || Val > Req.MaxValue)
+            {
+                bPassesRequirements = false;
+                break;
+            }
+        }
+
+        if (!bPassesRequirements) continue;
+
+        // 2. Compute Dynamic Probability Weight
+        float FinalWeight = Option.SelectionWeight;
+        for (const auto& ScalarPair : Option.ProbabilityAttributeScalars.LocalLookupMap)
+        {
+            if (!ScalarPair.Key.IsValid()) continue;
+
+            float AttrVal = 0.0f;
+            if (AttrSet)
+            {
+                AttrVal = AttrSet->GetDynamicAttributeValue(ScalarPair.Key, 0);
+            }
+            if (FMath::IsNearlyZero(AttrVal))
+            {
+                GetNeedValue(ScalarPair.Key, AttrVal);
+            }
+
+            FinalWeight += (AttrVal * ScalarPair.Value);
+        }
+
+        FinalWeight = FMath::Max(0.01f, FinalWeight);
+        TotalWeight += FinalWeight;
+
+        FEligibleUtterance Item;
+        Item.Def = &Option;
+        Item.ComputedWeight = FinalWeight;
+        ValidOptions.Add(Item);
+    }
+
+    if (ValidOptions.Num() == 0) return false;
+
+    // 3. Weighted Lottery Selection
+    const float Roll = FMath::FRandRange(0.0f, TotalWeight);
+    float RunningSum = 0.0f;
+
+    for (const FEligibleUtterance& Item : ValidOptions)
+    {
+        RunningSum += Item.ComputedWeight;
+        if (Roll <= RunningSum)
+        {
+            OutSelectedUtterance = *Item.Def;
+            return true;
+        }
+    }
+
+    OutSelectedUtterance = *ValidOptions.Last().Def;
+    return true;
 }

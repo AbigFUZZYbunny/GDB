@@ -4,12 +4,15 @@
 #include "DynamicDataSerializer.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicGASManagerComponent.h"
+#include "DynamicSocialComponent.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicNetworkComponent.h"
 #include "AIController.h"
 #include "DynamicCharacter.h"
 #include "DynamicCustomizationComponent.h"
 #include "DynamicEnvironmentChunkActor.h"
+#include "DynamicLogicEvaluator.h"
 #include "Engine/World.h"
 #include "UObject/UnrealType.h"
 #include "Async/Async.h"
@@ -997,6 +1000,7 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     RecipeMasterRegistry.Append(MoveTemp(StagingData.RecipeMasterRegistry));
     FastPathDialogueRegistry.Append(MoveTemp(StagingData.FastPathDialogueRegistry));
     MovementStateRegistry.Append(MoveTemp(StagingData.MovementStateRegistry));
+    AIBehaviorMasterRegistry.Append(MoveTemp(StagingData.AIBehaviorMasterRegistry));
 
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {
@@ -1416,4 +1420,100 @@ void ADynamicGameState::EvaluateNetworkGraphs(float DeltaSeconds)
             }
         }
     }
+}
+
+bool ADynamicGameState::EvaluateBestDynamicBehavior(ADynamicCharacter* Character, FDynamicAIBehaviorDef& OutBestBehavior, float& OutBestScore) const
+{
+    OutBestScore = -MAX_flt;
+    if (!Character || AIBehaviorMasterRegistry.Num() == 0) return false;
+
+    UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent();
+    UDynamicAttributeSet* AttrSet = Character->GetDynamicAttributeSet();
+    UDynamicSocialComponent* SocialComp = Character->FindComponentByClass<UDynamicSocialComponent>();
+
+    FGameplayTagContainer SourceTags, TargetTags;
+    if (ASC) ASC->GetOwnedGameplayTags(TargetTags);
+
+    bool bFoundValid = false;
+
+    for (const auto& Pair : AIBehaviorMasterRegistry)
+    {
+        const FDynamicAIBehaviorDef& Def = Pair.Value;
+
+        // 1. Cooldown Check
+        if (IsBehaviorOnCooldown(Character, Def.BehaviorTag))
+        {
+            continue;
+        }
+
+        // 2. Prerequisite Condition Tree
+        if (!Def.PrerequisiteConditionTreeName.IsNone())
+        {
+            if (const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(Character, Def.PrerequisiteConditionTreeName))
+            {
+                if (!UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, ASC, ASC, SourceTags, TargetTags))
+                {
+                    continue;
+                }
+            }
+        }
+
+        // 3. Dynamic Priority Evaluation (Base Priority + Weighted Attributes/Needs)
+        float EvaluatedScore = Def.BasePriority;
+
+        for (const auto& ScalarPair : Def.PriorityAttributeScalars.LocalLookupMap)
+        {
+            if (!ScalarPair.Key.IsValid()) continue;
+
+            float AttributeValue = 0.0f;
+            if (AttrSet)
+            {
+                AttributeValue = AttrSet->GetDynamicAttributeValue(ScalarPair.Key, 0);
+            }
+
+            // Check Needs if attribute is zero
+            if (FMath::IsNearlyZero(AttributeValue) && SocialComp)
+            {
+                SocialComp->GetNeedValue(ScalarPair.Key, AttributeValue);
+            }
+
+            EvaluatedScore += (AttributeValue * ScalarPair.Value);
+        }
+
+        if (EvaluatedScore > OutBestScore)
+        {
+            OutBestScore = EvaluatedScore;
+            OutBestBehavior = Def;
+            bFoundValid = true;
+        }
+    }
+
+    return bFoundValid;
+}
+
+void ADynamicGameState::RecordBehaviorExecutionCooldown(ADynamicCharacter* Character, FGameplayTag BehaviorTag, float CooldownSeconds)
+{
+    if (!Character || !BehaviorTag.IsValid() || CooldownSeconds <= 0.0f) return;
+
+    UWorld* World = GetWorld();
+    const double ExpiryTime = (World ? World->GetTimeSeconds() : 0.0) + CooldownSeconds;
+
+    TWeakObjectPtr<ADynamicCharacter> WeakChar(Character);
+    CharacterBehaviorCooldowns.FindOrAdd(WeakChar).Add(BehaviorTag, ExpiryTime);
+}
+
+bool ADynamicGameState::IsBehaviorOnCooldown(ADynamicCharacter* Character, FGameplayTag BehaviorTag) const
+{
+    if (!Character || !BehaviorTag.IsValid()) return false;
+
+    TWeakObjectPtr<ADynamicCharacter> WeakChar(Character);
+    if (const TMap<FGameplayTag, double>* CooldownMap = CharacterBehaviorCooldowns.Find(WeakChar))
+    {
+        if (const double* ExpiryTime = CooldownMap->Find(BehaviorTag))
+        {
+            const double CurrentTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+            return (*ExpiryTime > CurrentTime);
+        }
+    }
+    return false;
 }

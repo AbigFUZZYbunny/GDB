@@ -40,6 +40,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|LLM")
     FCloudAIContextFilterConfig ContextFilterConfig;
+    
+    // Evaluates a set of utterances against the character's attributes/needs and picks one via weighted lottery
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|Dialogue")
+    bool SelectBestUtterance(const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances, FDynamicDialogueUtteranceDef& OutSelectedUtterance) const;
 
     // --- Query API ---
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")

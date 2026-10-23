@@ -1,0 +1,124 @@
+﻿{
+  "AIBehaviorMasterRegistry": {
+    "Behavior.Core.BegOrGreet": {
+      "ActionTag": "Action.Interact.Chat",
+      "TargetPlaceRoleTag": "Role.Place.TownSquare",
+      "ExecutionType": "Wait",
+      "BasePriority": 8.0,
+      "CooldownDuration": 15.0,
+      "PriorityAttributeScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Need.Hunger", "Value": 1.2 }
+        ]
+      },
+      "ExecutionMetrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Duration", "Value": 2.5 }
+        ]
+      },
+      "Utterances": [
+        {
+          "UtteranceText": "Please, kind traveler... a coin for a starving soul? I haven't eaten in days.",
+          "SelectionWeight": 5.0,
+          "AttributeRequirements": [
+            { "AttributeTag": "Need.Hunger", "MinValue": 60.0, "MaxValue": 100.0 },
+            { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 5.0 }
+          ],
+          "ProbabilityAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Need.Hunger", "Value": 0.25 }
+            ]
+          },
+          "EmotionTag": "Emotion.Despair"
+        },
+        {
+          "UtteranceText": "Ugh... my wounds... I don't know if I can make it much longer...",
+          "SelectionWeight": 10.0,
+          "AttributeRequirements": [
+            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 35.0 }
+          ],
+          "ProbabilityAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Resource.Health", "Value": -0.3 }
+            ]
+          },
+          "EmotionTag": "Emotion.Pain"
+        },
+        {
+          "UtteranceText": "Fine day in the market, isn't it? May fortune find your coin purse.",
+          "SelectionWeight": 2.0,
+          "AttributeRequirements": [
+            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 70.0, "MaxValue": 100.0 },
+            { "AttributeTag": "Need.Hunger", "MinValue": 0.0, "MaxValue": 40.0 }
+          ],
+          "ProbabilityAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Wealth.Gold", "Value": 0.05 }
+            ]
+          },
+          "EmotionTag": "Emotion.Friendly"
+        }
+      ]
+    },
+    "Behavior.Core.Passerby": {
+      "ActionTag": "Action.Interact.Chat",
+      "TargetPlaceRoleTag": "",
+      "ExecutionType": "Walk",
+      "BasePriority": 5.0,
+      "CooldownDuration": 1.0,
+      "PriorityAttributeScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Need.Hunger", "Value": 1.2 }
+        ]
+      },
+      "ExecutionMetrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Duration", "Value": 2.5 }
+        ]
+      },
+      "Utterances": [
+        {
+          "UtteranceText": "Please, kind traveler... a coin for a starving soul? I haven't eaten in days.",
+          "SelectionWeight": 5.0,
+          "AttributeRequirements": [
+            { "AttributeTag": "Need.Hunger", "MinValue": 60.0, "MaxValue": 100.0 },
+            { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 5.0 }
+          ],
+          "ProbabilityAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Need.Hunger", "Value": 0.25 }
+            ]
+          },
+          "EmotionTag": "Emotion.Despair"
+        },
+        {
+          "UtteranceText": "Ugh... my wounds... I don't know if I can make it much longer...",
+          "SelectionWeight": 10.0,
+          "AttributeRequirements": [
+            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 35.0 }
+          ],
+          "ProbabilityAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Resource.Health", "Value": -0.3 }
+            ]
+          },
+          "EmotionTag": "Emotion.Pain"
+        },
+        {
+          "UtteranceText": "Fine day in the market, isn't it? May fortune find your coin purse.",
+          "SelectionWeight": 2.0,
+          "AttributeRequirements": [
+            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 70.0, "MaxValue": 100.0 },
+            { "AttributeTag": "Need.Hunger", "MinValue": 0.0, "MaxValue": 40.0 }
+          ],
+          "ProbabilityAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Wealth.Gold", "Value": 0.05 }
+            ]
+          },
+          "EmotionTag": "Emotion.Friendly"
+        }
+      ]
+    }
+  }
+}

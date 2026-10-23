@@ -386,6 +386,16 @@ enum class ECloudAITaskPriority : uint8
     High = 2    // Direct Player Conversation > Ambient background chatter (Strictly Assigned to Low Latency and High Accuracy Miners)
 };
 
+UENUM(BlueprintType)
+enum class ENpcBehaviorExecutionType : uint8
+{
+    Ability,        // Triggers GAS Gameplay Ability via AbilitySystemComponent
+    Interaction,    // Executes an interaction with a target actor (Eat, Sleep, Open, Use)
+    Movement,       // Switches Mover locomotion state (Walk, Run, Sprint, Flee)
+    Montage,        // Plays a contextual animation montage with custom playrate
+    Wait            // Idles/waits for a designated duration
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -4129,38 +4139,68 @@ struct FCloudAIPayloadPackage
 // FAST-PATH DIALOGUE & CONTEXTUAL CHATTER STRUCTS
 // ============================================================================
 
+// Rich, data-driven utterance definition with dynamic attribute weighting and selection probability
 USTRUCT(BlueprintType)
-struct FFastPathDialogueEntry
+struct GDB_API FDynamicDialogueUtteranceDef
 {
     GENERATED_BODY()
 
-    // e.g., Dialogue.Category.Greeting, Dialogue.Category.Response, Dialogue.Category.Callout, Dialogue.Category.Rumor
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
-    FGameplayTag CategoryTag;
+    // The text template / dialogue line
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FString UtteranceText;
 
-    // Template string supporting %target%, %location_type%, %recent_time%, %speaker%
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
-    FString UtteranceTemplate;
+    // Base probability weight relative to other valid utterances (Default: 1.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    float SelectionWeight = 1.0f;
 
-    // List of allowed emotional moods (e.g. Mood.Angry, Mood.Joyful, Mood.Suspicious, Mood.Fond)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
-    FGameplayTagContainer AllowedMoodTags;
+    // Absolute attribute requirements for this line to even be considered (e.g., Health between 0 and 30, Hunger > 70)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    TArray<FCharacterAttributeRangeDef> AttributeRequirements;
 
-    // Multi-attribute relational requirements (e.g. Affinity [50..100], Hostility [60..100], Trust [-100..-20])
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
-    TArray<FCharacterAttributeRangeDef> RelationalAttributeRequirements;
+    // Dynamic probability bias: adds (AttributeValue * WeightScalar) to SelectionWeight at runtime
+    // (e.g. Need.Hunger * 0.1 increases begging probability as hunger rises)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FDynamicTagFloatMapWrapper ProbabilityAttributeScalars;
 
-    // Allowed relationship types (e.g. Relationship.Type.Friendship, Relationship.Type.Rivalry)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
-    FGameplayTagContainer AllowedRelationshipTypeTags;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
-    TSoftObjectPtr<UAnimMontage> GestureMontage;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    // Optional audio/voice cue tag
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FGameplayTag VoiceCueTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    // Optional facial expression / emotion tag
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTag EmotionTag;
+};
+
+// Updated FastPathDialogueEntry using the rich utterance definitions
+USTRUCT(BlueprintType)
+struct GDB_API FFastPathDialogueEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTag CategoryTag;
+
+    // Deprecated single string, kept for backwards fallback
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FString UtteranceTemplate;
+
+    // Collection of conditional, weighted utterances
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    TArray<FDynamicDialogueUtteranceDef> UtteranceVariations;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTagContainer AllowedMoodTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTagContainer AllowedRelationshipTypeTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    TArray<FCharacterAttributeRangeDef> RelationalAttributeRequirements;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTag VoiceCueTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     float SelectionWeight = 1.0f;
 };
 
@@ -4250,6 +4290,56 @@ struct FDynamicMovementStateDef
 // ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
 // ============================================================================
 USTRUCT(BlueprintType)
+struct GDB_API FDynamicAIBehaviorDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FGameplayTag BehaviorTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FGameplayTag ActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FGameplayTag TargetPlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    ENpcBehaviorExecutionType ExecutionType = ENpcBehaviorExecutionType::Ability;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FGameplayTag AbilityTagToTrigger;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FGameplayTag MovementStateTagToSet;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    TSoftObjectPtr<UAnimMontage> MontageToPlay;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    float BasePriority = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FName PrerequisiteConditionTreeName = NAME_None;
+
+    // Attribute Scalars: Multipliers applied to character attributes & needs (e.g., Need.Hunger * 1.5, Attribute.Resource.Health * -1.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FDynamicTagFloatMapWrapper PriorityAttributeScalars;
+
+    // Execution parameters: AcceptanceRadius, DurationSeconds, SpeedScalar, etc.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    FDynamicTagFloatMapWrapper ExecutionMetrics;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    TArray<FDynamicDialogueUtteranceDef> Utterances;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    float CooldownDuration = 5.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    bool bInterruptible = true;
+};
+
+USTRUCT(BlueprintType)
 struct FMasterRegistryStagingData
 {
     GENERATED_BODY()
@@ -4281,6 +4371,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FFastPathDialogueDef> FastPathDialogueRegistry;
     TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
     TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
+    TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
 
     bool bHasCalendarConfig = false;
     FDynamicCalendarDef CalendarConfig;
@@ -4369,5 +4460,3 @@ struct GDB_API FMinerNodeStats
     UPROPERTY() int32 TasksCompleted = 0;
     UPROPERTY() bool bIsCurrentlyProcessing = false;
 };
-
-// Internal Task State for the Subsystem Queue

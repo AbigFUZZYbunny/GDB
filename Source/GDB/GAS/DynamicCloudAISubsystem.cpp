@@ -2,6 +2,7 @@
 #include "DynamicCloudAISubsystem.h"
 #include "DynamicAILinkComponent.h"
 #include "DynamicCharacter.h"
+#include "DynamicGameState.h"
 #include "DynamicSocialComponent.h"
 #include "DynamicAttributeSet.h"
 #include "AbilitySystemComponent.h"
@@ -310,21 +311,41 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
     OutFallbackResponse.Commands.Empty();
     if (!Character) return;
 
-    FCloudAICommand DefaultCommand;
-    if (const UDynamicSocialComponent* SocialComp = Character->FindComponentByClass<UDynamicSocialComponent>())
+    UWorld* World = Character->GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+
+    if (GS)
     {
-        float HungerVal = 0.0f;
-        static const FGameplayTag HungerTag = FGameplayTag::RequestGameplayTag(TEXT("Need.Hunger"), false);
-        if (HungerTag.IsValid() && SocialComp->GetNeedValue(HungerTag, HungerVal) && HungerVal > 70.0f)
+        FDynamicAIBehaviorDef BestBehavior;
+        float BestScore = -MAX_flt;
+
+        // Data-driven fallback evaluation directly from Master Registry
+        if (GS->EvaluateBestDynamicBehavior(Character, BestBehavior, BestScore))
         {
-            DefaultCommand.CommandActionTag = FGameplayTag::RequestGameplayTag(TEXT("Action.ConsumeFood"), false);
-            DefaultCommand.TargetEntityOrPlaceRoleTag = FGameplayTag::RequestGameplayTag(TEXT("Role.Place.Tavern"), false);
-            DefaultCommand.PriorityWeight = 90.0f;
-            OutFallbackResponse.Commands.Add(DefaultCommand);
+            FCloudAICommand Cmd;
+            Cmd.CommandActionTag = BestBehavior.ActionTag.IsValid() ? BestBehavior.ActionTag : BestBehavior.BehaviorTag;
+            Cmd.TargetEntityOrPlaceRoleTag = BestBehavior.TargetPlaceRoleTag;
+            Cmd.PriorityWeight = BestScore;
+
+            if (BestBehavior.Utterances.Num() > 0)
+            {
+                if (UDynamicSocialComponent* SocialComp = Character->FindComponentByClass<UDynamicSocialComponent>())
+                {
+                    FDynamicDialogueUtteranceDef ChosenUtterance;
+                    if (SocialComp->SelectBestUtterance(BestBehavior.Utterances, ChosenUtterance))
+                    {
+                        Cmd.UtteranceText = ChosenUtterance.UtteranceText;
+                    }
+                }
+            }
+
+            OutFallbackResponse.Commands.Add(Cmd);
             return;
         }
     }
 
+    // Baseline fallback if no specific behavior passed conditions
+    FCloudAICommand DefaultCommand;
     DefaultCommand.CommandActionTag = FGameplayTag::RequestGameplayTag(TEXT("Schedule.Wander"), false);
     DefaultCommand.TargetEntityOrPlaceRoleTag = FGameplayTag::RequestGameplayTag(TEXT("Role.Place.Workplace"), false);
     DefaultCommand.PriorityWeight = 10.0f;

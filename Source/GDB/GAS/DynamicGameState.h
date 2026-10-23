@@ -114,6 +114,9 @@ public:
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Registries")
     TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
+    
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Registries")
+    TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Configuration")
     FDynamicCalendarDef CalendarConfig;
@@ -158,7 +161,35 @@ public:
     
     void ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn);
 
+    void RegisterNetworkNode(class UDynamicNetworkComponent* Node);
+    void UnregisterNetworkNode(class UDynamicNetworkComponent* Node);
+    void MarkNetworkGraphDirty(class UDynamicNetworkComponent* Node);
+    void QueueNetworkBurstTransfer(class UDynamicNetworkComponent* Node, FGameplayTag ResourceTag);
+
 private:
+    // --- Network Graph Tracking ---
+    UPROPERTY()
+    TArray<TWeakObjectPtr<class UDynamicNetworkComponent>> ActiveNetworkNodes;
+
+    bool bIsNetworkGraphDirty = false;
+    
+    // Struct representing a disjoint subgraph for a specific resource
+    struct FResourceGraphState
+    {
+        TArray<TWeakObjectPtr<class UDynamicNetworkComponent>> Sources;
+        TArray<TWeakObjectPtr<class UDynamicNetworkComponent>> Consumers;
+        TArray<TWeakObjectPtr<class UDynamicNetworkComponent>> Storages;
+        TArray<TWeakObjectPtr<class UDynamicNetworkComponent>> Transporters;
+    };
+    
+    TMap<int32, FResourceGraphState> ComputedResourceGraphs;
+    
+    void RebuildNetworkGraphs();
+    void EvaluateNetworkGraphs(float DeltaSeconds);
+    
+    // Hooks directly into the existing async environment simulation task
+    void SolveNetworksAsync(float HoursToSimulate);
+    
     FComputedAbilityScoreInfo EvaluateAbilityScore(FGameplayTag AbilityTag, const FDynamicAbilityDef& AbilityDef) const;
     float ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath) const;
     float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;

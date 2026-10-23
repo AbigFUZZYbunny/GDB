@@ -3,7 +3,9 @@
 #include "DynamicSpatialActor.h"
 #include "DynamicDataSerializer.h"
 #include "DynamicPhysicsActor.h"
-#include "DynamicEffectFactory.h"
+#include "DynamicAttributeSet.h"
+#include "AbilitySystemComponent.h"
+#include "DynamicNetworkComponent.h"
 #include "AIController.h"
 #include "DynamicCharacter.h"
 #include "DynamicCustomizationComponent.h"
@@ -1126,4 +1128,281 @@ void ADynamicGameState::WarmGameplayEffectCache()
     FGameplayEffectExecutionDefinition ExecDefInf;
     ExecDefInf.CalculationClass = ExecDefInst.CalculationClass;
     GenericInfiniteEffect->Executions.Add(ExecDefInf);
+}
+
+void ADynamicGameState::RegisterNetworkNode(UDynamicNetworkComponent* Node)
+{
+    if (!HasAuthority() || !Node) return;
+    ActiveNetworkNodes.AddUnique(Node);
+    bIsNetworkGraphDirty = true;
+}
+
+void ADynamicGameState::UnregisterNetworkNode(UDynamicNetworkComponent* Node)
+{
+    if (!HasAuthority() || !Node) return;
+    ActiveNetworkNodes.Remove(Node);
+    bIsNetworkGraphDirty = true;
+}
+
+void ADynamicGameState::MarkNetworkGraphDirty(UDynamicNetworkComponent* Node)
+{
+    bIsNetworkGraphDirty = true;
+}
+
+void ADynamicGameState::QueueNetworkBurstTransfer(UDynamicNetworkComponent* Node, FGameplayTag ResourceTag)
+{
+    if (!HasAuthority() || !Node) return;
+    const FDynamicNetworkNodeDef* Def = Node->GetNodeDefinition();
+    if (!Def) return;
+
+    AActor* OwnerActor = Node->GetOwner();
+    if (!OwnerActor) return;
+
+    // Correctly fetch AttributeSet via UAbilitySystemComponent
+    UAbilitySystemComponent* ASC = OwnerActor->FindComponentByClass<UAbilitySystemComponent>();
+    UDynamicAttributeSet* AttrSet = ASC ? const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))) : nullptr;
+    if (!AttrSet) return;
+
+    for (const FDynamicNetworkResourceConfig& ResConfig : Def->SupportedResources)
+    {
+        if (ResConfig.ResourceTag == ResourceTag && ResConfig.bIsEnvironmentLinked)
+        {
+            const float CurrentVolume = AttrSet->GetDynamicAttributeValue(ResConfig.VolumeAttributeTag, 0);
+            const float BurstAmount = FMath::Min(CurrentVolume, ResConfig.MaxBurstCapacity);
+            
+            if (BurstAmount > 0.0f)
+            {
+                ServerModifyEnvironmentalMana(OwnerActor->GetActorLocation(), ResourceTag, BurstAmount);
+                AttrSet->SetDynamicAttributeValue(ResConfig.VolumeAttributeTag, CurrentVolume - BurstAmount, 0);
+            }
+        }
+    }
+}
+
+void ADynamicGameState::RebuildNetworkGraphs()
+{
+    // Fast O(N+E) Breadth-First Search to label Disjoint Sets
+    ComputedResourceGraphs.Empty();
+    ActiveNetworkNodes.RemoveAll([](const TWeakObjectPtr<UDynamicNetworkComponent>& Node) { return !Node.IsValid(); });
+
+    int32 CurrentGraphID = 0;
+    TSet<UDynamicNetworkComponent*> Visited;
+
+    for (const TWeakObjectPtr<UDynamicNetworkComponent>& WeakNode : ActiveNetworkNodes)
+    {
+        UDynamicNetworkComponent* RootNode = WeakNode.Get();
+        if (!RootNode || Visited.Contains(RootNode)) continue;
+
+        const FDynamicNetworkNodeDef* RootDef = RootNode->GetNodeDefinition();
+        if (!RootDef) continue;
+
+        for (const FDynamicNetworkResourceConfig& ResConfig : RootDef->SupportedResources)
+        {
+            const FGameplayTag TargetRes = ResConfig.ResourceTag;
+            CurrentGraphID++;
+            FResourceGraphState& Graph = ComputedResourceGraphs.Add(CurrentGraphID);
+
+            TArray<UDynamicNetworkComponent*> Queue;
+            Queue.Add(RootNode);
+            Visited.Add(RootNode);
+
+            while (Queue.Num() > 0)
+            {
+                UDynamicNetworkComponent* Node = Queue[0];
+                Queue.RemoveAt(0, EAllowShrinking::No);
+
+                const FDynamicNetworkNodeDef* NodeDef = Node->GetNodeDefinition();
+                if (NodeDef)
+                {
+                    for (const FDynamicNetworkResourceConfig& Config : NodeDef->SupportedResources)
+                    {
+                        if (Config.ResourceTag == TargetRes)
+                        {
+                            Node->ActiveGraphIDs.Add(TargetRes, CurrentGraphID);
+                            
+                            switch (Config.NodeType)
+                            {
+                                case ENetworkNodeType::Source: Graph.Sources.Add(Node); break;
+                                case ENetworkNodeType::Consumer: Graph.Consumers.Add(Node); break;
+                                case ENetworkNodeType::Storage: Graph.Storages.Add(Node); break;
+                                case ENetworkNodeType::Transporter: Graph.Transporters.Add(Node); break;
+                            }
+                        }
+                    }
+                }
+
+                // Traverse edges
+                for (const FNetworkConnectionItem& Edge : Node->ReplicatedConnections.Items)
+                {
+                    if (UDynamicNetworkComponent* Connected = Edge.ConnectedNode.Get())
+                    {
+                        if (!Visited.Contains(Connected))
+                        {
+                            Visited.Add(Connected);
+                            Queue.Add(Connected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    bIsNetworkGraphDirty = false;
+}
+
+void ADynamicGameState::EvaluateNetworkGraphs(float DeltaSeconds)
+{
+    if (bIsNetworkGraphDirty)
+    {
+        RebuildNetworkGraphs();
+    }
+
+    // Mathematical Graph Resolution (Time-sliced batch execution)
+    for (auto& Pair : ComputedResourceGraphs)
+    {
+        FResourceGraphState& Graph = Pair.Value;
+        float TotalSupply = 0.0f;
+        float TotalDemand = 0.0f;
+
+        // 1. Accumulate Total Graph Supply & Environment Extractions
+        for (const TWeakObjectPtr<UDynamicNetworkComponent>& WeakSource : Graph.Sources)
+        {
+            if (UDynamicNetworkComponent* Source = WeakSource.Get())
+            {
+                const FDynamicNetworkNodeDef* Def = Source->GetNodeDefinition();
+                AActor* OwnerActor = Source->GetOwner();
+                UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+                UDynamicAttributeSet* AttrSet = ASC ? const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))) : nullptr;
+                if (!Def || !AttrSet) continue;
+
+                for (const FDynamicNetworkResourceConfig& Config : Def->SupportedResources)
+                {
+                    if (Config.NodeType != ENetworkNodeType::Source) continue;
+
+                    const float AttrFlow = AttrSet->GetDynamicAttributeValue(Config.FlowRateAttributeTag, 0);
+                    const float EffectiveFlow = (AttrFlow > 0.0f) ? AttrFlow : Config.MaxFlowRate;
+                    const float PotentialPush = EffectiveFlow * DeltaSeconds;
+
+                    if (Config.bIsEnvironmentLinked)
+                    {
+                        const float EnvAvailable = GetEnvironmentMetricAtLocation(OwnerActor->GetActorLocation(), Config.ResourceTag);
+                        const float Extracted = FMath::Min(PotentialPush, EnvAvailable);
+                        ServerModifyEnvironmentalMana(OwnerActor->GetActorLocation(), Config.ResourceTag, -Extracted);
+                        TotalSupply += Extracted;
+                    }
+                    else
+                    {
+                        const float CurrentVol = AttrSet->GetDynamicAttributeValue(Config.VolumeAttributeTag, 0);
+                        const float Pushed = FMath::Min(CurrentVol, PotentialPush);
+                        AttrSet->SetDynamicAttributeValue(Config.VolumeAttributeTag, CurrentVol - Pushed, 0);
+                        TotalSupply += Pushed;
+                    }
+                }
+            }
+        }
+
+        // 2. Accumulate Graph Demand & Calculate Ratios
+        for (const TWeakObjectPtr<UDynamicNetworkComponent>& WeakConsumer : Graph.Consumers)
+        {
+            if (UDynamicNetworkComponent* Consumer = WeakConsumer.Get())
+            {
+                const FDynamicNetworkNodeDef* Def = Consumer->GetNodeDefinition();
+                AActor* OwnerActor = Consumer->GetOwner();
+                UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+                UDynamicAttributeSet* AttrSet = ASC ? const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))) : nullptr;
+                if (!Def || !AttrSet) continue;
+
+                for (const FDynamicNetworkResourceConfig& Config : Def->SupportedResources)
+                {
+                    if (Config.NodeType != ENetworkNodeType::Consumer) continue;
+
+                    const float Capacity = AttrSet->GetDynamicAttributeValue(Config.MaxVolumeAttributeTag, 0);
+                    const float CurrentVol = AttrSet->GetDynamicAttributeValue(Config.VolumeAttributeTag, 0);
+                    const float AttrFlow = AttrSet->GetDynamicAttributeValue(Config.FlowRateAttributeTag, 0);
+                    
+                    const float SpaceLeft = FMath::Max(0.0f, Capacity - CurrentVol);
+                    const float EffectiveFlow = (AttrFlow > 0.0f) ? AttrFlow : Config.MaxFlowRate;
+                    const float FlowLimit = EffectiveFlow * DeltaSeconds;
+                    
+                    TotalDemand += FMath::Min(SpaceLeft, FlowLimit);
+                }
+            }
+        }
+
+        // 3. Buffer missing supply from Storage, or push excess to Storage
+        float DemandDeficit = TotalDemand - TotalSupply;
+        if (DemandDeficit > 0.0f)
+        {
+            for (const TWeakObjectPtr<UDynamicNetworkComponent>& WeakStorage : Graph.Storages)
+            {
+                if (UDynamicNetworkComponent* Storage = WeakStorage.Get())
+                {
+                    AActor* OwnerActor = Storage->GetOwner();
+                    UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+                    UDynamicAttributeSet* AttrSet = ASC ? const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))) : nullptr;
+                    const FDynamicNetworkNodeDef* Def = Storage->GetNodeDefinition();
+                    if (!Def || !AttrSet) continue;
+
+                    for (const FDynamicNetworkResourceConfig& Config : Def->SupportedResources)
+                    {
+                        if (Config.NodeType != ENetworkNodeType::Storage) continue;
+                    
+                        const float CurrentVol = AttrSet->GetDynamicAttributeValue(Config.VolumeAttributeTag, 0);
+                        const float AttrFlow = AttrSet->GetDynamicAttributeValue(Config.FlowRateAttributeTag, 0);
+                        const float EffectiveFlow = (AttrFlow > 0.0f) ? AttrFlow : Config.MaxFlowRate;
+                        const float PullLimit = FMath::Min(CurrentVol, EffectiveFlow * DeltaSeconds);
+                    
+                        const float Pulled = FMath::Min(DemandDeficit, PullLimit);
+                        AttrSet->SetDynamicAttributeValue(Config.VolumeAttributeTag, CurrentVol - Pulled, 0);
+                    
+                        TotalSupply += Pulled;
+                        DemandDeficit -= Pulled;
+                        if (DemandDeficit <= 0.0f) break;
+                    }
+                }
+            }
+        }
+
+        // 4. Distribute finalized Supply to Consumers based on Pressure priority
+        const float SatisfactionRatio = (TotalDemand > 0.0f) ? FMath::Clamp(TotalSupply / TotalDemand, 0.0f, 1.0f) : 1.0f;
+        
+        for (const TWeakObjectPtr<UDynamicNetworkComponent>& WeakConsumer : Graph.Consumers)
+        {
+            if (UDynamicNetworkComponent* Consumer = WeakConsumer.Get())
+            {
+                const FDynamicNetworkNodeDef* Def = Consumer->GetNodeDefinition();
+                AActor* OwnerActor = Consumer->GetOwner();
+                
+                // CORRECTED: Fetch AttributeSet via AbilitySystemComponent
+                UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+                UDynamicAttributeSet* AttrSet = ASC ? const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))) : nullptr;
+                
+                if (!Def || !AttrSet) continue;
+
+                for (const FDynamicNetworkResourceConfig& Config : Def->SupportedResources)
+                {
+                    if (Config.NodeType != ENetworkNodeType::Consumer) continue;
+
+                    const float Capacity = AttrSet->GetDynamicAttributeValue(Config.MaxVolumeAttributeTag, 0);
+                    const float CurrentVol = AttrSet->GetDynamicAttributeValue(Config.VolumeAttributeTag, 0);
+                    const float AttrFlow = AttrSet->GetDynamicAttributeValue(Config.FlowRateAttributeTag, 0);
+                    
+                    const float SpaceLeft = FMath::Max(0.0f, Capacity - CurrentVol);
+                    const float EffectiveFlow = (AttrFlow > 0.0f) ? AttrFlow : Config.MaxFlowRate;
+                    const float FlowLimit = EffectiveFlow * DeltaSeconds;
+                    
+                    const float RequestedDemand = FMath::Min(SpaceLeft, FlowLimit);
+                    const float ReceivedSupply = RequestedDemand * SatisfactionRatio;
+
+                    if (Config.bIsEnvironmentLinked)
+                    {
+                        ServerModifyEnvironmentalMana(OwnerActor->GetActorLocation(), Config.ResourceTag, ReceivedSupply);
+                    }
+                    else
+                    {
+                        AttrSet->SetDynamicAttributeValue(Config.VolumeAttributeTag, CurrentVol + ReceivedSupply, 0);
+                    }
+                }
+            }
+        }
+    }
 }

@@ -883,6 +883,40 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.MovementStateRegistry.Add(StateTag, Def);
         }
     }
+    
+    if (RootObject->HasField(TEXT("NetworkMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("NetworkMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            
+            TSharedPtr<FJsonObject> NodeObj = Pair.Value->AsObject();
+            FDynamicNetworkNodeDef NodeDef;
+            
+            if (NodeObj->HasField(TEXT("SupportedResources")))
+            {
+                for (const auto& ResVal : NodeObj->GetArrayField(TEXT("SupportedResources")))
+                {
+                    TSharedPtr<FJsonObject> ResObj = ResVal->AsObject();
+                    FDynamicNetworkResourceConfig ResConfig;
+                    
+                    ResConfig.ResourceTag = FGameplayTag::RequestGameplayTag(FName(*ResObj->GetStringField(TEXT("ResourceTag"))), false);
+                    ResConfig.NodeType = StringToEnum<ENetworkNodeType>(ResObj->GetStringField(TEXT("NodeType")));
+                    ResConfig.MaxFlowRate = ResObj->HasField(TEXT("MaxFlowRate")) ? static_cast<float>(ResObj->GetNumberField(TEXT("MaxFlowRate"))) : 100.0f;
+                    ResConfig.MaxBurstCapacity = ResObj->HasField(TEXT("MaxBurstCapacity")) ? static_cast<float>(ResObj->GetNumberField(TEXT("MaxBurstCapacity"))) : 0.0f;
+                    ResConfig.VolumeAttributeTag = FGameplayTag::RequestGameplayTag(FName(*ResObj->GetStringField(TEXT("VolumeAttributeTag"))), false);
+                    ResConfig.MaxVolumeAttributeTag = FGameplayTag::RequestGameplayTag(FName(*ResObj->GetStringField(TEXT("MaxVolumeAttributeTag"))), false);
+                    ResConfig.FlowRateAttributeTag = FGameplayTag::RequestGameplayTag(FName(*ResObj->GetStringField(TEXT("FlowRateAttributeTag"))), false);
+                    ResConfig.PressureAttributeTag = FGameplayTag::RequestGameplayTag(FName(*ResObj->GetStringField(TEXT("PressureAttributeTag"))), false);
+                    ResConfig.bIsEnvironmentLinked = ResObj->HasField(TEXT("bIsEnvironmentLinked")) ? ResObj->GetBoolField(TEXT("bIsEnvironmentLinked")) : false;
+                    
+                    NodeDef.SupportedResources.Add(ResConfig);
+                }
+            }
+            OutStaging.NetworkMasterRegistry.Add(KeyTag, NodeDef);
+        }
+    }
 
     return true;
 }

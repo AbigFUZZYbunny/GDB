@@ -368,6 +368,15 @@ enum class ECloudAIExecutionBackend : uint8
     LocalRuleBasedFallback  // Local hosted co-op (1-5 players): Zero HTTP socket overhead, instant rule-based simulation
 };
 
+UENUM(BlueprintType)
+enum class ENetworkNodeType : uint8
+{
+    Source,       // Generates resources (e.g., Solar Panel, Magic Node)
+    Consumer,     // Drains resources (e.g., Lightbulb, Shield Generator)
+    Storage,      // Stores resources bidirectionally (e.g., Battery, Fireball)
+    Transporter   // Connects nodes, transfers up to FlowLimit (e.g., Pipe, Wire)
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -643,7 +652,85 @@ struct TStructOpsTypeTraits<FFastInteractableStateArray> : public TStructOpsType
     enum { WithNetDeltaSerializer = true };
 };
 
+USTRUCT(BlueprintType)
+struct FDynamicNetworkResourceConfig
+{
+    GENERATED_BODY()
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag ResourceTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ENetworkNodeType NodeType = ENetworkNodeType::Transporter;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MaxFlowRate = 100.0f; // Added fallback/default flow rate
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MaxBurstCapacity = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag VolumeAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag MaxVolumeAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag FlowRateAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag PressureAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsEnvironmentLinked = false;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicNetworkNodeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FDynamicNetworkResourceConfig> SupportedResources;
+};
+
+// --- Fast Array for Visual & Logical Connections ---
+
+USTRUCT(BlueprintType)
+struct FNetworkConnectionItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TWeakObjectPtr<class UDynamicNetworkComponent> ConnectedNode;
+
+    void PreReplicatedRemove(const struct FFastNetworkConnectionArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastNetworkConnectionArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastNetworkConnectionArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastNetworkConnectionArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FNetworkConnectionItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicNetworkComponent* OwningComponent = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FNetworkConnectionItem, FFastNetworkConnectionArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastNetworkConnectionArray> : public TStructOpsTypeTraitsBase2<FFastNetworkConnectionArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
 
 // ============================================================================
 // ITEM & CONTAINER GRID SYSTEM
@@ -4184,6 +4271,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
     TMap<FGameplayTag, FFastPathDialogueDef> FastPathDialogueRegistry;
     TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
+    TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
 
     bool bHasCalendarConfig = false;
     FDynamicCalendarDef CalendarConfig;

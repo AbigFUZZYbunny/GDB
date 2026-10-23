@@ -1,0 +1,54 @@
+﻿{
+  "_comment": "Multi-Profession Master Registry: Defines independent career paths that characters can hold simultaneously to sustain small town economies.",
+  "NetworkMasterRegistry": {
+    "Network.Machine.Generator.Coal": {
+      "SupportedResources": [
+        {
+          "ResourceTag": "Resource.Power.Electricity",
+          "NodeType": "Source",
+          "MaxFlowRate": 150.0,
+          "VolumeAttributeTag": "Attribute.Resource.Power",
+          "MaxVolumeAttributeTag": "Attribute.Resource.Power.Max",
+          "FlowRateAttributeTag": "Attribute.Network.FlowRate",
+          "PressureAttributeTag": "Attribute.Network.Pressure",
+          "bIsEnvironmentLinked": false
+        }
+      ]
+    },
+    "Network.Machine.Light.Streetlamp": {
+      "SupportedResources": [
+        {
+          "ResourceTag": "Resource.Power.Electricity",
+          "NodeType": "Consumer",
+          "MaxFlowRate": 5.0,
+          "VolumeAttributeTag": "Attribute.Resource.Power",
+          "MaxVolumeAttributeTag": "Attribute.Resource.Power.Max",
+          "bIsEnvironmentLinked": false
+        }
+      ]
+    },
+    "Network.Magic.Fireball": {
+      "SupportedResources": [
+        {
+          "ResourceTag": "Resource.Mana.Fire",
+          "NodeType": "Storage",
+          "MaxFlowRate": 25.0,
+          "MaxBurstCapacity": 5000.0,
+          "VolumeAttributeTag": "Attribute.Resource.Mana.Fire",
+          "MaxVolumeAttributeTag": "Attribute.Resource.Mana.Fire.Max",
+          "bIsEnvironmentLinked": true
+        }
+      ]
+    },
+    "Network.Infrastructure.Pipe.Water": {
+      "SupportedResources": [
+        {
+          "ResourceTag": "Resource.Fluid.Water",
+          "NodeType": "Transporter",
+          "MaxFlowRate": 500.0,
+          "bIsEnvironmentLinked": false
+        }
+      ]
+    }
+  }
+}

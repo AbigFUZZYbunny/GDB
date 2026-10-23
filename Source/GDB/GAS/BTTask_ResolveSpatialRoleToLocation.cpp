@@ -78,7 +78,7 @@ EBTNodeResult::Type UBTTask_ResolveSpatialRoleToLocation::ExecuteTask(UBehaviorT
         }
     }
 
-    // 3. O(1) Spatial Registry Query via GameState
+    // 3. O(1) Spatial Registry Query via GameState (bypasses TActorIterator over thousands of world actors)
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS)
     {

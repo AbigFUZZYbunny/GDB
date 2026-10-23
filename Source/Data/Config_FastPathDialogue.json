@@ -1,0 +1,93 @@
+﻿{
+  "_comment": "Master Fast-Path Dialogue Registry: Drives quick responses, emotional variants (angry/hateful vs. happy/loving), street callouts, and local gossip without LLM latency.",
+  "FastPathDialogueRegistry": {
+    "Dialogue.Profile.GeneralTownfolk": {
+      "Entries": [
+        {
+          "CategoryTag": "Dialogue.Category.Greeting",
+          "UtteranceTemplate": "May the light brighten your path, %target%! It is wonderful to see you.",
+          "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content" ],
+          "RelationalAttributeRequirements": [
+            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 30.0, "MaxValue": 100.0 }
+          ],
+          "AllowedRelationshipTypeTags": [ "Relationship.Type.Friendship" ],
+          "SelectionWeight": 2.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Greeting",
+          "UtteranceTemplate": "What do you want, %target%? Spit it out or get out of my sight.",
+          "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Irritated" ],
+          "RelationalAttributeRequirements": [
+            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": -100.0, "MaxValue": -10.0 }
+          ],
+          "AllowedRelationshipTypeTags": [ "Relationship.Type.Rivalry" ],
+          "SelectionWeight": 3.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Greeting",
+          "UtteranceTemplate": "Good day to you, traveler.",
+          "AllowedMoodTags": [ "Need.Mood.Neutral" ],
+          "RelationalAttributeRequirements": [
+            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": -10.0, "MaxValue": 30.0 }
+          ],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 1.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Response",
+          "UtteranceTemplate": "Doing quite well, thank you for asking, %target%!",
+          "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content" ],
+          "RelationalAttributeRequirements": [
+            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 10.0, "MaxValue": 100.0 }
+          ],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 1.5
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Response",
+          "UtteranceTemplate": "None of your concern. Walk away.",
+          "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Hateful" ],
+          "RelationalAttributeRequirements": [
+            { "AttributeTag": "Relationship.Metric.Hostility", "MinValue": 25.0, "MaxValue": 100.0 }
+          ],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 2.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Callout",
+          "UtteranceTemplate": "Hey %target%, hold up a moment! I need a word with you.",
+          "AllowedMoodTags": [ "Need.Mood.Content", "Need.Mood.Neutral" ],
+          "RelationalAttributeRequirements": [
+            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": -5.0, "MaxValue": 100.0 }
+          ],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 1.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Callout.Ignored",
+          "UtteranceTemplate": "Fine! Walk away then, see if I bother warning you next time!",
+          "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Irritated", "Need.Mood.Neutral" ],
+          "RelationalAttributeRequirements": [],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 1.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Rumor",
+          "UtteranceTemplate": "Did you hear? %target% was seen entering %location_type% %recent_time% and hasn't returned since.",
+          "AllowedMoodTags": [ "Need.Mood.Suspicious", "Need.Mood.Neutral" ],
+          "RelationalAttributeRequirements": [],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 1.0
+        },
+        {
+          "CategoryTag": "Dialogue.Category.Rumor",
+          "UtteranceTemplate": "Someone told me that %target% left %location_type% %recent_time% in a terrible hurry.",
+          "AllowedMoodTags": [ "Need.Mood.Content", "Need.Mood.Neutral" ],
+          "RelationalAttributeRequirements": [],
+          "AllowedRelationshipTypeTags": [],
+          "SelectionWeight": 1.0
+        }
+      ]
+    }
+  }
+}

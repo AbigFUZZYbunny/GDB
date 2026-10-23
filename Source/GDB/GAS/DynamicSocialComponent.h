@@ -7,6 +7,8 @@
 #include "DynamicGASTypes.h"
 #include "DynamicSocialComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnFastPathDialogueSpokenSignature, AActor*, Speaker, AActor*, Target, const FString&, Utterance);
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicSocialComponent : public UActorComponent
 {
@@ -14,8 +16,12 @@ class GDB_API UDynamicSocialComponent : public UActorComponent
 
 public:
     UDynamicSocialComponent();
-
+    virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Social|Dialogue")
+    FOnFastPathDialogueSpokenSignature OnFastPathDialogueSpoken;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Social")
     FGuid CharacterPersistentGuid;
@@ -31,6 +37,9 @@ public:
 
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social")
     FFastAssignedProfessionArray ReplicatedProfessions;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|LLM")
+    FCloudAIContextFilterConfig ContextFilterConfig;
 
     // --- Query API ---
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")
@@ -62,8 +71,36 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social")
     void ServerSetCloudAISuspension(bool bSuspended);
 
+    // Filtered serialization to optimize token budgets and server serialization times
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social")
     FString SerializeAgentContextForLLM(ECloudAIRequestType RequestType) const;
+
+    // --- Fast-Path Dialogue & Contextual Chatter Engine ---
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Dialogue")
+    bool TryResolveFastPathDialogue(
+        FGameplayTag CategoryTag,
+        AActor* TargetActor,
+        FString& OutUtterance,
+        TSoftObjectPtr<UAnimMontage>& OutMontage,
+        FGameplayTag& OutVoiceCueTag
+    );
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Dialogue")
+    bool TriggerCalloutToTarget(AActor* TargetActor, float IgnoreTimeout = 6.0f);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Dialogue")
+    void HandleCalloutIgnored();
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Dialogue")
+    void ClearActiveCallout();
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|Dialogue")
+    FString FormatDialogueTokens(
+        const FString& TemplateString,
+        AActor* TargetActor,
+        const FString& CustomLocation = TEXT("the tavern"),
+        const FString& CustomTime = TEXT("recently")
+    ) const;
 
     // --- FastArray Cache Callbacks ---
     void RebuildRelationshipCache();
@@ -79,4 +116,10 @@ protected:
 
     UPROPERTY(Replicated)
     bool bCloudAISuspended = false;
+
+private:
+    mutable double LastContextSerializationTime = 0.0;
+
+    TWeakObjectPtr<AActor> ActiveCalloutTarget;
+    FTimerHandle TimerHandle_CalloutTimeout;
 };

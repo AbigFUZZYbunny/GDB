@@ -73,8 +73,6 @@ protected:
     UFUNCTION()
     void OnRep_IsActiveInWorld();
 
-    void ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def);
-
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
     TObjectPtr<USkeletalMeshComponent> SkeletalMeshComponent;
 
@@ -109,6 +107,8 @@ protected:
     bool bIsActiveInWorld = true;
 
 private:
+    void ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def);
+
     TMap<uint8, const FPhysicsLimbConfig*> LocalLimbLookupMap;
     TMap<FName, uint8> LocalBoneToLimbMap;
     TMap<uint8, double> ServerLastLimbHitTimestamp;

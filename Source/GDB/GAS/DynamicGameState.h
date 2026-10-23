@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameplayTagContainer.h"
 #include "DynamicGASTypes.h"
 #include "DynamicGameState.generated.h"
 
@@ -46,6 +47,8 @@ public:
     TMap<FGameplayTag, FDynamicQuestGeneratorRule> QuestGeneratorRules;
     TMap<FGameplayTag, FDynamicLanguageDef> LanguageMasterRegistry;
     TMap<FGameplayTag, FNameGenerationRuleConfig> NameGenerationRulesRegistry;
+    TMap<FGameplayTag, FFastPathDialogueDef> FastPathDialogueRegistry;
+    TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Calendar")
     FDynamicCalendarDef CalendarConfig;
@@ -100,6 +103,8 @@ public:
 
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
+    void WarmGameplayEffectCacheAsync(TFunction<void()> OnComplete = nullptr, float MaxBudgetPerFrameSeconds = 0.003f);
+
     void MergeStagingRegistry(FMasterRegistryStagingData&& StagingData);
 
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Crafting")
@@ -136,7 +141,7 @@ public:
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
     const FPhysicsCalculationSettings& GetCalculationSettings() const { return CalculationSettings; }
 
-    // --- Spatial Role Fast-Lookup API ---
+    // Spatial Role Fast-Lookup API
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|SpatialRole")
     void RegisterSpatialRoleActor(AActor* TargetActor, const FGameplayTagContainer& RoleTags);
 
@@ -159,6 +164,7 @@ private:
 
     UPROPERTY(Transient)
     TMap<FGameplayTag, TObjectPtr<UGameplayEffect>> DynamicEffectCDOCache;
+    mutable FCriticalSection EffectCacheCriticalSection;
 
     UPROPERTY() TArray<TObjectPtr<ADynamicSpatialActor>> InactiveSpatialActorPool;
     UPROPERTY() TArray<TObjectPtr<ADynamicPhysicsActor>> InactivePhysicsActorPool;
@@ -168,14 +174,11 @@ private:
     TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
     TArray<float> AdvectionDeltaScratchpad;
 
-    // Spatial Role Partitions
     TMap<FGameplayTag, TArray<TWeakObjectPtr<AActor>>> SpatialRoleActorRegistry;
     TMap<TWeakObjectPtr<AActor>, TArray<FGameplayTag>> ActorToRegisteredRolesMap;
 
-    // In-flight thread-safe queue holding modifications applied during active worker passes
     TQueue<FEnvironmentManaModificationRecord, EQueueMode::Mpsc> PendingManaModifications;
 
-    // Watchdog Timers: Prevents silent ThreadPool drop lockouts
     bool bIsSimulationTaskRunning = false;
     double SimulationTaskStartTimestamp = 0.0;
     static constexpr double SimulationTaskTimeoutSeconds = 45.0;

@@ -14,17 +14,16 @@
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
+#include "Containers/Ticker.h"
 
 ADynamicGameState::ADynamicGameState()
 {
     bReplicates = true;
-    // Environment grid is simulated on server and replicated through spatialized ADynamicEnvironmentChunkActor instances.
 }
 
 void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    // CRITICAL: ReplicatedEnvironmentGrid removed to eliminate global 10,000-cell array choke.
 }
 
 void ADynamicGameState::BeginPlay()
@@ -33,7 +32,6 @@ void ADynamicGameState::BeginPlay()
 
     if (HasAuthority())
     {
-        // 1. Hydrate Base Data Registries from Content/Data
         const FString DataDir = FPaths::ProjectContentDir() / TEXT("Data");
         TArray<FString> ShippedJsonFiles;
         IFileManager::Get().FindFiles(ShippedJsonFiles, *(DataDir / TEXT("*.json")), true, false);
@@ -46,7 +44,6 @@ void ADynamicGameState::BeginPlay()
             }
         }
 
-        // 2. Hydrate Modded Profiles from Saved/DynamicModules
         const FString ModDir = FPaths::ProjectSavedDir() / TEXT("DynamicModules");
         TArray<FString> ModFiles;
         IFileManager::Get().FindFiles(ModFiles, *(ModDir / TEXT("*.json")), true, false);
@@ -59,7 +56,6 @@ void ADynamicGameState::BeginPlay()
             }
         }
 
-        // 3. Initialize Environmental Grid and Spatial Chunks
         SpawnServerEnvironmentChunks();
     }
 }
@@ -103,7 +99,6 @@ void ADynamicGameState::SetupDynamicEnvironment(const FDynamicEnvironmentSystemC
         const int32 TotalCells = GridWidth * GridHeight;
         EnvironmentReadBuffer.SetNum(TotalCells);
         EnvironmentWriteBuffer.SetNum(TotalCells);
-
         const int32 NumElements = EnvironmentConfig.TrackedElementalTags.Num();
         const uint8 DefaultPackedVal = static_cast<uint8>(FMath::Clamp(
             FMath::RoundToInt((EnvironmentConfig.DefaultCellDensity / FMath::Max(1.0f, EnvironmentConfig.MaxElementDensityCap)) * 255.0f),
@@ -119,12 +114,10 @@ void ADynamicGameState::SetupDynamicEnvironment(const FDynamicEnvironmentSystemC
         }
 
         EnvironmentWriteBuffer = EnvironmentReadBuffer;
-
         if (NumElements > 0 && TotalCells > 0)
         {
             AdvectionDeltaScratchpad.SetNumZeroed(NumElements * TotalCells);
         }
-
         SpawnServerEnvironmentChunks();
     }
 }
@@ -187,15 +180,12 @@ void ADynamicGameState::SpawnServerEnvironmentChunks()
 float ADynamicGameState::GetEnvironmentMetricAtLocation(const FVector& WorldLocation, FGameplayTag MetricOrElementTag) const
 {
     if (CellSizeWorldUnits <= 0.0f || !MetricOrElementTag.IsValid()) return 0.0f;
-
     const int32 CellIdx = GetEnvironmentCellIndexAtLocation(WorldLocation);
 
-    // 1. Authoritative Server / Standalone Lookup
     if (HasAuthority())
     {
         if (!EnvironmentReadBuffer.IsValidIndex(CellIdx)) return 0.0f;
         const FEnvironmentGridCellItem& Cell = EnvironmentReadBuffer[CellIdx];
-
         const int32 ElemIdx = ResolveElementArrayIndex(MetricOrElementTag);
         if (ElemIdx != INDEX_NONE && Cell.PackedElementalDensities.IsValidIndex(ElemIdx))
         {
@@ -204,7 +194,6 @@ float ADynamicGameState::GetEnvironmentMetricAtLocation(const FVector& WorldLoca
         return Cell.DerivedPhysicalMetrics.LocalLookupMap.FindRef(MetricOrElementTag);
     }
 
-    // 2. Client Proximity Chunk Lookup
     const int32 CellX = CellIdx % GridWidth;
     const int32 CellY = CellIdx / GridWidth;
     const FIntPoint ChunkCoord(CellX / ChunkDimension, CellY / ChunkDimension);
@@ -224,7 +213,6 @@ float ADynamicGameState::GetEnvironmentMetricAtLocation(const FVector& WorldLoca
             }
         }
     }
-
     return 0.0f;
 }
 
@@ -247,7 +235,6 @@ float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocat
 
     RecalculateCellPhysicalMetrics(Cell);
 
-    // If worker thread is executing, stage modification to reapply post-swap
     if (bIsSimulationTaskRunning)
     {
         FEnvironmentManaModificationRecord Record;
@@ -261,7 +248,6 @@ float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocat
         EnvironmentWriteBuffer[CellIdx] = Cell;
     }
 
-    // Immediately push to spatial chunk
     const int32 CellX = CellIdx % GridWidth;
     const int32 CellY = CellIdx / GridWidth;
     const FIntPoint ChunkCoord(CellX / ChunkDimension, CellY / ChunkDimension);
@@ -278,20 +264,16 @@ float ADynamicGameState::ServerModifyEnvironmentalMana(const FVector& WorldLocat
 
 void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
 {
-    if (!HasAuthority() || EnvironmentReadBuffer.Num() == 0)
-    {
-        return;
-    }
+    if (!HasAuthority() || EnvironmentReadBuffer.Num() == 0) return;
 
     AccumulatedUnsimulatedHours += ElapsedGameHours;
     const double CurrentWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 
-    // Watchdog check: If task has been running longer than timeout, recover
     if (bIsSimulationTaskRunning)
     {
         if (SimulationTaskStartTimestamp > 0.0 && (CurrentWorldTime - SimulationTaskStartTimestamp) > SimulationTaskTimeoutSeconds)
         {
-            UE_LOG(LogTemp, Error, TEXT("ADynamicGameState: Async environment simulation task timed out after %.1f seconds (ThreadPool stall or crash detected). Forcing watchdog reset."), (CurrentWorldTime - SimulationTaskStartTimestamp));
+            UE_LOG(LogTemp, Error, TEXT("ADynamicGameState: Async environment simulation task timed out after %.1f seconds. Forcing watchdog reset."), (CurrentWorldTime - SimulationTaskStartTimestamp));
             bIsSimulationTaskRunning = false;
             SimulationTaskStartTimestamp = 0.0;
         }
@@ -318,7 +300,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
     {
         const int32 NumElements = CapturedEnvConfig.TrackedElementalTags.Num();
         const int32 ScratchpadSize = NumElements * TotalCells;
-
         if (AdvectionDeltaScratchpad.Num() != ScratchpadSize)
         {
             AdvectionDeltaScratchpad.SetNumZeroed(ScratchpadSize);
@@ -336,7 +317,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
         const float BorderDissipation = FMath::Clamp(CapturedEnvConfig.BorderDissipationRate, 0.0f, 1.0f);
         const float TransferRatio = FMath::Clamp(0.15f * HoursToSimulate, 0.0f, 0.35f);
 
-        // Pass A: Advection transfer calculation
         for (int32 i = 0; i < TotalCells; ++i)
         {
             const FEnvironmentGridCellItem& Cell = ReadCells[i];
@@ -387,7 +367,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
         }
 
-        // Pass B: Homeostasis, Biome Shift, and Physical Formula evaluations
         TArray<int32> ModifiedCellIndices;
         ModifiedCellIndices.Reserve(TotalCells / 4);
 
@@ -395,7 +374,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
         {
             const FEnvironmentGridCellItem& ReadCell = ReadCells[i];
             FEnvironmentGridCellItem& WriteCell = WriteCells[i];
-
             WriteCell.CellIndex = ReadCell.CellIndex;
             WriteCell.CurrentBiomeTag = ReadCell.CurrentBiomeTag;
             WriteCell.TargetShiftBiomeTag = ReadCell.TargetShiftBiomeTag;
@@ -490,7 +468,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
         }
 
-        // Pass C: GameThread completion - O(1) buffer swap, bounded delta flush, and watchdog reset
+        // Pass C: GameThread completion using dynamic time-sliced budget (2ms cap)
         Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim, CapturedEnvConfig]()
         {
             if (!IsValid(this))
@@ -500,7 +478,6 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 return;
             }
 
-            // Swap buffers: write buffer becomes authoritative read buffer
             Swap(EnvironmentReadBuffer, EnvironmentWriteBuffer);
 
             FEnvironmentManaModificationRecord PendingMod;
@@ -508,9 +485,11 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             PostSwapModifiedCells.Reserve(ModifiedIndices.Num());
             PostSwapModifiedCells.Append(ModifiedIndices);
 
-            // Bounded flush: Drain up to 1000 records to prevent GameThread starvation during heavy combat
-            int32 MaxDrain = 1000;
-            while (MaxDrain-- > 0 && PendingManaModifications.Dequeue(PendingMod))
+            // Time-sliced drain replacing hardcoded count
+            const double DrainStartTime = FPlatformTime::Seconds();
+            constexpr double MaxDrainBudgetSeconds = 0.002;
+
+            while ((FPlatformTime::Seconds() - DrainStartTime < MaxDrainBudgetSeconds) && PendingManaModifications.Dequeue(PendingMod))
             {
                 if (EnvironmentReadBuffer.IsValidIndex(PendingMod.CellIndex))
                 {
@@ -521,23 +500,19 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                         const float CurrentVal = (static_cast<float>(Cell.PackedElementalDensities[ElemIdx]) / 255.0f) * CapturedEnvConfig.MaxElementDensityCap;
                         const float AdjustedVal = FMath::Clamp(CurrentVal + PendingMod.DeltaAmount, 0.0f, CapturedEnvConfig.MaxElementDensityCap);
                         Cell.PackedElementalDensities[ElemIdx] = static_cast<uint8>(FMath::RoundToInt((AdjustedVal / CapturedEnvConfig.MaxElementDensityCap) * 255.0f));
-
                         RecalculateCellPhysicalMetrics(Cell);
                         PostSwapModifiedCells.Add(PendingMod.CellIndex);
                     }
                 }
             }
 
-            // Sync updated cells across spatial chunks
             for (const int32 CellIdx : PostSwapModifiedCells)
             {
                 if (!EnvironmentReadBuffer.IsValidIndex(CellIdx)) continue;
-
                 if (EnvironmentWriteBuffer.IsValidIndex(CellIdx))
                 {
                     EnvironmentWriteBuffer[CellIdx] = EnvironmentReadBuffer[CellIdx];
                 }
-
                 const int32 CellX = CellIdx % CapturedGridWidth;
                 const int32 CellY = CellIdx / CapturedGridWidth;
                 const FIntPoint ChunkCoord(CellX / CapturedChunkDim, CellY / CapturedChunkDim);
@@ -558,28 +533,95 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
 
 UGameplayEffect* ADynamicGameState::GetOrCreateCachedEffectObject(FGameplayTag EffectTag)
 {
-    if (TObjectPtr<UGameplayEffect>* Found = DynamicEffectCDOCache.Find(EffectTag))
+    if (!EffectTag.IsValid()) return nullptr;
+
     {
-        return Found->Get();
+        FScopeLock Lock(&EffectCacheCriticalSection);
+        if (TObjectPtr<UGameplayEffect>* Found = DynamicEffectCDOCache.Find(EffectTag))
+        {
+            return Found->Get();
+        }
     }
 
     if (const FDynamicEffectDef* FoundDef = MasterEffectRegistry.Find(EffectTag))
     {
         UGameplayEffect* NewEffect = UDynamicEffectFactory::ConstructGameplayEffectObject(this, *FoundDef, EffectTag);
-        DynamicEffectCDOCache.Add(EffectTag, NewEffect);
+        {
+            FScopeLock Lock(&EffectCacheCriticalSection);
+            DynamicEffectCDOCache.Add(EffectTag, NewEffect);
+        }
         return NewEffect;
     }
-
     return nullptr;
 }
 
 void ADynamicGameState::WarmGameplayEffectCache()
 {
-    DynamicEffectCDOCache.Empty(MasterEffectRegistry.Num());
+    // Gather all effect tags from MasterEffectRegistry and AbilityMasterRegistry
+    TSet<FGameplayTag> AllRequiredEffects;
     for (const auto& Pair : MasterEffectRegistry)
     {
-        GetOrCreateCachedEffectObject(Pair.Key);
+        AllRequiredEffects.Add(Pair.Key);
     }
+    for (const auto& AbilityPair : AbilityMasterRegistry)
+    {
+        for (const FGameplayTag& EffTag : AbilityPair.Value.SpatialDelivery.EffectsToApply)
+        {
+            if (EffTag.IsValid()) AllRequiredEffects.Add(EffTag);
+        }
+        for (const FGameplayTag& EffTag : AbilityPair.Value.InteractionConfig.EffectsToApplyToTarget)
+        {
+            if (EffTag.IsValid()) AllRequiredEffects.Add(EffTag);
+        }
+    }
+
+    for (const FGameplayTag& Tag : AllRequiredEffects)
+    {
+        GetOrCreateCachedEffectObject(Tag);
+    }
+}
+
+void ADynamicGameState::WarmGameplayEffectCacheAsync(TFunction<void()> OnComplete, float MaxBudgetPerFrameSeconds)
+{
+    TArray<FGameplayTag> PendingTags;
+    for (const auto& Pair : MasterEffectRegistry)
+    {
+        PendingTags.Add(Pair.Key);
+    }
+    for (const auto& AbilityPair : AbilityMasterRegistry)
+    {
+        for (const FGameplayTag& EffTag : AbilityPair.Value.SpatialDelivery.EffectsToApply)
+        {
+            if (EffTag.IsValid()) PendingTags.AddUnique(EffTag);
+        }
+        for (const FGameplayTag& EffTag : AbilityPair.Value.InteractionConfig.EffectsToApplyToTarget)
+        {
+            if (EffTag.IsValid()) PendingTags.AddUnique(EffTag);
+        }
+    }
+
+    TSharedRef<int32> CurrentIndex = MakeShared<int32>(0);
+    TSharedRef<TArray<FGameplayTag>> TagsToProcess = MakeShared<TArray<FGameplayTag>>(MoveTemp(PendingTags));
+
+    FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this, CurrentIndex, TagsToProcess, OnComplete, MaxBudgetPerFrameSeconds](float DeltaTime) -> bool
+    {
+        if (!IsValid(this)) return false;
+
+        const double StartTime = FPlatformTime::Seconds();
+        while (*CurrentIndex < TagsToProcess->Num() && (FPlatformTime::Seconds() - StartTime < MaxBudgetPerFrameSeconds))
+        {
+            const FGameplayTag& Tag = (*TagsToProcess)[*CurrentIndex];
+            GetOrCreateCachedEffectObject(Tag);
+            (*CurrentIndex)++;
+        }
+
+        if (*CurrentIndex >= TagsToProcess->Num())
+        {
+            if (OnComplete) OnComplete();
+            return false;
+        }
+        return true;
+    }));
 }
 
 int32 ADynamicGameState::GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const
@@ -594,11 +636,9 @@ int32 ADynamicGameState::GetEnvironmentCellIndexAtLocation(const FVector& WorldL
 
 void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell)
 {
-    // Evaluates dynamic metric formulas from external JSON
     for (const FDynamicEnvironmentPhysicalMetricFormula& Formula : EnvironmentConfig.MetricFormulas)
     {
         float EvaluatedValue = Formula.BaseConstant;
-
         for (const auto& WeightPair : Formula.ElementWeights.LocalLookupMap)
         {
             const int32 Idx = ResolveElementArrayIndex(WeightPair.Key);
@@ -608,21 +648,17 @@ void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem&
                 EvaluatedValue += Density * WeightPair.Value;
             }
         }
-
         const float Clamped = FMath::Clamp(EvaluatedValue, Formula.MinClamp, Formula.MaxClamp);
         Cell.DerivedPhysicalMetrics.UpdateEntry(Formula.MetricTag, Clamped);
     }
 }
 
-// Universal Property Reflection Helper
 float ADynamicGameState::ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath)
 {
     if (!StructMemory || !StructType || PropertyPath.IsNone()) return 0.0f;
 
-    // Splits sub-paths (e.g., "LifeCycleRequirements.BaseResourceCost" or "SpatialDelivery.SpeedOrExpansionRate")
     FString LeftStr, RightStr;
     const FString FullPath = PropertyPath.ToString();
-
     if (FullPath.Split(TEXT("."), &LeftStr, &RightStr))
     {
         const FName OuterPropName(*LeftStr);
@@ -653,13 +689,11 @@ float ADynamicGameState::ExtractReflectedNumericProperty(const void* StructMemor
             }
         }
     }
-
     return 0.0f;
 }
 
 float ADynamicGameState::ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const
 {
-    // 1. Dynamic MetricTag Query: searches any dynamic map wrapper
     if (Rule.MetricTag.IsValid())
     {
         if (const float* FoundNum = AbilityDef.NumericParams.LocalLookupMap.Find(Rule.MetricTag)) return *FoundNum;
@@ -667,20 +701,16 @@ float ADynamicGameState::ExtractAbilityPropertyForScoring(const FDynamicAbilityD
         if (const float* FoundMov = AbilityDef.MovementConfig.MovementMetrics.LocalLookupMap.Find(Rule.MetricTag)) return *FoundMov;
         if (const float* FoundInt = AbilityDef.InteractionConfig.InteractionMetrics.LocalLookupMap.Find(Rule.MetricTag)) return *FoundInt;
     }
-
-    // 2. Dynamic Property Reflection: extracts any native struct variable without hardcoded strings
     if (!Rule.PropertyName.IsNone())
     {
         return ExtractReflectedNumericProperty(&AbilityDef, FDynamicAbilityDef::StaticStruct(), Rule.PropertyName);
     }
-
     return 0.0f;
 }
 
 ADynamicSpatialActor* ADynamicGameState::AcquireSpatialActor(const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn)
 {
     if (!HasAuthority()) return nullptr;
-
     while (InactiveSpatialActorPool.Num() > 0)
     {
         ADynamicSpatialActor* PooledActor = InactiveSpatialActorPool.Pop(EAllowShrinking::No);
@@ -689,8 +719,6 @@ ADynamicSpatialActor* ADynamicGameState::AcquireSpatialActor(const FTransform& S
             PooledActor->SetOwner(OwnerActor);
             PooledActor->SetInstigator(InstigatorPawn);
             PooledActor->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
-
-            // SCRUB STALE DATA: Sanitize actor before returning to active world
             PooledActor->ResetToDefaultPoolState();
             return PooledActor;
         }
@@ -712,7 +740,6 @@ void ADynamicGameState::ReleaseSpatialActorToPool(ADynamicSpatialActor* ActorToR
 ADynamicPhysicsActor* ADynamicGameState::AcquirePhysicsActor(FGameplayTag ArchetypeTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn)
 {
     if (!HasAuthority() || !ArchetypeTag.IsValid()) return nullptr;
-
     while (InactivePhysicsActorPool.Num() > 0)
     {
         ADynamicPhysicsActor* PooledActor = InactivePhysicsActorPool.Pop(EAllowShrinking::No);
@@ -721,8 +748,6 @@ ADynamicPhysicsActor* ADynamicGameState::AcquirePhysicsActor(FGameplayTag Archet
             PooledActor->SetOwner(OwnerActor);
             PooledActor->SetInstigator(InstigatorPawn);
             PooledActor->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
-
-            // SCRUB STALE DATA: Sanitize actor before re-hydrating new archetype
             PooledActor->ResetToDefaultPoolState();
             PooledActor->InitializeFromArchetype(ArchetypeTag);
             return PooledActor;
@@ -733,7 +758,6 @@ ADynamicPhysicsActor* ADynamicGameState::AcquirePhysicsActor(FGameplayTag Archet
     SpawnParams.Owner = OwnerActor;
     SpawnParams.Instigator = InstigatorPawn;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
     ADynamicPhysicsActor* NewActor = GetWorld()->SpawnActor<ADynamicPhysicsActor>(ADynamicPhysicsActor::StaticClass(), SpawnTransform, SpawnParams);
     if (NewActor)
     {
@@ -747,19 +771,19 @@ void ADynamicGameState::RegisterSpatialRoleActor(AActor* TargetActor, const FGam
     if (!HasAuthority() || !IsValid(TargetActor) || RoleTags.IsEmpty()) return;
 
     TWeakObjectPtr<AActor> WeakTarget(TargetActor);
-
-    // Unregister stale roles if this actor is re-registering with new tags
     UnregisterSpatialRoleActor(TargetActor);
 
     TArray<FGameplayTag>& TrackedRoles = ActorToRegisteredRolesMap.FindOrAdd(WeakTarget);
 
-    for (const FGameplayTag& RoleTag : RoleTags)
+    for (const FGameplayTag& BaseTag : RoleTags)
     {
-        if (RoleTag.IsValid())
+        if (!BaseTag.IsValid()) continue;
+        FGameplayTag CurrentTag = BaseTag;
+        while (CurrentTag.IsValid())
         {
-            TArray<TWeakObjectPtr<AActor>>& RoleBucket = SpatialRoleActorRegistry.FindOrAdd(RoleTag);
-            RoleBucket.AddUnique(WeakTarget);
-            TrackedRoles.AddUnique(RoleTag);
+            SpatialRoleActorRegistry.FindOrAdd(CurrentTag).AddUnique(WeakTarget);
+            TrackedRoles.AddUnique(CurrentTag);
+            CurrentTag = CurrentTag.RequestDirectParent();
         }
     }
 }
@@ -810,10 +834,7 @@ void ADynamicGameState::GetActorsWithRoleTag(FGameplayTag RoleTag, TArray<AActor
 void ADynamicGameState::ReleasePhysicsActorToPool(ADynamicPhysicsActor* ActorToReturn)
 {
     if (!HasAuthority() || !IsValid(ActorToReturn)) return;
-
-    // Purge from active spatial role indexing before pool storage
     UnregisterSpatialRoleActor(ActorToReturn);
-
     InactivePhysicsActorPool.AddUnique(ActorToReturn);
 }
 
@@ -938,7 +959,6 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
     }
 
     Result.RawAbilityScore = FMath::Max(1.0f, RawScore);
-
     FAbilityScoreDifficultyProfile ActiveDiff;
     for (const FAbilityScoreDifficultyProfile& Diff : AbilityScoreConfig.DifficultyProfiles)
     {
@@ -955,7 +975,6 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
     Result.ComputedSpellLevel = FMath::Clamp(1 + FMath::RoundToInt(LevelAlpha * 9.0f), 1, 10);
     Result.LearnPointCost = FMath::Max(1.0f, static_cast<float>(FMath::RoundToInt(Result.DifficultyAdjustedScore * ActiveDiff.LearnPointCostPerScoreUnit)));
     Result.MinimumMasteryRequired = FMath::Max(0.0f, Result.DifficultyAdjustedScore * ActiveDiff.MinMasteryRequiredPerScoreUnit);
-
     return Result;
 }
 
@@ -963,7 +982,6 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
 {
     check(IsInGameThread());
 
-    // 1. Move/Append all parsed TMaps in O(1) pointer operations
     AttributeMasterRegistry.Append(MoveTemp(StagingData.AttributeMasterRegistry));
     DeliveryArchetypes.Append(MoveTemp(StagingData.DeliveryArchetypes));
     AbilityMasterRegistry.Append(MoveTemp(StagingData.AbilityMasterRegistry));
@@ -987,8 +1005,9 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     LanguageMasterRegistry.Append(MoveTemp(StagingData.LanguageMasterRegistry));
     NameGenerationRulesRegistry.Append(MoveTemp(StagingData.NameGenerationRulesRegistry));
     RecipeMasterRegistry.Append(MoveTemp(StagingData.RecipeMasterRegistry));
+    FastPathDialogueRegistry.Append(MoveTemp(StagingData.FastPathDialogueRegistry));
+    MovementStateRegistry.Append(MoveTemp(StagingData.MovementStateRegistry));
 
-    // 2. Append Gameplay Effects and pre-warm CDO cache for newly registered effects
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {
         for (auto& Pair : StagingData.MasterEffectRegistry)
@@ -998,7 +1017,6 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
         }
     }
 
-    // 3. Update single configuration blocks if provided
     if (StagingData.bHasCalendarConfig)
     {
         CalendarConfig = StagingData.CalendarConfig;
@@ -1020,8 +1038,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
         SetupDynamicEnvironment(StagingData.EnvironmentConfig);
     }
 
-    // 4. Rebuild ability progression scores
     RebuildAllAbilityScores();
+    WarmGameplayEffectCache();
 }
 
 ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn)
@@ -1067,18 +1085,14 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
             PooledActor->SetActorEnableCollision(true);
             PooledActor->ResetToDefaultPoolState();
 
-            // Optimization B: Restore Mover Component movement ticks after repositioning
             if (UMoverComponent* Mover = PooledActor->FindComponentByClass<UMoverComponent>())
             {
                 Mover->Activate(true);
             }
-
-            // Initialize identity, bodyslide morphs, and mesh from the requested template tag
             if (UDynamicCustomizationComponent* Cust = PooledActor->GetCustomizationComponent())
             {
                 Cust->InitializeCustomization(TemplateTag, ECharacterGender::Neutral);
             }
-
             SpawnConfiguredAIController(PooledActor, TemplateTag);
             return PooledActor;
         }
@@ -1088,7 +1102,6 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
     SpawnParams.Owner = OwnerActor;
     SpawnParams.Instigator = InstigatorPawn;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
     ADynamicCharacter* NewCharacter = GetWorld()->SpawnActor<ADynamicCharacter>(ADynamicCharacter::StaticClass(), SpawnTransform, SpawnParams);
     if (NewCharacter)
     {
@@ -1096,7 +1109,6 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
         {
             Cust->InitializeCustomization(TemplateTag, ECharacterGender::Neutral);
         }
-
         SpawnConfiguredAIController(NewCharacter, TemplateTag);
     }
     return NewCharacter;
@@ -1106,16 +1118,13 @@ void ADynamicGameState::ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn)
 {
     if (!HasAuthority() || !IsValid(ActorToReturn)) return;
 
-    // Detach and destroy AI Controller
     if (AController* CharController = ActorToReturn->GetController())
     {
         CharController->Destroy();
     }
-
     ActorToReturn->SetActorHiddenInGame(true);
     ActorToReturn->SetActorTickEnabled(false);
     ActorToReturn->SetActorEnableCollision(false);
-    ActorToReturn->SetActorLocation(FVector(0, 0, -10000.0f)); // Move out of broadphase bounds
-
+    ActorToReturn->SetActorLocation(FVector(0, 0, -10000.0f));
     InactiveCharacterPool.AddUnique(ActorToReturn);
 }

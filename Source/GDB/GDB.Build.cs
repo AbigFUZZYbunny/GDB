@@ -24,7 +24,8 @@ public class GDB : ModuleRules
 			"PhysicsControl",       // Required for Active Ragdoll 5.8 configurations 
 			"MotionTrajectory",
 			"AIModule", 
-			"HTTP"
+			"HTTP",
+			"SignificanceManager"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

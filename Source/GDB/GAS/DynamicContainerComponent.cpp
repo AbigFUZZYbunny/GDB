@@ -5,6 +5,7 @@
 #include "DynamicAttributeSet.h"
 #include "DynamicInteractableComponent.h"
 #include "DynamicGameState.h"
+#include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 
 UDynamicContainerComponent::UDynamicContainerComponent()
@@ -20,9 +21,19 @@ void UDynamicContainerComponent::BeginPlay()
     ReplicatedSlots.OwningContainer = this;
 }
 
+void UDynamicContainerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(TimerHandle_TombstoneCompression);
+    }
+    Super::EndPlay(EndPlayReason);
+}
+
 void UDynamicContainerComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
     DOREPLIFETIME_CONDITION(UDynamicContainerComponent, ContainerConfig, COND_InitialOnly);
     DOREPLIFETIME(UDynamicContainerComponent, ReplicatedSlots);
 }
@@ -45,7 +56,8 @@ void FDynamicContainerSlotItem::PostReplicatedChange(const FFastContainerSlotArr
 void UDynamicContainerComponent::HandleSingleSlotReplicated(const FDynamicContainerSlotItem& Item, bool bWasRemoved)
 {
     RebuildLocalSlotCache();
-    OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, bWasRemoved ? 0 : Item.StackCount);
+    const bool bIsEmpty = bWasRemoved || !Item.StoredActorArchetypeTag.IsValid() || Item.StackCount <= 0;
+    OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, bIsEmpty ? 0 : Item.StackCount);
 }
 
 void UDynamicContainerComponent::OnRep_ReplicatedSlots()
@@ -53,7 +65,8 @@ void UDynamicContainerComponent::OnRep_ReplicatedSlots()
     RebuildLocalSlotCache();
     for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
     {
-        OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, Item.StackCount);
+        const int32 DisplayCount = (!Item.StoredActorArchetypeTag.IsValid() || Item.StackCount <= 0) ? 0 : Item.StackCount;
+        OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, DisplayCount);
     }
 }
 
@@ -61,11 +74,16 @@ void UDynamicContainerComponent::RebuildLocalSlotCache()
 {
     FlatKeyToArrayIndexMap.Empty(ReplicatedSlots.Items.Num());
     CachedTotalWeight = 0.0f;
+    PendingTombstoneCount = 0;
 
     for (int32 i = 0; i < ReplicatedSlots.Items.Num(); ++i)
     {
         const FDynamicContainerSlotItem& Item = ReplicatedSlots.Items[i];
-        if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid()) continue;
+        if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid())
+        {
+            PendingTombstoneCount++;
+            continue;
+        }
 
         const int32 FlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
         FlatKeyToArrayIndexMap.Add(FlatKey, i);
@@ -75,10 +93,15 @@ void UDynamicContainerComponent::RebuildLocalSlotCache()
 
 void UDynamicContainerComponent::ClearContainerForPooling()
 {
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(TimerHandle_TombstoneCompression);
+    }
     ReplicatedSlots.Items.Empty();
     ReplicatedSlots.MarkArrayDirty();
     FlatKeyToArrayIndexMap.Empty();
     CachedTotalWeight = 0.0f;
+    PendingTombstoneCount = 0;
 }
 
 void UDynamicContainerComponent::InitializeContainerFromDef(const FDynamicContainerDef& InDef)
@@ -145,6 +168,7 @@ bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32
     for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
     {
         if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid()) continue;
+
         const int32 ItemFlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
         if (ItemFlatKey == IgnoreFlatKey) continue;
 
@@ -160,6 +184,7 @@ bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32
             return false;
         }
     }
+
     return true;
 }
 
@@ -197,6 +222,7 @@ bool UDynamicContainerComponent::FindSpaceForItem(FGameplayTag ArchetypeTag, int
             }
         }
     }
+
     return false;
 }
 
@@ -228,10 +254,22 @@ bool UDynamicContainerComponent::ServerStorePhysicalActor(ADynamicPhysicsActor* 
         NewSlot.SavedInteractableStates = Interactable->GetCurrentStateTags();
     }
 
-    FDynamicContainerSlotItem& Added = ReplicatedSlots.Items.Add_GetRef(NewSlot);
-    ReplicatedSlots.MarkItemDirty(Added);
-    RebuildLocalSlotCache();
+    int32 TombstoneIdx = ReplicatedSlots.Items.IndexOfByPredicate([](const FDynamicContainerSlotItem& Slot) {
+        return Slot.StackCount <= 0 || !Slot.StoredActorArchetypeTag.IsValid();
+    });
 
+    if (TombstoneIdx != INDEX_NONE)
+    {
+        ReplicatedSlots.Items[TombstoneIdx] = NewSlot;
+        ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[TombstoneIdx]);
+    }
+    else
+    {
+        FDynamicContainerSlotItem& Added = ReplicatedSlots.Items.Add_GetRef(NewSlot);
+        ReplicatedSlots.MarkItemDirty(Added);
+    }
+
+    RebuildLocalSlotCache();
     ActorToStore->DeactivateAndReturnToPool();
     return true;
 }
@@ -252,8 +290,21 @@ bool UDynamicContainerComponent::ServerAddActorByTag(FGameplayTag ArchetypeTag, 
     NewSlot.StackCount = Quantity;
     NewSlot.SavedAttributeState = CustomAttributes;
 
-    FDynamicContainerSlotItem& Added = ReplicatedSlots.Items.Add_GetRef(NewSlot);
-    ReplicatedSlots.MarkItemDirty(Added);
+    int32 TombstoneIdx = ReplicatedSlots.Items.IndexOfByPredicate([](const FDynamicContainerSlotItem& Slot) {
+        return Slot.StackCount <= 0 || !Slot.StoredActorArchetypeTag.IsValid();
+    });
+
+    if (TombstoneIdx != INDEX_NONE)
+    {
+        ReplicatedSlots.Items[TombstoneIdx] = NewSlot;
+        ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[TombstoneIdx]);
+    }
+    else
+    {
+        FDynamicContainerSlotItem& Added = ReplicatedSlots.Items.Add_GetRef(NewSlot);
+        ReplicatedSlots.MarkItemDirty(Added);
+    }
+
     RebuildLocalSlotCache();
     return true;
 }
@@ -266,7 +317,7 @@ bool UDynamicContainerComponent::ServerRemoveStoredActorByTag(FGameplayTag Arche
     int32 RemainingToRemove = Quantity;
     for (int32 i = ReplicatedSlots.Items.Num() - 1; i >= 0 && RemainingToRemove > 0; --i)
     {
-        if (ReplicatedSlots.Items[i].StoredActorArchetypeTag == ArchetypeTag)
+        if (ReplicatedSlots.Items[i].StoredActorArchetypeTag == ArchetypeTag && ReplicatedSlots.Items[i].StackCount > 0)
         {
             const int32 Take = FMath::Min(RemainingToRemove, ReplicatedSlots.Items[i].StackCount);
             ReplicatedSlots.Items[i].StackCount -= Take;
@@ -276,12 +327,17 @@ bool UDynamicContainerComponent::ServerRemoveStoredActorByTag(FGameplayTag Arche
             const int32 GridY = ReplicatedSlots.Items[i].GridY;
             const int32 NewCount = ReplicatedSlots.Items[i].StackCount;
 
-            // Tombstone Prevention: Eradicate dead struct from the replicated array entirely
             if (NewCount <= 0)
             {
-                ReplicatedSlots.Items.RemoveAtSwap(i);
-                ReplicatedSlots.MarkArrayDirty();
+                ReplicatedSlots.Items[i].StoredActorArchetypeTag = FGameplayTag::EmptyTag;
+                ReplicatedSlots.Items[i].StackCount = 0;
+                ReplicatedSlots.Items[i].SavedAttributeState.Empty();
+                ReplicatedSlots.Items[i].SavedInteractableStates.Reset();
+                ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[i]);
                 OnContainerSlotChanged.Broadcast(GridX, GridY, ArchetypeTag, 0);
+
+                PendingTombstoneCount++;
+                ScheduleTombstoneCompression();
             }
             else
             {
@@ -309,11 +365,16 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToWorld(int3
 
     ReplicatedSlots.Items[FoundIndex].StackCount -= QuantityToExtract;
 
-    // Tombstone Prevention: Purge slot completely on zero count
     if (ReplicatedSlots.Items[FoundIndex].StackCount <= 0)
     {
-        ReplicatedSlots.Items.RemoveAtSwap(FoundIndex);
-        ReplicatedSlots.MarkArrayDirty();
+        ReplicatedSlots.Items[FoundIndex].StoredActorArchetypeTag = FGameplayTag::EmptyTag;
+        ReplicatedSlots.Items[FoundIndex].StackCount = 0;
+        ReplicatedSlots.Items[FoundIndex].SavedAttributeState.Empty();
+        ReplicatedSlots.Items[FoundIndex].SavedInteractableStates.Reset();
+        ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[FoundIndex]);
+
+        PendingTombstoneCount++;
+        ScheduleTombstoneCompression();
     }
     else
     {
@@ -360,7 +421,51 @@ int32 UDynamicContainerComponent::GetTotalCountOfArchetype(FGameplayTag Archetyp
     int32 Total = 0;
     for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
     {
-        if (Item.StoredActorArchetypeTag == ArchetypeTag) Total += Item.StackCount;
+        if (Item.StoredActorArchetypeTag == ArchetypeTag && Item.StackCount > 0)
+        {
+            Total += Item.StackCount;
+        }
     }
     return Total;
+}
+
+void UDynamicContainerComponent::ScheduleTombstoneCompression(float DelaySeconds)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    // Debounce compression timer: only compresses when modifications settle
+    World->GetTimerManager().SetTimer(
+        TimerHandle_TombstoneCompression,
+        this,
+        &UDynamicContainerComponent::ServerCompressContainerSlots,
+        DelaySeconds,
+        false
+    );
+}
+
+void UDynamicContainerComponent::ServerCompressContainerSlots()
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    bool bHasTombstones = false;
+    for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
+    {
+        if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid())
+        {
+            bHasTombstones = true;
+            break;
+        }
+    }
+
+    if (!bHasTombstones) return;
+
+    ReplicatedSlots.Items.RemoveAll([](const FDynamicContainerSlotItem& Slot) {
+        return Slot.StackCount <= 0 || !Slot.StoredActorArchetypeTag.IsValid();
+    });
+
+    ReplicatedSlots.MarkArrayDirty();
+    RebuildLocalSlotCache();
 }

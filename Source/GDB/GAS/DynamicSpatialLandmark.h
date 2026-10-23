@@ -11,7 +11,7 @@ class USphereComponent;
 
 /**
  * Concrete world anchor representing a village building, workplace, tavern, home, or point of interest.
- * Indexes into ADynamicGameState for O(1) role queries by EQS and AI Behavior Trees.
+ * Automatically indexes with ADynamicGameState for O(1) query performance.
  */
 UCLASS()
 class GDB_API ADynamicSpatialLandmark : public AActor

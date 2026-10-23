@@ -1821,7 +1821,41 @@ struct FEvolutionProfileDef
 };
 
 // ============================================================================
-// SKELETAL TOPOLOGY & PHYSICS MOTOR CONFIG
+// PHYSICS CALCULATION SETTINGS
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FPhysicsImpactCalculationConfig
+{
+    GENERATED_BODY()
+
+    // Minimum impact velocity to trigger wall impact calculations (units/sec)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    float BaseImpactVelocityThreshold = 750.0f;
+
+    // Base damage multiplier per unit of unmitigated excess velocity
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    float BaseImpactDamageScalar = 0.04f;
+
+    // Base damage threshold at which impact force breaks character hand grip
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    float BaseGripLossThreshold = 30.0f;
+
+    // Attributes that reduce effective impact velocity (e.g. Attribute.Stat.Agility, Attribute.Skill.Acrobatics)
+    // Evaluates both global (LimbId = 0) and limb-specific attributes (LimbId of impacted bone)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    FDynamicTagFloatMapWrapper VelocityMitigationScalars;
+
+    // Attributes that absorb or mitigate raw damage (e.g. Attribute.Stat.Toughness, Attribute.Limb.Armor)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    FDynamicTagFloatMapWrapper DamageMitigationScalars;
+
+    // Attributes that increase grip retention / break-ragdoll threshold (e.g. Attribute.Stat.Strength, Attribute.Limb.GripStrength, Attribute.Skill.Climbing)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    FDynamicTagFloatMapWrapper GripRetentionScalars;
+};
+
+// ============================================================================
+// PHYSICS CALCULATION SETTINGS
 // ============================================================================
 
 USTRUCT(BlueprintType)
@@ -1829,32 +1863,24 @@ struct FPhysicsCalculationSettings
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString CalculationMode = TEXT("ImpulseMagnitude");
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FGameplayTag PrimaryDamageTargetAttributeTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float MinImpulseThreshold = 350.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    float MinImpulseThreshold = 300.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float MaxImpulseCap = 25000.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    float MaxImpulseCap = 15000.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float ImpulseToDamageScalar = 0.0085f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    float ImpulseToDamageScalar = 0.01f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float MassRatioExponent = 0.75f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    float CooldownBetweenHitsPerLimb = 0.1f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float MinRelativeVelocityThreshold = 200.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float VelocityToDamageScalar = 0.05f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float CooldownBetweenHitsPerLimb = 0.15f;
+    // Data-driven wall and physical surface collision impact mechanics
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    FPhysicsImpactCalculationConfig WallImpactSettings;
 };
 
 USTRUCT(BlueprintType)
@@ -3927,6 +3953,127 @@ struct FCloudAIPayloadPackage
 };
 
 // ============================================================================
+// FAST-PATH DIALOGUE & CONTEXTUAL CHATTER STRUCTS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FFastPathDialogueEntry
+{
+    GENERATED_BODY()
+
+    // e.g., Dialogue.Category.Greeting, Dialogue.Category.Response, Dialogue.Category.Callout, Dialogue.Category.Rumor
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FGameplayTag CategoryTag;
+
+    // Template string supporting %target%, %location_type%, %recent_time%, %speaker%
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FString UtteranceTemplate;
+
+    // List of allowed emotional moods (e.g. Mood.Angry, Mood.Joyful, Mood.Suspicious, Mood.Fond)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FGameplayTagContainer AllowedMoodTags;
+
+    // Multi-attribute relational requirements (e.g. Affinity [50..100], Hostility [60..100], Trust [-100..-20])
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    TArray<FCharacterAttributeRangeDef> RelationalAttributeRequirements;
+
+    // Allowed relationship types (e.g. Relationship.Type.Friendship, Relationship.Type.Rivalry)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FGameplayTagContainer AllowedRelationshipTypeTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    TSoftObjectPtr<UAnimMontage> GestureMontage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FGameplayTag VoiceCueTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    float SelectionWeight = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FFastPathDialogueDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FGameplayTag DialogueProfileTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    TArray<FFastPathDialogueEntry> Entries;
+};
+
+// ============================================================================
+// DYNAMIC MOVEMENT STATE STRUCTS
+// ============================================================================
+
+UENUM(BlueprintType)
+enum class EMovementLocomotionType : uint8
+{
+    Grounded,
+    Airborne,
+    Aquatic,
+    WallAttached
+};
+
+USTRUCT(BlueprintType)
+struct FMovementStatConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    float BaseValue = 0.0f;
+
+    // Map of Attribute Tag -> Multiplicative Weight (e.g., Attribute.Stat.Agility -> 0.05)
+    // Formula evaluated in Tick: BaseValue * FMath::Max(0.01f, 1.0f + Sum(AttributeValue * Weight))
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FDynamicTagFloatMapWrapper AttributeScalars;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicMovementStateDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FGameplayTag StateTag;
+
+    // Maps directly to the Mover 2.0 Internal Mode Name (e.g., "Walking", "Swimming", "Flying")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FName MoverModeName = TEXT("Walking");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    EMovementLocomotionType LocomotionType = EMovementLocomotionType::Grounded;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FMovementStatConfig MaxSpeed;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FMovementStatConfig Acceleration;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FMovementStatConfig Deceleration;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FMovementStatConfig GroundFriction;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FMovementStatConfig GravityScale;
+
+    // Defines the physical bounds for stances (88.0 = Standing, 44.0 = Crouching, 22.0 = Crawling)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FMovementStatConfig TargetCapsuleHalfHeight;
+
+    // Prevents entering this state if the character has these tags (e.g., State.Debuff.Crippled blocks Sprint)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FGameplayTagContainer BlockedByTags;
+
+    // Automatically granted to the ASC while in this mode (e.g., State.Moving.Crawl, State.Moving.Fly)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Movement")
+    FGameplayTagContainer GrantsTags;
+};
+
+// ============================================================================
 // ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
 // ============================================================================
 USTRUCT(BlueprintType)
@@ -3958,6 +4105,8 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicLanguageDef> LanguageMasterRegistry;
     TMap<FGameplayTag, FNameGenerationRuleConfig> NameGenerationRulesRegistry;
     TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
+    TMap<FGameplayTag, FFastPathDialogueDef> FastPathDialogueRegistry;
+    TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
 
     bool bHasCalendarConfig = false;
     FDynamicCalendarDef CalendarConfig;
@@ -3988,4 +4137,50 @@ struct FEnvironmentManaModificationRecord
 
     UPROPERTY()
     float DeltaAmount = 0.0f;
+};
+
+// ============================================================================
+// CLOUD AI LATENCY MASKING & TOKEN ECONOMY STRUCTS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FCloudAIVampingConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Vamping")
+    bool bEnableVamping = true;
+
+    // Grace period before playing filler behavior so instant local responses do not glitch
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Vamping")
+    float VampingStartDelay = 0.75f;
+
+    // Contextual filler dialogue uttered while awaiting remote responses
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Vamping")
+    TArray<FString> FillerUtterances;
+
+    // Thinking / pondering / inspecting montages to loop during latency
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Vamping")
+    TArray<TSoftObjectPtr<UAnimMontage>> ThinkingMontages;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Vamping")
+    FGameplayTag VampingCueTag;
+};
+
+USTRUCT(BlueprintType)
+struct FCloudAIContextFilterConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Token Economy")
+    float SpatialEntityPerceptionRadius = 2500.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Token Economy")
+    int32 MaxRelationshipsInPrompt = 5;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Token Economy")
+    bool bFilterUrgentNeedsOnly = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Token Economy")
+    bool bDeltaOnlySerialization = true;
 };

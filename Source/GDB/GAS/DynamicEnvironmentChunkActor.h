@@ -11,6 +11,7 @@ class ADynamicGameState;
 /**
  * Spatialized actor representing an 8x8 slice of the environmental grid.
  * Replicates coordinates on initial spawn only, and grid cells via NetCullDistance proximity.
+ * NetUpdateFrequency throttled to 1.0f to batch advection updates and minimize network overhead.
  */
 UCLASS()
 class GDB_API ADynamicEnvironmentChunkActor : public AInfo
@@ -44,12 +45,8 @@ public:
 
     void HandleSingleCellReplicated(const FEnvironmentGridCellItem& Item);
 
-    // Initial setup called by ADynamicGameState on server authority
     void InitializeChunk(FIntPoint InCoord, int32 InDimX, int32 InDimY, float CellSizeWorldUnits, const FVector& WorldOrigin);
-
-    // Server push to update a cell in this chunk and mark it dirty for replication
     void UpdateCellData(int32 GlobalCellIndex, const FEnvironmentGridCellItem& NewCellData);
-
     const FEnvironmentGridCellItem* FindCellItemByGlobalIndex(int32 GlobalCellIndex) const;
 
 private:

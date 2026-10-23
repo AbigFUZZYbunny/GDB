@@ -11,6 +11,7 @@ class ADynamicGameState;
 class ADynamicCharacter;
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FOnMasterRegistryDeserializedSignature, bool, bSuccess);
+DECLARE_DYNAMIC_DELEGATE_OneParam(FOnPlayerHydrationCompletedSignature, bool, bSuccess);
 
 UCLASS()
 class GDB_API UDynamicDataSerializer : public UBlueprintFunctionLibrary
@@ -50,12 +51,31 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
     static bool DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots);
+    
+    static void DeserializeMovementStatConfig(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FMovementStatConfig& OutConfig);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
     static bool SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
     static bool DeserializePlayerFromSnapshotJson(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload);
+
+    // Asynchronous thread pool parsing that marshals component hydration back to GameThread
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
+    static void DeserializePlayerFromSnapshotJsonAsync(
+        ADynamicCharacter* TargetCharacter, 
+        const FString& InJsonPayload, 
+        FOnPlayerHydrationCompletedSignature OnComplete
+    );
+
+    static void DeserializePlayerFromSnapshotJsonAsyncNative(
+        ADynamicCharacter* TargetCharacter, 
+        const FString& InJsonPayload, 
+        TFunction<void(bool)> OnComplete = nullptr
+    );
+
+    static bool ParseSnapshotFromJsonString(const FString& InJsonPayload, FPlayerPersistenceSnapshot& OutSnapshot);
+    static bool ApplySnapshotToPlayerCharacter(ADynamicCharacter* TargetCharacter, const FPlayerPersistenceSnapshot& Snapshot);
 
     template<typename TEnum>
     static FString EnumToString(TEnum Value)
@@ -79,8 +99,10 @@ public:
 
     static int32 FlattenAndParseJsonNode(const TSharedPtr<FJsonObject>& JsonObj, FDynamicConditionTreeContainer& OutContainer);
     static TSharedPtr<FJsonObject> ReconstructJsonFromFlatNode(int32 NodeIndex, const FDynamicConditionTreeContainer& TreeContainer);
+
     static void DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper);
     static TSharedPtr<FJsonObject> SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper);
+
     static void DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile);
     static TSharedPtr<FJsonObject> SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile);
 };

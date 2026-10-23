@@ -64,7 +64,18 @@ void ADynamicGameModeBase::PostLogin(APlayerController* NewPlayer)
                 {
                     if (ADynamicCharacter* CharPawn = Cast<ADynamicCharacter>(NewPlayer->GetPawn()))
                     {
-                        UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(CharPawn, SnapshotJson);
+                        // Asynchronous hydration: JSON string-to-struct executes on ThreadPool
+                        UDynamicDataSerializer::DeserializePlayerFromSnapshotJsonAsyncNative(
+                            CharPawn, 
+                            SnapshotJson, 
+                            [WeakPC = TWeakObjectPtr<APlayerController>(NewPlayer)](bool bSuccess)
+                            {
+                                if (!bSuccess)
+                                {
+                                    UE_LOG(LogTemp, Warning, TEXT("ADynamicGameModeBase: Async hydration failed for connecting player."));
+                                }
+                            }
+                        );
                     }
                 }
             }

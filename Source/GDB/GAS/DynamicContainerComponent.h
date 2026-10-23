@@ -21,6 +21,7 @@ public:
     UDynamicContainerComponent();
 
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Container")
@@ -67,8 +68,13 @@ public:
 
     FFastContainerSlotArray& GetMutableReplicatedSlots() { return ReplicatedSlots; }
     const FFastContainerSlotArray& GetReplicatedSlots() const { return ReplicatedSlots; }
-
     void ClearContainerForPooling();
+
+    // FastArray Tombstone Garbage Collection
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
+    void ServerCompressContainerSlots();
+
+    void ScheduleTombstoneCompression(float DelaySeconds = 15.0f);
 
 private:
     void RebuildLocalSlotCache();
@@ -76,4 +82,7 @@ private:
 
     TMap<int32, int32> FlatKeyToArrayIndexMap;
     float CachedTotalWeight = 0.0f;
+
+    FTimerHandle TimerHandle_TombstoneCompression;
+    int32 PendingTombstoneCount = 0;
 };

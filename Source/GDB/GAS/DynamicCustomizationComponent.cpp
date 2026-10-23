@@ -7,6 +7,7 @@
 #include "AbilitySystemComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
+#include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/SkeletalMeshComponent.h"
 
@@ -21,11 +22,38 @@ void UDynamicCustomizationComponent::BeginPlay()
 {
     Super::BeginPlay();
     ReplicatedMorphs.OwningCustomizationComp = this;
+
+    // On non-dedicated servers (client and standalone), poll significance at low frequency (2.0s)
+    // for distant crowd characters to eliminate per-frame distance overhead.
+    if (UWorld* World = GetWorld())
+    {
+        if (World->GetNetMode() != NM_DedicatedServer)
+        {
+            World->GetTimerManager().SetTimer(
+                TimerHandle_SignificancePoll,
+                this,
+                &UDynamicCustomizationComponent::UpdateSignificanceEvaluation,
+                2.0f,
+                true,
+                FMath::FRandRange(0.1f, 1.5f) // Jitter start to distribute CPU spikes across crowd
+            );
+        }
+    }
+}
+
+void UDynamicCustomizationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(TimerHandle_SignificancePoll);
+    }
+    Super::EndPlay(EndPlayReason);
 }
 
 void UDynamicCustomizationComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
     DOREPLIFETIME(UDynamicCustomizationComponent, ActiveCharacterTemplateTag);
     DOREPLIFETIME(UDynamicCustomizationComponent, ActiveGender);
     DOREPLIFETIME(UDynamicCustomizationComponent, ReplicatedMorphs);
@@ -61,34 +89,108 @@ void FDynamicCharacterMorphItem::PostReplicatedChange(const FFastCharacterMorphA
     }
 }
 
+bool UDynamicCustomizationComponent::CheckCurrentSignificance() const
+{
+    const AActor* OwnerActor = GetOwner();
+    if (!OwnerActor) return false;
+
+    // Locally controlled player always evaluates morphs immediately
+    const APawn* PawnOwner = Cast<APawn>(OwnerActor);
+    if (PawnOwner && PawnOwner->IsLocallyControlled())
+    {
+        return true;
+    }
+
+    const UWorld* World = GetWorld();
+    if (!World || World->GetNetMode() == NM_DedicatedServer)
+    {
+        return false;
+    }
+
+    const APlayerController* PC = World->GetFirstPlayerController();
+    if (!PC) return true;
+
+    FVector ViewLocation;
+    FRotator ViewRotation;
+    PC->GetPlayerViewPoint(ViewLocation, ViewRotation);
+
+    return FVector::DistSquared(OwnerActor->GetActorLocation(), ViewLocation) <= FMath::Square(MorphSignificanceRadius);
+}
+
+void UDynamicCustomizationComponent::UpdateSignificanceEvaluation()
+{
+    const bool bNewSignificant = CheckCurrentSignificance();
+    SetSignificanceState(bNewSignificant);
+}
+
+void UDynamicCustomizationComponent::SetSignificanceState(bool bNewSignificant)
+{
+    if (bIsSignificantlyVisible == bNewSignificant) return;
+    bIsSignificantlyVisible = bNewSignificant;
+
+    if (bIsSignificantlyVisible)
+    {
+        FlushDeferredMorphs();
+    }
+}
+
+void UDynamicCustomizationComponent::FlushDeferredMorphs()
+{
+    if (DeferredMorphSliders.Num() == 0) return;
+
+    for (const FGameplayTag& SliderTag : DeferredMorphSliders)
+    {
+        if (const float* Val = LocalMorphCache.Find(SliderTag))
+        {
+            ApplySingleSliderDeformation(SliderTag, *Val);
+            OnMorphUpdated.Broadcast(SliderTag, *Val);
+        }
+    }
+    DeferredMorphSliders.Empty();
+}
+
 void UDynamicCustomizationComponent::HandleSingleMorphReplicated(const FDynamicCharacterMorphItem& MorphItem)
 {
     LocalMorphCache.Add(MorphItem.SliderTag, MorphItem.SliderValue);
-    ApplySingleSliderDeformation(MorphItem.SliderTag, MorphItem.SliderValue);
-    OnMorphUpdated.Broadcast(MorphItem.SliderTag, MorphItem.SliderValue);
+
+    if (CheckCurrentSignificance())
+    {
+        ApplySingleSliderDeformation(MorphItem.SliderTag, MorphItem.SliderValue);
+        OnMorphUpdated.Broadcast(MorphItem.SliderTag, MorphItem.SliderValue);
+    }
+    else
+    {
+        DeferredMorphSliders.Add(MorphItem.SliderTag);
+    }
 }
 
 void UDynamicCustomizationComponent::OnRep_ReplicatedMorphs()
 {
-    // Optimize morph application: Only evaluate and push delta changes to the skeletal mesh
-    // rather than resetting and rebuilding all morph targets across the character rig.
     TSet<FGameplayTag> ReplicatedTags;
     ReplicatedTags.Reserve(ReplicatedMorphs.Items.Num());
+
+    const bool bSignificant = CheckCurrentSignificance();
 
     for (const FDynamicCharacterMorphItem& Item : ReplicatedMorphs.Items)
     {
         ReplicatedTags.Add(Item.SliderTag);
-
         const float* CachedVal = LocalMorphCache.Find(Item.SliderTag);
         if (!CachedVal || !FMath::IsNearlyEqual(*CachedVal, Item.SliderValue, 0.001f))
         {
             LocalMorphCache.Add(Item.SliderTag, Item.SliderValue);
-            ApplySingleSliderDeformation(Item.SliderTag, Item.SliderValue);
-            OnMorphUpdated.Broadcast(Item.SliderTag, Item.SliderValue);
+
+            if (bSignificant)
+            {
+                ApplySingleSliderDeformation(Item.SliderTag, Item.SliderValue);
+                OnMorphUpdated.Broadcast(Item.SliderTag, Item.SliderValue);
+            }
+            else
+            {
+                DeferredMorphSliders.Add(Item.SliderTag);
+            }
         }
     }
 
-    // Clean up any sliders that were removed remotely
     if (LocalMorphCache.Num() > ReplicatedMorphs.Items.Num())
     {
         TArray<FGameplayTag> StaleKeys;
@@ -99,12 +201,15 @@ void UDynamicCustomizationComponent::OnRep_ReplicatedMorphs()
                 StaleKeys.Add(Pair.Key);
             }
         }
-
         for (const FGameplayTag& DeadTag : StaleKeys)
         {
             LocalMorphCache.Remove(DeadTag);
-            ApplySingleSliderDeformation(DeadTag, 0.0f);
-            OnMorphUpdated.Broadcast(DeadTag, 0.0f);
+            DeferredMorphSliders.Remove(DeadTag);
+            if (bSignificant)
+            {
+                ApplySingleSliderDeformation(DeadTag, 0.0f);
+                OnMorphUpdated.Broadcast(DeadTag, 0.0f);
+            }
         }
     }
 }
@@ -129,6 +234,7 @@ void UDynamicCustomizationComponent::InitializeCustomization(FGameplayTag Templa
 
     ReplicatedMorphs.Items.Empty();
     LocalMorphCache.Empty();
+    DeferredMorphSliders.Empty();
 
     for (const FTagFloatPair& DefaultPair : TemplateDef.DefaultBodyslideSliders)
     {
@@ -156,7 +262,6 @@ float UDynamicCustomizationComponent::ClampSliderToLimits(FGameplayTag SliderTag
     FCharacterTemplateDef TemplateDef;
     if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return RawValue;
 
-    // 1. Check gender-specific slider clamps first
     for (const FCharacterGenderProfile& Variant : TemplateDef.GenderVariants)
     {
         if (Variant.Gender == ActiveGender)
@@ -171,7 +276,6 @@ float UDynamicCustomizationComponent::ClampSliderToLimits(FGameplayTag SliderTag
         }
     }
 
-    // 2. Fall back to racial slider clamps
     for (const FRacialSliderClampOverride& Clamp : TemplateDef.RacialSliderClamps)
     {
         if (Clamp.SliderTag == SliderTag)
@@ -222,6 +326,15 @@ float UDynamicCustomizationComponent::GetMorphSliderValue(FGameplayTag SliderTag
 
 void UDynamicCustomizationComponent::ApplyCustomizationToMesh()
 {
+    if (!CheckCurrentSignificance())
+    {
+        for (const auto& Pair : LocalMorphCache)
+        {
+            DeferredMorphSliders.Add(Pair.Key);
+        }
+        return;
+    }
+
     for (const auto& Pair : LocalMorphCache)
     {
         ApplySingleSliderDeformation(Pair.Key, Pair.Value);
@@ -242,7 +355,6 @@ void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag S
     const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag);
     if (!SkelDef) return;
 
-    // Collect all modular skeletal meshes attached to the character (Face, Torso, Legs, Feet)
     TArray<USkeletalMeshComponent*> ModularMeshes;
     CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
 
@@ -250,7 +362,6 @@ void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag S
     {
         if (SliderDef.SliderTag == SliderTag)
         {
-            // 1. Morph Targets: Apply directly across all modular meshes
             for (const FName& MorphName : SliderDef.TargetMorphTargets)
             {
                 if (!MorphName.IsNone())
@@ -265,23 +376,19 @@ void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag S
                 }
             }
 
-            // 2. Bone Scales: Propagate bone scale and length adjustments via curves to the AnimBP/ControlRig
             for (const FBoneScaleConstraint& BoneConstraint : SliderDef.TargetBones)
             {
                 if (!BoneConstraint.BoneName.IsNone())
                 {
                     const float TargetScale = FMath::Lerp(BoneConstraint.MinScaleMultiplier, BoneConstraint.MaxScaleMultiplier, Value);
-
                     for (USkeletalMeshComponent* MeshComp : ModularMeshes)
                     {
                         if (MeshComp && MeshComp->DoesSocketExist(BoneConstraint.BoneName))
                         {
                             const FName DirectBoneCurve = BoneConstraint.BoneName;
                             const FName ScaleCurveName = FName(*FString::Printf(TEXT("scale_%s"), *BoneConstraint.BoneName.ToString()));
-
                             MeshComp->SetMorphTarget(ScaleCurveName, TargetScale);
                             MeshComp->SetMorphTarget(DirectBoneCurve, TargetScale);
-
                             if (BoneConstraint.bAllowLengthAdjustment)
                             {
                                 const float TargetLength = FMath::Lerp(BoneConstraint.MinLengthOffset, BoneConstraint.MaxLengthOffset, Value);
@@ -311,7 +418,6 @@ void UDynamicCustomizationComponent::OnRep_AppearanceColors()
 
 void UDynamicCustomizationComponent::OnRep_HairStyle()
 {
-    // Client-side hair mesh synchronization hook
 }
 
 void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag TransformationTag)
@@ -325,7 +431,6 @@ void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag Tran
     const FDynamicTransformationRule* Rule = GS->ConversionRegistry.Find(TransformationTag);
     if (!Rule) return;
 
-    // Note: Uses hierarchical MatchesTag so Character.Humanoid.Elf matches AllowedBaseTemplateTags = [Character.Humanoid]
     if (Rule->AllowedBaseTemplateTags.Num() > 0 && !ActiveCharacterTemplateTag.MatchesAny(Rule->AllowedBaseTemplateTags))
     {
         return;
@@ -337,7 +442,6 @@ void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag Tran
     {
         bCachedInvertsHealingToDamage = true;
     }
-
     if (Rule->bApplyColorTint)
     {
         SkinColor = Rule->TransformationColorTint;
@@ -373,9 +477,7 @@ void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag Tran
 
         if (UAbilitySystemComponent* ASC = CharOwner->GetAbilitySystemComponent())
         {
-            // Also grant InheritedCategoryTags as loose gameplay tags so ConditionTrees can query SuperCategory.Undead
             ASC->AddLooseGameplayTags(Rule->InheritedCategoryTags);
-
             for (const FGameplayTag& AbilityTag : Rule->GrantedAbilities)
             {
                 if (const FDynamicAbilityDef* AbilityDef = GS->AbilityMasterRegistry.Find(AbilityTag))
@@ -434,7 +536,6 @@ bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
-    // Look up available evolutionary branches for this base template tag
     const FDynamicEvolutionContainer* EvoContainer = GS->EvolutionMasterRegistry.Find(BaseTemplateTag);
     if (!EvoContainer) return false;
 
@@ -449,7 +550,6 @@ bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag
     {
         bool bPassesCheck = true;
 
-        // 1. Evaluate Attribute Threshold (e.g. Level >= 5)
         if (Branch.RequiredAttributeTag.IsValid())
         {
             float CurVal = AttrSet->GetDynamicAttributeValue(Branch.RequiredAttributeTag, 0);
@@ -459,7 +559,6 @@ bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag
             }
         }
 
-        // 2. Evaluate Logic Condition Tree (e.g. Starvation or Experience checks)
         if (bPassesCheck && !Branch.PrerequisiteConditionTreeName.IsNone())
         {
             const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(CharOwner, Branch.PrerequisiteConditionTreeName);
@@ -474,13 +573,9 @@ bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag
             }
         }
 
-        // 3. Trigger Evolution if all conditions are met
         if (bPassesCheck)
         {
-            // Mutate template tag
             ActiveCharacterTemplateTag = Branch.TargetCharacterTemplateTag;
-
-            // Apply evolution stat modifications
             for (const FDynamicModifierDef& Mod : Branch.EvolutionStatModifiers)
             {
                 if (Mod.TargetAttributeTag.IsValid())
@@ -490,7 +585,6 @@ bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag
                 }
             }
 
-            // Reinitialize mesh and appearance for the new template
             FCharacterTemplateDef NewTemplate;
             if (GS->GetCharacterTemplate(Branch.TargetCharacterTemplateTag, NewTemplate))
             {

@@ -26,10 +26,13 @@ void UDynamicCloudAISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     ActiveBackend = ECloudAIExecutionBackend::LocalRuleBasedFallback;
+    BuildAndCacheJsonSchema();
 }
 
 void UDynamicCloudAISubsystem::Deinitialize()
 {
+    CachedCloudAISchema.Reset();
+    ActiveDirectCallbacks.Empty();
     Super::Deinitialize();
 }
 
@@ -54,7 +57,7 @@ FString UDynamicCloudAISubsystem::SanitizeMarkdownJson(const FString& RawRespons
     return Trimmed.TrimStartAndEnd();
 }
 
-TSharedPtr<FJsonObject> UDynamicCloudAISubsystem::GenerateCloudAIJsonSchema() const
+void UDynamicCloudAISubsystem::BuildAndCacheJsonSchema()
 {
     TSharedRef<FJsonObject> SchemaObj = MakeShareable(new FJsonObject());
     SchemaObj->SetStringField(TEXT("type"), TEXT("object"));
@@ -147,7 +150,16 @@ TSharedPtr<FJsonObject> UDynamicCloudAISubsystem::GenerateCloudAIJsonSchema() co
     PropertiesObj->SetObjectField(TEXT("Commands"), CommandsObj);
     SchemaObj->SetObjectField(TEXT("properties"), PropertiesObj);
 
-    return SchemaObj;
+    CachedCloudAISchema = SchemaObj;
+}
+
+TSharedPtr<FJsonObject> UDynamicCloudAISubsystem::GenerateCloudAIJsonSchema()
+{
+    if (!CachedCloudAISchema.IsValid())
+    {
+        BuildAndCacheJsonSchema();
+    }
+    return CachedCloudAISchema;
 }
 
 void UDynamicCloudAISubsystem::RequestCloudAIDirective(ADynamicCharacter* Character, const FString& ContextPrompt, FOnCloudAIDirectiveReceived OnCompleted)

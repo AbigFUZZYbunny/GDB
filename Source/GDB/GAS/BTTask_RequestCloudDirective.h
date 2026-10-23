@@ -8,36 +8,50 @@
 
 class UDynamicCloudAISubsystem;
 
+/**
+ * Behavior Tree Task that dispatches remote or local LLM requests.
+ * Features an intermediate vamping system to mask HTTP latency via animations and filler chatter.
+ */
 UCLASS()
 class GDB_API UBTTask_RequestCloudDirective : public UBTTaskNode
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	UBTTask_RequestCloudDirective();
+    UBTTask_RequestCloudDirective();
 
-	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
-	virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+    virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+    virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+    virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 
-	UPROPERTY(EditAnywhere, Category = "Cloud AI")
-	ECloudAIRequestType RequestType = ECloudAIRequestType::ComplexDecision;
+    UPROPERTY(EditAnywhere, Category = "Cloud AI")
+    ECloudAIRequestType RequestType = ECloudAIRequestType::ComplexDecision;
 
-	UPROPERTY(EditAnywhere, Category = "Cloud AI")
-	float RequestTimeoutSeconds = 8.0f;
+    UPROPERTY(EditAnywhere, Category = "Cloud AI")
+    float RequestTimeoutSeconds = 8.0f;
 
-	UPROPERTY(EditAnywhere, Category = "Blackboard")
-	FBlackboardKeySelector ActionTagKey;
+    UPROPERTY(EditAnywhere, Category = "Cloud AI|Vamping")
+    FCloudAIVampingConfig VampingConfig;
 
-	UPROPERTY(EditAnywhere, Category = "Blackboard")
-	FBlackboardKeySelector TargetPlaceRoleKey;
+    UPROPERTY(EditAnywhere, Category = "Blackboard")
+    FBlackboardKeySelector ActionTagKey;
 
-	UPROPERTY(EditAnywhere, Category = "Blackboard")
-	FBlackboardKeySelector UtteranceTextKey;
+    UPROPERTY(EditAnywhere, Category = "Blackboard")
+    FBlackboardKeySelector TargetPlaceRoleKey;
+
+    UPROPERTY(EditAnywhere, Category = "Blackboard")
+    FBlackboardKeySelector UtteranceTextKey;
 
 protected:
-	void HandleDirectCloudResponse(TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp, const TArray<FCloudAICommandOutput>& Commands);
+    void HandleDirectCloudResponse(TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp, const TArray<FCloudAICommandOutput>& Commands);
+    void StartVampingBehavior(APawn* ControlledPawn, UBehaviorTreeComponent& OwnerComp);
+    void StopVampingBehavior(APawn* ControlledPawn);
 
 private:
-	FGuid ActiveRequestGuid;
-	TWeakObjectPtr<UDynamicCloudAISubsystem> CachedCloudSubsystem;
+    FGuid ActiveRequestGuid;
+    TWeakObjectPtr<UDynamicCloudAISubsystem> CachedCloudSubsystem;
+
+    float ElapsedTaskTime = 0.0f;
+    bool bVampingStarted = false;
+    TWeakObjectPtr<UAnimMontage> ActiveVampingMontage;
 };

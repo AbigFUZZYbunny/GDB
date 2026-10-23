@@ -45,16 +45,14 @@ public:
     ADynamicCharacter(const FObjectInitializer& ObjectInitializer);
 
     virtual void Tick(float DeltaSeconds) override;
+    virtual void PostInitializeComponents() override;
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
     USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
     USkeletalMeshComponent* GetMesh() const { return MeshComponent; }
     UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
-
-    // Optimization C: Non-const AttributeSet accessor eliminates const_cast throughout codebase
     UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
 
-    // IDynamicPoolScrubbableInterface implementation
     virtual void ResetToDefaultPoolState() override;
 
     UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category = "DynamicGAS|Combat")
@@ -86,6 +84,27 @@ public:
     void RewindToHistoricalSnapshot(double TargetTimestamp);
     void RestoreFromHistoricalSnapshot();
 
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Movement")
+    bool ServerSetMovementState(FGameplayTag NewStateTag);
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Movement")
+    void ApplyMovementStateConfig(const FDynamicMovementStateDef& Def);
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "DynamicGAS|Movement")
+    FGameplayTag DefaultMovementStateTag;
+
+    UPROPERTY(ReplicatedUsing=OnRep_ActiveMovementState, BlueprintReadOnly, Category = "DynamicGAS|Movement")
+    FGameplayTag ActiveMovementStateTag;
+
+    UFUNCTION()
+    void OnRep_ActiveMovementState();
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
+    void ConfigureHangingPhysics(bool bEnableHanging, bool bHasFooting = false);
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
+    void UpdateClimbingFootingState();
+
 protected:
     virtual void BeginPlay() override;
     virtual void PossessedBy(AController* NewController) override;
@@ -93,6 +112,12 @@ protected:
 
     UFUNCTION()
     void OnServerSkeletalMeshHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+
+    UFUNCTION()
+    void OnServerCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+
+    void HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag);
+    void ProcessWallImpact(const FHitResult& Hit, float ImpactVelocity);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     UCapsuleComponent* CapsuleComponent;
@@ -112,7 +137,6 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
     UAbilitySystemComponent* AbilitySystemComponent;
 
-    // Optimization C: Direct mutable subobject pointer
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Abilities")
     TObjectPtr<UDynamicAttributeSet> AttributeSet;
 
@@ -122,6 +146,7 @@ protected:
 private:
     void InitializeAbilitySystem();
     float CalculateAuthoritativeStrikeForce() const;
+    void SetupDefaultMoverModes();
 
     bool bIsRagdolling;
     bool bAttributesInitializedOnServer = false;
@@ -132,10 +157,18 @@ private:
 
     UPROPERTY()
     TArray<FCharacterTransformHistorySnapshot> TransformHistoryBuffer;
-
     int32 HistoryBufferWriteIndex = 0;
     int32 HistoryBufferCount = 0;
 
     FCharacterTransformHistorySnapshot PreRewindCachedTransform;
     bool bIsCurrentlyRewound = false;
+
+    bool bPreRewindSimulatingPhysics = false;
+    bool bPreRewindMoverActive = false;
+    bool bIsHangingPhysical = false;
+    bool bCurrentFootingActive = false;
+    
+    float CachedTargetCapsuleHalfHeight = 88.0f;
+    FVector PreviousVelocity = FVector::ZeroVector;
+    FGameplayTagContainer GrantedMovementTags;
 };

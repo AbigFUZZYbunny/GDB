@@ -1,0 +1,36 @@
+﻿{
+  "_comment": "Authoritative Physics & Limb-Accurate Collision Impact Calculations",
+  "CalculationSettings": {
+    "PrimaryDamageTargetAttributeTag": "Attribute.Resource.Health",
+    "MinImpulseThreshold": 300.0,
+    "MaxImpulseCap": 15000.0,
+    "ImpulseToDamageScalar": 0.01,
+    "CooldownBetweenHitsPerLimb": 0.1,
+    "WallImpactSettings": {
+      "BaseImpactVelocityThreshold": 750.0,
+      "BaseImpactDamageScalar": 0.04,
+      "BaseGripLossThreshold": 30.0,
+      "VelocityMitigationScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Stat.Agility", "Value": 8.0 },
+          { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 12.0 },
+          { "KeyTag": "Attribute.Limb.Flexibility", "Value": 5.0 }
+        ]
+      },
+      "DamageMitigationScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.005 },
+          { "KeyTag": "Attribute.Limb.Armor", "Value": 0.01 },
+          { "KeyTag": "Attribute.Limb.Conditioning", "Value": 0.003 }
+        ]
+      },
+      "GripRetentionScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Stat.Strength", "Value": 2.5 },
+          { "KeyTag": "Attribute.Skill.Climbing", "Value": 4.0 },
+          { "KeyTag": "Attribute.Limb.GripStrength", "Value": 3.0 }
+        ]
+      }
+    }
+  }
+}

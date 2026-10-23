@@ -1,0 +1,109 @@
+﻿{
+  "_comment": "Dynamic Movement Framework mapped to Mover 2.0 queues, utilizing multi-attribute stat scaling.",
+  "MovementStateRegistry": {
+    "Movement.Mode.Walk": {
+      "MoverModeName": "Walking",
+      "LocomotionType": "Grounded",
+      "MaxSpeed": { "BaseValue": 250.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "Acceleration": { "BaseValue": 1024.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "Deceleration": { "BaseValue": 1024.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GroundFriction": { "BaseValue": 8.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GravityScale": { "BaseValue": 1.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "TargetCapsuleHalfHeight": { "BaseValue": 88.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "BlockedByTags": [],
+      "GrantsTags": ["State.Moving.Walk"]
+    },
+    "Movement.Mode.Sprint": {
+      "MoverModeName": "Walking",
+      "LocomotionType": "Grounded",
+      "MaxSpeed": {
+        "BaseValue": 600.0,
+        "AttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Agility", "Value": 0.05 },
+            { "KeyTag": "Attribute.Skill.MovementMastery", "Value": 0.02 }
+          ]
+        }
+      },
+      "Acceleration": {
+        "BaseValue": 2048.0,
+        "AttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Strength", "Value": 0.03 },
+            { "KeyTag": "Attribute.Stat.Agility", "Value": 0.04 }
+          ]
+        }
+      },
+      "Deceleration": { "BaseValue": 2048.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GroundFriction": { "BaseValue": 8.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GravityScale": { "BaseValue": 1.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "TargetCapsuleHalfHeight": { "BaseValue": 88.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "BlockedByTags": ["State.Debuff.Crippled", "State.Overencumbered", "State.Exhausted"],
+      "GrantsTags": ["State.Moving.Sprint"]
+    },
+    "Movement.Mode.Crouch": {
+      "MoverModeName": "Walking",
+      "LocomotionType": "Grounded",
+      "MaxSpeed": {
+        "BaseValue": 120.0,
+        "AttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Agility", "Value": 0.02 }
+          ]
+        }
+      },
+      "Acceleration": { "BaseValue": 512.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "Deceleration": { "BaseValue": 512.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GroundFriction": { "BaseValue": 10.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GravityScale": { "BaseValue": 1.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "TargetCapsuleHalfHeight": {
+        "BaseValue": 44.0,
+        "AttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Agility", "Value": -0.005 }
+          ]
+        }
+      },
+      "BlockedByTags": [],
+      "GrantsTags": ["State.Moving.Crouch", "State.Stance.Low"]
+    },
+    "Movement.Mode.Fly": {
+      "MoverModeName": "Flying",
+      "LocomotionType": "Airborne",
+      "MaxSpeed": {
+        "BaseValue": 1200.0,
+        "AttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Skill.FlightMastery", "Value": 0.1 }
+          ]
+        }
+      },
+      "Acceleration": { "BaseValue": 3000.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "Deceleration": { "BaseValue": 1500.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GroundFriction": { "BaseValue": 0.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GravityScale": { "BaseValue": 0.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "TargetCapsuleHalfHeight": { "BaseValue": 88.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "BlockedByTags": ["State.Debuff.Rooted", "State.Overencumbered"],
+      "GrantsTags": ["State.Moving.Fly"]
+    },
+    "Movement.Mode.Climb": {
+      "MoverModeName": "Flying",
+      "LocomotionType": "WallAttached",
+      "MaxSpeed": {
+        "BaseValue": 180.0,
+        "AttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Strength", "Value": 0.04 }
+          ]
+        }
+      },
+      "Acceleration": { "BaseValue": 800.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "Deceleration": { "BaseValue": 800.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GroundFriction": { "BaseValue": 0.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "GravityScale": { "BaseValue": 0.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "TargetCapsuleHalfHeight": { "BaseValue": 88.0, "AttributeScalars": { "ReplicatedEntries": [] } },
+      "BlockedByTags": ["State.Debuff.Crippled"],
+      "GrantsTags": ["State.Moving.Climb"]
+    }
+  }
+}

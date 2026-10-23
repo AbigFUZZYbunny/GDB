@@ -18,6 +18,7 @@ public:
     UDynamicCustomizationComponent();
 
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Customization")
@@ -41,11 +42,9 @@ public:
     UPROPERTY(ReplicatedUsing = OnRep_HairStyle, BlueprintReadOnly, Category = "Dynamic GAS|Customization")
     FGameplayTag ActiveHairArchetypeTag;
 
-    // Tracks active conversions (e.g. Transformation.Vampirism, Transformation.Undead.General)
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Transformation")
     FGameplayTagContainer ActiveTransformations;
 
-    // Tracks super-categories granted by transformations (e.g. SuperCategory.Undead)
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Transformation")
     FGameplayTagContainer ActiveInheritedCategories;
 
@@ -68,7 +67,6 @@ public:
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Customization")
     float GetMorphSliderValue(FGameplayTag SliderTag) const;
 
-    // --- Dynamic Transformation & Siring API ---
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Transformation")
     void ServerApplyTransformation(FGameplayTag TransformationTag);
 
@@ -77,15 +75,33 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Transformation")
     bool DoesCharacterInvertHealingToDamage() const { return bCachedInvertsHealingToDamage; }
-    
+
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Evolution")
     bool ServerCheckAndTriggerEvolution(FGameplayTag BaseTemplateTag);
+
+    // --- Significance & Crowd Hub Optimization ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Customization|Significance")
+    float MorphSignificanceRadius = 2000.0f;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Customization|Significance")
+    bool CheckCurrentSignificance() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Customization|Significance")
+    void SetSignificanceState(bool bNewSignificant);
+
+    void FlushDeferredMorphs();
 
 private:
     float ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const;
     void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value);
 
+    void UpdateSignificanceEvaluation();
+
     TMap<FGameplayTag, float> LocalMorphCache;
+    TSet<FGameplayTag> DeferredMorphSliders;
+
+    bool bIsSignificantlyVisible = true;
+    FTimerHandle TimerHandle_SignificancePoll;
 
     UPROPERTY(Replicated)
     bool bCachedInvertsHealingToDamage = false;

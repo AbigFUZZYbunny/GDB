@@ -1,8 +1,8 @@
 ﻿// DynamicDataSerializer.cpp
 #include "DynamicDataSerializer.h"
 #include "DynamicCharacter.h"
-#include "DynamicPhysicsActor.h"          // <-- Fixes undefined ADynamicPhysicsActor
-#include "EngineUtils.h"                  // <-- Fixes undefined TActorIterator
+#include "DynamicPhysicsActor.h"
+#include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicEquipmentComponent.h"
@@ -323,15 +323,37 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 DeserializeMapWrapper(LimbObj, TEXT("AngularMotorAttributeScalars"), PhysicsConfig.Limbs[i].AngularMotorAttributeScalars);
                 DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), PhysicsConfig.Limbs[i].LinearMotorAttributeScalars);
             }
+
+            if (RootObject->HasField(TEXT("CalculationSettings")))
+            {
+                TSharedPtr<FJsonObject> CalcObj = RootObject->GetObjectField(TEXT("CalculationSettings"));
+                if (CalcObj->HasField(TEXT("WallImpactSettings")))
+                {
+                    TSharedPtr<FJsonObject> ImpactObj = CalcObj->GetObjectField(TEXT("WallImpactSettings"));
+                    DeserializeMapWrapper(ImpactObj, TEXT("VelocityMitigationScalars"), PhysicsConfig.CalculationSettings.WallImpactSettings.VelocityMitigationScalars);
+                    DeserializeMapWrapper(ImpactObj, TEXT("DamageMitigationScalars"), PhysicsConfig.CalculationSettings.WallImpactSettings.DamageMitigationScalars);
+                    DeserializeMapWrapper(ImpactObj, TEXT("GripRetentionScalars"), PhysicsConfig.CalculationSettings.WallImpactSettings.GripRetentionScalars);
+                }
+            }
+
             OutStaging.bHasPhysicsConfig = true;
             OutStaging.PhysicsConfig = PhysicsConfig;
         }
     }
     else if (RootObject->HasField(TEXT("CalculationSettings")))
     {
+        TSharedPtr<FJsonObject> CalcObj = RootObject->GetObjectField(TEXT("CalculationSettings"));
         FPhysicsCalculationSettings CalcSettings;
-        if (FJsonObjectConverter::JsonObjectToUStruct(RootObject->GetObjectField(TEXT("CalculationSettings")).ToSharedRef(), &CalcSettings, 0, 0))
+        if (FJsonObjectConverter::JsonObjectToUStruct(CalcObj.ToSharedRef(), &CalcSettings, 0, 0))
         {
+            if (CalcObj->HasField(TEXT("WallImpactSettings")))
+            {
+                TSharedPtr<FJsonObject> ImpactObj = CalcObj->GetObjectField(TEXT("WallImpactSettings"));
+                DeserializeMapWrapper(ImpactObj, TEXT("VelocityMitigationScalars"), CalcSettings.WallImpactSettings.VelocityMitigationScalars);
+                DeserializeMapWrapper(ImpactObj, TEXT("DamageMitigationScalars"), CalcSettings.WallImpactSettings.DamageMitigationScalars);
+                DeserializeMapWrapper(ImpactObj, TEXT("GripRetentionScalars"), CalcSettings.WallImpactSettings.GripRetentionScalars);
+            }
+
             OutStaging.bHasCalcSettings = true;
             OutStaging.CalcSettings = CalcSettings;
         }
@@ -711,6 +733,126 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.NameGenerationRulesRegistry.Add(RuleConfig.CultureOrTemplateTag, RuleConfig);
         }
     }
+    
+    // Deserialization of Fast-Path Dialogue Registry
+    if (RootObject->HasField(TEXT("FastPathDialogueRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("FastPathDialogueRegistry"))->Values)
+        {
+            FGameplayTag ProfileTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!ProfileTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> DefObj = Pair.Value->AsObject();
+            if (!DefObj.IsValid()) continue;
+
+            FFastPathDialogueDef DialogueDef;
+            DialogueDef.DialogueProfileTag = ProfileTag;
+
+            if (DefObj->HasField(TEXT("Entries")))
+            {
+                for (const auto& EntryVal : DefObj->GetArrayField(TEXT("Entries")))
+                {
+                    TSharedPtr<FJsonObject> EntryObj = EntryVal->AsObject();
+                    if (!EntryObj.IsValid()) continue;
+
+                    FFastPathDialogueEntry Entry;
+                    Entry.CategoryTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("CategoryTag"))), false);
+                    Entry.UtteranceTemplate = EntryObj->GetStringField(TEXT("UtteranceTemplate"));
+
+                    if (EntryObj->HasField(TEXT("AllowedMoodTags")))
+                    {
+                        for (const auto& MoodVal : EntryObj->GetArrayField(TEXT("AllowedMoodTags")))
+                        {
+                            FGameplayTag MoodTag = FGameplayTag::RequestGameplayTag(FName(*MoodVal->AsString()), false);
+                            if (MoodTag.IsValid()) Entry.AllowedMoodTags.AddTag(MoodTag);
+                        }
+                    }
+
+                    if (EntryObj->HasField(TEXT("AllowedRelationshipTypeTags")))
+                    {
+                        for (const auto& RelVal : EntryObj->GetArrayField(TEXT("AllowedRelationshipTypeTags")))
+                        {
+                            FGameplayTag RelTag = FGameplayTag::RequestGameplayTag(FName(*RelVal->AsString()), false);
+                            if (RelTag.IsValid()) Entry.AllowedRelationshipTypeTags.AddTag(RelTag);
+                        }
+                    }
+
+                    if (EntryObj->HasField(TEXT("RelationalAttributeRequirements")))
+                    {
+                        for (const auto& ReqVal : EntryObj->GetArrayField(TEXT("RelationalAttributeRequirements")))
+                        {
+                            TSharedPtr<FJsonObject> ReqObj = ReqVal->AsObject();
+                            if (ReqObj.IsValid())
+                            {
+                                FCharacterAttributeRangeDef Range;
+                                Range.AttributeTag = FGameplayTag::RequestGameplayTag(FName(*ReqObj->GetStringField(TEXT("AttributeTag"))), false);
+                                Range.MinValue = static_cast<float>(ReqObj->GetNumberField(TEXT("MinValue")));
+                                Range.MaxValue = static_cast<float>(ReqObj->GetNumberField(TEXT("MaxValue")));
+                                Entry.RelationalAttributeRequirements.Add(Range);
+                            }
+                        }
+                    }
+
+                    if (EntryObj->HasField(TEXT("VoiceCueTag")))
+                    {
+                        Entry.VoiceCueTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("VoiceCueTag"))), false);
+                    }
+
+                    if (EntryObj->HasField(TEXT("SelectionWeight")))
+                    {
+                        Entry.SelectionWeight = static_cast<float>(EntryObj->GetNumberField(TEXT("SelectionWeight")));
+                    }
+
+                    DialogueDef.Entries.Add(Entry);
+                }
+            }
+
+            OutStaging.FastPathDialogueRegistry.Add(ProfileTag, DialogueDef);
+        }
+    }
+    
+    // Deserialization of Movement States
+    if (RootObject->HasField(TEXT("MovementStateRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("MovementStateRegistry"))->Values)
+        {
+            FGameplayTag StateTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!StateTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> MovObj = Pair.Value->AsObject();
+            if (!MovObj.IsValid()) continue;
+
+            FDynamicMovementStateDef Def;
+            Def.StateTag = StateTag;
+            Def.MoverModeName = FName(*MovObj->GetStringField(TEXT("MoverModeName")));
+            Def.LocomotionType = StringToEnum<EMovementLocomotionType>(MovObj->GetStringField(TEXT("LocomotionType")));
+
+            DeserializeMovementStatConfig(MovObj, TEXT("MaxSpeed"), Def.MaxSpeed);
+            DeserializeMovementStatConfig(MovObj, TEXT("Acceleration"), Def.Acceleration);
+            DeserializeMovementStatConfig(MovObj, TEXT("Deceleration"), Def.Deceleration);
+            DeserializeMovementStatConfig(MovObj, TEXT("GroundFriction"), Def.GroundFriction);
+            DeserializeMovementStatConfig(MovObj, TEXT("GravityScale"), Def.GravityScale);
+            DeserializeMovementStatConfig(MovObj, TEXT("TargetCapsuleHalfHeight"), Def.TargetCapsuleHalfHeight);
+
+            if (MovObj->HasField(TEXT("BlockedByTags")))
+            {
+                for (const auto& TagVal : MovObj->GetArrayField(TEXT("BlockedByTags")))
+                {
+                    Def.BlockedByTags.AddTag(FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false));
+                }
+            }
+
+            if (MovObj->HasField(TEXT("GrantsTags")))
+            {
+                for (const auto& TagVal : MovObj->GetArrayField(TEXT("GrantsTags")))
+                {
+                    Def.GrantsTags.AddTag(FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false));
+                }
+            }
+
+            OutStaging.MovementStateRegistry.Add(StateTag, Def);
+        }
+    }
 
     return true;
 }
@@ -897,138 +1039,21 @@ static void RestoreDraggedActorContainers(ADynamicPhysicsActor* SpawnedActor, co
     }
 }
 
-bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload)
+bool UDynamicDataSerializer::ParseSnapshotFromJsonString(const FString& InJsonPayload, FPlayerPersistenceSnapshot& OutSnapshot)
 {
-    if (!InCharacter || !InCharacter->HasAuthority()) return false;
-
-    FPlayerPersistenceSnapshot Snapshot;
-
-    // 1. Identity & Customization
-    if (const UDynamicCustomizationComponent* Cust = InCharacter->GetCustomizationComponent())
-    {
-        Snapshot.CharacterTemplateTag = Cust->ActiveCharacterTemplateTag;
-        Snapshot.Gender = Cust->ActiveGender;
-        Snapshot.SkinColor = Cust->SkinColor;
-        Snapshot.HairColor = Cust->HairColor;
-        Snapshot.ActiveHairArchetypeTag = Cust->ActiveHairArchetypeTag;
-        for (const FDynamicCharacterMorphItem& Morph : Cust->ReplicatedMorphs.Items)
-        {
-            FTagFloatPair Pair;
-            Pair.KeyTag = Morph.SliderTag;
-            Pair.Value = Morph.SliderValue;
-            Snapshot.MorphSliders.Add(Pair);
-        }
-    }
-
-    // 2. Attributes
-    if (const UDynamicAttributeSet* AttrSet = InCharacter->GetDynamicAttributeSet())
-    {
-        Snapshot.Attributes = AttrSet->FastAttributes.Items;
-    }
-
-    // 3. Genetics & Aging
-    if (const UDynamicLifeComponent* Life = InCharacter->FindComponentByClass<UDynamicLifeComponent>())
-    {
-        Snapshot.Genome = Life->ReplicatedGenome.Items;
-    }
-
-    // 4. Equipment
-    if (const UDynamicEquipmentComponent* Equip = InCharacter->FindComponentByClass<UDynamicEquipmentComponent>())
-    {
-        Snapshot.Equipment = Equip->ReplicatedEquipmentSlots.Items;
-    }
-
-    // 5. Container Inventory
-    if (const UDynamicContainerComponent* Container = InCharacter->FindComponentByClass<UDynamicContainerComponent>())
-    {
-        Snapshot.InventorySlots = Container->GetReplicatedSlots().Items;
-    }
-
-    // 6. Quests
-    if (const UDynamicQuestComponent* QuestComp = InCharacter->FindComponentByClass<UDynamicQuestComponent>())
-    {
-        Snapshot.ActiveQuests = QuestComp->ReplicatedActiveQuests.Items;
-        Snapshot.ActiveObjectives = QuestComp->ReplicatedActiveObjectives.Items;
-    }
-
-    // 7. Language
-    if (const UDynamicLanguageComponent* Lang = InCharacter->FindComponentByClass<UDynamicLanguageComponent>())
-    {
-        Snapshot.KnownWords = Lang->ReplicatedKnownWords.Items;
-    }
-
-    // 8. Social, Needs, Memory
-    if (const UDynamicSocialComponent* Social = InCharacter->FindComponentByClass<UDynamicSocialComponent>())
-    {
-        Snapshot.CharacterGuid = Social->CharacterPersistentGuid;
-        Snapshot.Relationships = Social->ReplicatedRelationships.Items;
-        Snapshot.Needs = Social->ReplicatedNeedsAndMoods.Items;
-        Snapshot.KnownPlaces = Social->ReplicatedKnownPlaces.Items;
-    }
-
-    // 9. Serializing Dragged / Tethered World Physics Actors
-    for (TActorIterator<ADynamicPhysicsActor> It(InCharacter->GetWorld()); It; ++It)
-    {
-        ADynamicPhysicsActor* PhysActor = *It;
-        if (PhysActor && !PhysActor->IsPendingKillPending())
-        {
-            const float DistSq = FVector::DistSquared(PhysActor->GetActorLocation(), InCharacter->GetActorLocation());
-            const bool bIsAttached = PhysActor->GetAttachParentActor() == InCharacter;
-
-            if (bIsAttached || DistSq <= FMath::Square(600.0f))
-            {
-                FDraggedPhysicsActorSnapshot ActorSnapshot;
-                ActorSnapshot.ActorArchetypeTag = PhysActor->GetActorArchetypeTag();
-                ActorSnapshot.WorldTransform = PhysActor->GetActorTransform();
-
-                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
-                {
-                    ActorSnapshot.LinearVelocity = Prim->GetPhysicsLinearVelocity();
-                    ActorSnapshot.AngularVelocity = Prim->GetPhysicsAngularVelocityInDegrees();
-                }
-
-                if (const UDynamicAttributeSet* AttrSet = PhysActor->GetDynamicAttributeSet())
-                {
-                    ActorSnapshot.SavedAttributes = AttrSet->FastAttributes.Items;
-                }
-
-                if (const UDynamicInteractableComponent* Interactable = PhysActor->GetInteractableComponent())
-                {
-                    ActorSnapshot.SavedInteractableStates = Interactable->GetCurrentStateTags();
-                }
-
-                if (const UDynamicContainerComponent* Container = PhysActor->GetContainerComponent())
-                {
-                    ActorSnapshot.ContainerInventory = Container->GetReplicatedSlots().Items;
-                }
-
-                Snapshot.DraggedPhysicsActors.Add(ActorSnapshot);
-
-                if (ADynamicGameState* GS = InCharacter->GetWorld()->GetGameState<ADynamicGameState>())
-                {
-                    GS->ReleasePhysicsActorToPool(PhysActor);
-                }
-            }
-        }
-    }
-
-    TSharedPtr<FJsonObject> JsonObj = FJsonObjectConverter::UStructToJsonObject(Snapshot);
-    if (!JsonObj.IsValid()) return false;
-
-    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonPayload);
-    return FJsonSerializer::Serialize(JsonObj.ToSharedRef(), Writer);
-}
-
-bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload)
-{
-    if (!TargetCharacter || !TargetCharacter->HasAuthority() || InJsonPayload.IsEmpty()) return false;
+    if (InJsonPayload.IsEmpty()) return false;
 
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InJsonPayload);
     TSharedPtr<FJsonObject> RootObj;
     if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid()) return false;
 
-    FPlayerPersistenceSnapshot Snapshot;
-    if (!FJsonObjectConverter::JsonObjectToUStruct(RootObj.ToSharedRef(), &Snapshot, 0, 0)) return false;
+    return FJsonObjectConverter::JsonObjectToUStruct(RootObj.ToSharedRef(), &OutSnapshot, 0, 0);
+}
+
+bool UDynamicDataSerializer::ApplySnapshotToPlayerCharacter(ADynamicCharacter* TargetCharacter, const FPlayerPersistenceSnapshot& Snapshot)
+{
+    check(IsInGameThread());
+    if (!TargetCharacter || !TargetCharacter->HasAuthority()) return false;
 
     // 1. Identity & Mesh
     if (UDynamicCustomizationComponent* Cust = TargetCharacter->GetCustomizationComponent())
@@ -1153,4 +1178,192 @@ bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter
     }
 
     return true;
+}
+
+bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload)
+{
+    if (!InCharacter || !InCharacter->HasAuthority()) return false;
+
+    FPlayerPersistenceSnapshot Snapshot;
+
+    // 1. Identity & Customization
+    if (const UDynamicCustomizationComponent* Cust = InCharacter->GetCustomizationComponent())
+    {
+        Snapshot.CharacterTemplateTag = Cust->ActiveCharacterTemplateTag;
+        Snapshot.Gender = Cust->ActiveGender;
+        Snapshot.SkinColor = Cust->SkinColor;
+        Snapshot.HairColor = Cust->HairColor;
+        Snapshot.ActiveHairArchetypeTag = Cust->ActiveHairArchetypeTag;
+        for (const FDynamicCharacterMorphItem& Morph : Cust->ReplicatedMorphs.Items)
+        {
+            FTagFloatPair Pair;
+            Pair.KeyTag = Morph.SliderTag;
+            Pair.Value = Morph.SliderValue;
+            Snapshot.MorphSliders.Add(Pair);
+        }
+    }
+
+    // 2. Attributes
+    if (const UDynamicAttributeSet* AttrSet = InCharacter->GetDynamicAttributeSet())
+    {
+        Snapshot.Attributes = AttrSet->FastAttributes.Items;
+    }
+
+    // 3. Genetics & Aging
+    if (const UDynamicLifeComponent* Life = InCharacter->FindComponentByClass<UDynamicLifeComponent>())
+    {
+        Snapshot.Genome = Life->ReplicatedGenome.Items;
+    }
+
+    // 4. Equipment
+    if (const UDynamicEquipmentComponent* Equip = InCharacter->FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        Snapshot.Equipment = Equip->ReplicatedEquipmentSlots.Items;
+    }
+
+    // 5. Container Inventory
+    if (const UDynamicContainerComponent* Container = InCharacter->FindComponentByClass<UDynamicContainerComponent>())
+    {
+        Snapshot.InventorySlots = Container->GetReplicatedSlots().Items;
+    }
+
+    // 6. Quests
+    if (const UDynamicQuestComponent* QuestComp = InCharacter->FindComponentByClass<UDynamicQuestComponent>())
+    {
+        Snapshot.ActiveQuests = QuestComp->ReplicatedActiveQuests.Items;
+        Snapshot.ActiveObjectives = QuestComp->ReplicatedActiveObjectives.Items;
+    }
+
+    // 7. Language
+    if (const UDynamicLanguageComponent* Lang = InCharacter->FindComponentByClass<UDynamicLanguageComponent>())
+    {
+        Snapshot.KnownWords = Lang->ReplicatedKnownWords.Items;
+    }
+
+    // 8. Social, Needs, Memory
+    if (const UDynamicSocialComponent* Social = InCharacter->FindComponentByClass<UDynamicSocialComponent>())
+    {
+        Snapshot.CharacterGuid = Social->CharacterPersistentGuid;
+        Snapshot.Relationships = Social->ReplicatedRelationships.Items;
+        Snapshot.Needs = Social->ReplicatedNeedsAndMoods.Items;
+        Snapshot.KnownPlaces = Social->ReplicatedKnownPlaces.Items;
+    }
+
+    // 9. Serializing Dragged / Tethered World Physics Actors
+    for (TActorIterator<ADynamicPhysicsActor> It(InCharacter->GetWorld()); It; ++It)
+    {
+        ADynamicPhysicsActor* PhysActor = *It;
+        if (PhysActor && !PhysActor->IsPendingKillPending())
+        {
+            const float DistSq = FVector::DistSquared(PhysActor->GetActorLocation(), InCharacter->GetActorLocation());
+            const bool bIsAttached = PhysActor->GetAttachParentActor() == InCharacter;
+
+            if (bIsAttached || DistSq <= FMath::Square(600.0f))
+            {
+                FDraggedPhysicsActorSnapshot ActorSnapshot;
+                ActorSnapshot.ActorArchetypeTag = PhysActor->GetActorArchetypeTag();
+                ActorSnapshot.WorldTransform = PhysActor->GetActorTransform();
+
+                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                {
+                    ActorSnapshot.LinearVelocity = Prim->GetPhysicsLinearVelocity();
+                    ActorSnapshot.AngularVelocity = Prim->GetPhysicsAngularVelocityInDegrees();
+                }
+
+                if (const UDynamicAttributeSet* AttrSet = PhysActor->GetDynamicAttributeSet())
+                {
+                    ActorSnapshot.SavedAttributes = AttrSet->FastAttributes.Items;
+                }
+
+                if (const UDynamicInteractableComponent* Interactable = PhysActor->GetInteractableComponent())
+                {
+                    ActorSnapshot.SavedInteractableStates = Interactable->GetCurrentStateTags();
+                }
+
+                if (const UDynamicContainerComponent* Container = PhysActor->GetContainerComponent())
+                {
+                    ActorSnapshot.ContainerInventory = Container->GetReplicatedSlots().Items;
+                }
+
+                Snapshot.DraggedPhysicsActors.Add(ActorSnapshot);
+
+                if (ADynamicGameState* GS = InCharacter->GetWorld()->GetGameState<ADynamicGameState>())
+                {
+                    GS->ReleasePhysicsActorToPool(PhysActor);
+                }
+            }
+        }
+    }
+
+    TSharedPtr<FJsonObject> JsonObj = FJsonObjectConverter::UStructToJsonObject(Snapshot);
+    if (!JsonObj.IsValid()) return false;
+
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJsonPayload);
+    return FJsonSerializer::Serialize(JsonObj.ToSharedRef(), Writer);
+}
+
+bool UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload)
+{
+    FPlayerPersistenceSnapshot Snapshot;
+    if (!ParseSnapshotFromJsonString(InJsonPayload, Snapshot))
+    {
+        return false;
+    }
+    return ApplySnapshotToPlayerCharacter(TargetCharacter, Snapshot);
+}
+
+void UDynamicDataSerializer::DeserializePlayerFromSnapshotJsonAsync(
+    ADynamicCharacter* TargetCharacter, 
+    const FString& InJsonPayload, 
+    FOnPlayerHydrationCompletedSignature OnComplete)
+{
+    DeserializePlayerFromSnapshotJsonAsyncNative(TargetCharacter, InJsonPayload, [OnComplete](bool bSuccess)
+    {
+        OnComplete.ExecuteIfBound(bSuccess);
+    });
+}
+
+void UDynamicDataSerializer::DeserializePlayerFromSnapshotJsonAsyncNative(
+    ADynamicCharacter* TargetCharacter, 
+    const FString& InJsonPayload, 
+    TFunction<void(bool)> OnComplete)
+{
+    if (!TargetCharacter || InJsonPayload.IsEmpty())
+    {
+        if (OnComplete) OnComplete(false);
+        return;
+    }
+
+    TWeakObjectPtr<ADynamicCharacter> WeakChar(TargetCharacter);
+
+    // 1. Offload heavy JSON string-to-struct parsing to worker thread
+    Async(EAsyncExecution::ThreadPool, [WeakChar, InJsonPayload, OnComplete]()
+    {
+        FPlayerPersistenceSnapshot Snapshot;
+        const bool bParsed = ParseSnapshotFromJsonString(InJsonPayload, Snapshot);
+
+        // 2. Dispatch component hydration back onto the GameThread
+        Async(EAsyncExecution::TaskGraphMainThread, [WeakChar, Snapshot = MoveTemp(Snapshot), bParsed, OnComplete]() mutable
+        {
+            bool bApplied = false;
+            if (bParsed && WeakChar.IsValid())
+            {
+                bApplied = ApplySnapshotToPlayerCharacter(WeakChar.Get(), Snapshot);
+            }
+            if (OnComplete)
+            {
+                OnComplete(bApplied);
+            }
+        });
+    });
+}
+
+void UDynamicDataSerializer::DeserializeMovementStatConfig(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FMovementStatConfig& OutConfig)
+{
+    if (!InObject.IsValid() || !InObject->HasField(FieldName)) return;
+    TSharedPtr<FJsonObject> StatObj = InObject->GetObjectField(FieldName);
+    if (!StatObj.IsValid()) return;
+
+    OutConfig.BaseValue = StatObj->HasField(TEXT("BaseValue")) ? static_cast<float>(StatObj->GetNumberField(TEXT("BaseValue"))) : 0.0f;
+    DeserializeMapWrapper(StatObj, TEXT("AttributeScalars"), OutConfig.AttributeScalars);
 }

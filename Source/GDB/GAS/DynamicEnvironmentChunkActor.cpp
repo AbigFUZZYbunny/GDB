@@ -8,7 +8,11 @@ ADynamicEnvironmentChunkActor::ADynamicEnvironmentChunkActor()
     PrimaryActorTick.bCanEverTick = false;
     bReplicates = true;
     bAlwaysRelevant = false;
-    NetPriority = 1.5f;
+    NetPriority = 1.0f;
+
+    // Use official Unreal Engine 5.8 setter API for network update throttling
+    SetNetUpdateFrequency(1.0f);
+    SetMinNetUpdateFrequency(0.5f);
 
     ChunkCells.OwningChunkActor = this;
 }
@@ -46,12 +50,9 @@ void ADynamicEnvironmentChunkActor::GetLifetimeReplicatedProps(TArray<FLifetimeP
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-    // Optimization A: Replicate static coordinate configuration once on spawn
     DOREPLIFETIME_CONDITION(ADynamicEnvironmentChunkActor, ChunkCoord, COND_InitialOnly);
     DOREPLIFETIME_CONDITION(ADynamicEnvironmentChunkActor, ChunkDimX, COND_InitialOnly);
     DOREPLIFETIME_CONDITION(ADynamicEnvironmentChunkActor, ChunkDimY, COND_InitialOnly);
-
-    // Cells update and replicate dynamically via Net Delta Serialize
     DOREPLIFETIME(ADynamicEnvironmentChunkActor, ChunkCells);
 }
 

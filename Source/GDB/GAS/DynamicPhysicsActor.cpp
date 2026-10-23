@@ -1,25 +1,32 @@
 ﻿// DynamicPhysicsActor.cpp
 #include "DynamicPhysicsActor.h"
-#include "DynamicGameState.h"
+#include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicGASManagerComponent.h"
+#include "DynamicForceComponent.h"
 #include "DynamicInteractableComponent.h"
 #include "DynamicContainerComponent.h"
-#include "DynamicForceComponent.h"
-#include "AbilitySystemComponent.h"
-#include "Components/StaticMeshComponent.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "DynamicGameplayAbility.h"
+#include "DynamicGameState.h"
 #include "Net/UnrealNetwork.h"
 
-ADynamicPhysicsActor::ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+ADynamicPhysicsActor::ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer)
 {
-    PrimaryActorTick.bCanEverTick = false;
     bReplicates = true;
-
-    StaticMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticMeshComponent"));
-    RootComponent = StaticMeshComponent;
+    SetReplicateMovement(true);
 
     SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
-    SkeletalMeshComponent->SetupAttachment(RootComponent);
+    RootComponent = SkeletalMeshComponent;
+    SkeletalMeshComponent->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+    SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    SkeletalMeshComponent->SetNotifyRigidBodyCollision(true);
+    SkeletalMeshComponent->bMultiBodyOverlap = true;
+
+    StaticMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticMeshComponent"));
+    StaticMeshComponent->SetupAttachment(RootComponent);
+    StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    StaticMeshComponent->SetHiddenInGame(true);
 
     PhysicsControlComponent = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControlComponent"));
     ForceComponent = CreateDefaultSubobject<UDynamicForceComponent>(TEXT("ForceComponent"));
@@ -27,31 +34,68 @@ ADynamicPhysicsActor::ADynamicPhysicsActor(const FObjectInitializer& ObjectIniti
 
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
-    AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
+    AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
+    DynamicGASManager = CreateDefaultSubobject<UDynamicGASManagerComponent>(TEXT("DynamicGASManager"));
     AttributeSet = CreateDefaultSubobject<UDynamicAttributeSet>(TEXT("DynamicAttributeSet"));
     InteractableComponent = CreateDefaultSubobject<UDynamicInteractableComponent>(TEXT("InteractableComponent"));
     ContainerComponent = CreateDefaultSubobject<UDynamicContainerComponent>(TEXT("ContainerComponent"));
-    ContainerComponent->SetIsReplicated(true);
+}
+
+UAbilitySystemComponent* ADynamicPhysicsActor::GetAbilitySystemComponent() const
+{
+    return AbilitySystemComponent;
+}
+
+UPrimitiveComponent* ADynamicPhysicsActor::GetActivePhysicsPrimitive() const
+{
+    if (SkeletalMeshComponent && !SkeletalMeshComponent->bHiddenInGame && SkeletalMeshComponent->GetSkeletalMeshAsset() != nullptr)
+    {
+        return SkeletalMeshComponent;
+    }
+    if (StaticMeshComponent && !StaticMeshComponent->bHiddenInGame && StaticMeshComponent->GetStaticMesh() != nullptr)
+    {
+        return StaticMeshComponent;
+    }
+    return SkeletalMeshComponent;
+}
+
+void ADynamicPhysicsActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME(ADynamicPhysicsActor, ActorArchetypeTag);
+    DOREPLIFETIME(ADynamicPhysicsActor, bIsActiveInWorld);
 }
 
 void ADynamicPhysicsActor::BeginPlay()
 {
     Super::BeginPlay();
 
-    if (HasAuthority() && StaticMeshComponent)
-    {
-        StaticMeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicPhysicsActor::OnServerPrimitiveHit);
-    }
+    if (AbilitySystemComponent) AbilitySystemComponent->InitAbilityActorInfo(this, this);
 
-    if (HasAuthority() && ActorArchetypeTag.IsValid())
+    if (HasAuthority())
     {
-        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        if (SkeletalMeshComponent) SkeletalMeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicPhysicsActor::OnServerPrimitiveHit);
+        if (StaticMeshComponent) StaticMeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicPhysicsActor::OnServerPrimitiveHit);
+
+        if (ActorArchetypeTag.IsValid() && !bAttributesInitializedOnServer)
         {
-            FGameplayTagContainer RoleTags;
-            RoleTags.AddTag(ActorArchetypeTag);
-            GS->RegisterSpatialRoleActor(this, RoleTags);
+            InitializeFromArchetype(ActorArchetypeTag);
         }
+        else if (ActorArchetypeTag.IsValid())
+        {
+            if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+            {
+                FGameplayTagContainer RoleTags;
+                RoleTags.AddTag(ActorArchetypeTag);
+                GS->RegisterSpatialRoleActor(this, RoleTags);
+            }
+        }
+    }
+    else if (ActorArchetypeTag.IsValid())
+    {
+        OnRep_ActorArchetypeTag();
     }
 }
 
@@ -68,30 +112,19 @@ void ADynamicPhysicsActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-void ADynamicPhysicsActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-    DOREPLIFETIME(ADynamicPhysicsActor, ActorArchetypeTag);
-    DOREPLIFETIME(ADynamicPhysicsActor, bIsActiveInWorld);
-}
-
-UAbilitySystemComponent* ADynamicPhysicsActor::GetAbilitySystemComponent() const
-{
-    return AbilitySystemComponent;
-}
-
-UPrimitiveComponent* ADynamicPhysicsActor::GetActivePhysicsPrimitive() const
-{
-    if (SkeletalMeshComponent && !SkeletalMeshComponent->bHiddenInGame)
-    {
-        return SkeletalMeshComponent;
-    }
-    return StaticMeshComponent;
-}
-
 UDynamicContainerComponent* ADynamicPhysicsActor::GetContainerComponent(FGameplayTag ContainerIdentifierTag) const
 {
+    if (!ContainerIdentifierTag.IsValid()) return ContainerComponent;
+
+    TArray<UActorComponent*> Comps;
+    GetComponents(UDynamicContainerComponent::StaticClass(), Comps);
+    for (UActorComponent* Comp : Comps)
+    {
+        if (UDynamicContainerComponent* Container = Cast<UDynamicContainerComponent>(Comp))
+        {
+            if (Container->ContainerConfig.ContainerIdentifierTag == ContainerIdentifierTag) return Container;
+        }
+    }
     return ContainerComponent;
 }
 
@@ -100,41 +133,78 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
     if (!InArchetypeTag.IsValid()) return;
     ActorArchetypeTag = InArchetypeTag;
 
-    if (HasAuthority())
-    {
-        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
-        {
-            FGameplayTagContainer RoleTags;
-            RoleTags.AddTag(ActorArchetypeTag);
-            GS->RegisterSpatialRoleActor(this, RoleTags);
-        }
-    }
-
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
 
-    const FDynamicPhysicsActorDef* ActorDef = GS->MasterPhysicsActorRegistry.Find(ActorArchetypeTag);
-    if (!ActorDef) return;
+    const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ActorArchetypeTag);
+    if (!Def) return;
 
-    ApplyArchetypePresentationAndTopology(*ActorDef);
+    // Fast-register into GameState's spatial index
+    if (HasAuthority())
+    {
+        FGameplayTagContainer RoleTags;
+        RoleTags.AddTag(ActorArchetypeTag);
+        RoleTags.AppendTags(Def->InitialInteractableStateTags);
+        GS->RegisterSpatialRoleActor(this, RoleTags);
+    }
+
+    bIsActiveInWorld = true;
+    SetActorHiddenInGame(false);
+    SetActorEnableCollision(true);
+    ApplyArchetypePresentationAndTopology(*Def);
+
+    if (!HasAuthority()) return;
 
     if (AttributeSet)
     {
-        for (const FTagFloatPair& AttrPair : ActorDef->DefaultGlobalAttributes.ReplicatedEntries)
+        for (const FTagFloatPair& Pair : Def->DefaultGlobalAttributes.ReplicatedEntries)
         {
-            if (AttrPair.KeyTag.IsValid())
+            if (Pair.KeyTag.IsValid()) AttributeSet->SetDynamicAttributeValue(Pair.KeyTag, Pair.Value, 0);
+        }
+        for (const auto& Pair : LocalLimbLookupMap)
+        {
+            if (Pair.Value)
             {
-                AttributeSet->SetDynamicAttributeValue(AttrPair.KeyTag, AttrPair.Value, 0);
+                for (const FTagFloatPair& AttrPair : Pair.Value->DefaultLimbAttributes.ReplicatedEntries)
+                {
+                    if (AttrPair.KeyTag.IsValid())
+                    {
+                        AttributeSet->SetDynamicAttributeValue(AttrPair.KeyTag, AttrPair.Value, Pair.Key);
+                    }
+                }
             }
+        }
+        bAttributesInitializedOnServer = true;
+    }
+
+    if (InteractableComponent)
+    {
+        InteractableComponent->KinematicTargetPoints = Def->KinematicTargetPoints;
+        InteractableComponent->InvalidateAllKinematicCaches();
+        for (const FGameplayTag& StateTag : Def->InitialInteractableStateTags)
+        {
+            InteractableComponent->AddStateTag(StateTag);
         }
     }
 
-    if (ContainerComponent && ActorDef->Containers.Num() > 0)
+    bool bFirstContainer = true;
+    for (const FDynamicContainerDef& ContainerDef : Def->Containers)
     {
-        ContainerComponent->InitializeContainerFromDef(ActorDef->Containers[0]);
+        UDynamicContainerComponent* TargetContainer = nullptr;
+        if (bFirstContainer && ContainerComponent)
+        {
+            TargetContainer = ContainerComponent;
+            bFirstContainer = false;
+        }
+        else
+        {
+            TargetContainer = NewObject<UDynamicContainerComponent>(this);
+            TargetContainer->SetIsReplicated(true);
+            TargetContainer->RegisterComponent();
+            AddInstanceComponent(TargetContainer);
+        }
+        TargetContainer->InitializeContainerFromDef(ContainerDef);
     }
-
-    ForceNetUpdate();
 }
 
 void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def)
@@ -147,10 +217,7 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
         LocalLimbLookupMap.Add(Limb.LimbId, &Limb);
         for (const FPhysicsJointNodeConfig& Joint : Limb.JointChain)
         {
-            if (!Joint.BoneName.IsNone())
-            {
-                LocalBoneToLimbMap.Add(Joint.BoneName, Limb.LimbId);
-            }
+            if (!Joint.BoneName.IsNone()) LocalBoneToLimbMap.Add(Joint.BoneName, Limb.LimbId);
         }
     }
 
@@ -170,10 +237,7 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
             SkeletalMeshComponent->SetCollisionProfileName(Def.CollisionProfileName);
             SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
             SkeletalMeshComponent->SetSimulatePhysics(Def.bSimulatePhysicsOnSpawn);
-            if (Def.MassOverride > 0.0f)
-            {
-                SkeletalMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
-            }
+            if (Def.MassOverride > 0.0f) SkeletalMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
         }
         StaticMeshComponent->SetSimulatePhysics(false);
         StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -196,10 +260,7 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
             StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
             StaticMeshComponent->SetNotifyRigidBodyCollision(true);
             StaticMeshComponent->SetSimulatePhysics(Def.bSimulatePhysicsOnSpawn);
-            if (Def.MassOverride > 0.0f)
-            {
-                StaticMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
-            }
+            if (Def.MassOverride > 0.0f) StaticMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
         }
         SkeletalMeshComponent->SetSimulatePhysics(false);
         SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -207,29 +268,157 @@ void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicP
     }
 }
 
-const FPhysicsLimbConfig* ADynamicPhysicsActor::ResolveActorLimbConfig(uint8 LimbId) const
+void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerSlotItem& Snapshot)
 {
-    if (const FPhysicsLimbConfig* const* LocalLimbPtr = LocalLimbLookupMap.Find(LimbId))
+    if (!HasAuthority()) return;
+
+    if (AttributeSet)
     {
-        return *LocalLimbPtr;
+        for (const FDynamicAttributeItem& SavedAttr : Snapshot.SavedAttributeState)
+        {
+            if (SavedAttr.AttributeTag.IsValid()) AttributeSet->SetDynamicAttributeValue(SavedAttr.AttributeTag, SavedAttr.Value, SavedAttr.LimbId);
+        }
     }
+
+    if (InteractableComponent && Snapshot.SavedInteractableStates.Num() > 0)
+    {
+        const FGameplayTagContainer OldTags = InteractableComponent->GetCurrentStateTags();
+        for (const FGameplayTag& OldTag : OldTags)
+        {
+            InteractableComponent->RemoveStateTag(OldTag);
+        }
+        for (const FGameplayTag& SavedTag : Snapshot.SavedInteractableStates)
+        {
+            InteractableComponent->AddStateTag(SavedTag);
+        }
+    }
+}
+
+void ADynamicPhysicsActor::ResetToDefaultPoolState()
+{
+    if (HasAuthority())
+    {
+        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        {
+            GS->UnregisterSpatialRoleActor(this);
+        }
+    }
+
+    if (AbilitySystemComponent)
+    {
+        AbilitySystemComponent->CancelAllAbilities();
+        FGameplayEffectQuery AllEffectsQuery;
+        AbilitySystemComponent->RemoveActiveEffects(AllEffectsQuery);
+        AbilitySystemComponent->RemoveActiveGameplayEffectBySourceEffect(nullptr, nullptr);
+        FGameplayTagContainer AllTags;
+        AbilitySystemComponent->GetOwnedGameplayTags(AllTags);
+        AbilitySystemComponent->RemoveLooseGameplayTags(AllTags);
+        AbilitySystemComponent->ClearAllAbilities();
+        AbilitySystemComponent->RemoveAllGameplayCues();
+    }
+
+    if (AttributeSet)
+    {
+        AttributeSet->FastAttributes.Items.Empty();
+        AttributeSet->FastAttributes.MarkArrayDirty();
+        AttributeSet->OnRep_FastAttributes();
+    }
+
+    if (ForceComponent)
+    {
+        ForceComponent->ConsumePendingImpulse();
+    }
+
+    if (SkeletalMeshComponent)
+    {
+        SkeletalMeshComponent->SetSimulatePhysics(false);
+        SkeletalMeshComponent->SetPhysicsLinearVelocity(FVector::ZeroVector);
+        SkeletalMeshComponent->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+        SkeletalMeshComponent->SetRelativeLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
+        SkeletalMeshComponent->EmptyOverrideMaterials();
+    }
+
+    if (StaticMeshComponent)
+    {
+        StaticMeshComponent->SetSimulatePhysics(false);
+        StaticMeshComponent->SetPhysicsLinearVelocity(FVector::ZeroVector);
+        StaticMeshComponent->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+        StaticMeshComponent->SetRelativeLocationAndRotation(FVector::ZeroVector, FRotator::ZeroRotator);
+        StaticMeshComponent->EmptyOverrideMaterials();
+    }
+
+    SetActorLocationAndRotation(FVector(0.0f, 0.0f, -50000.0f), FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
+
+    if (ContainerComponent)
+    {
+        ContainerComponent->ClearContainerForPooling();
+    }
+
+    TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
+    for (UActorComponent* Comp : InstanceComps)
+    {
+        if (UDynamicContainerComponent* ExtraContainer = Cast<UDynamicContainerComponent>(Comp))
+        {
+            RemoveInstanceComponent(ExtraContainer);
+            ExtraContainer->DestroyComponent();
+        }
+    }
+
+    if (InteractableComponent)
+    {
+        InteractableComponent->ResetForPooling();
+    }
+
+    bAttributesInitializedOnServer = false;
+    LocalLimbLookupMap.Empty();
+    LocalBoneToLimbMap.Empty();
+    ServerLastLimbHitTimestamp.Empty();
+}
+
+void ADynamicPhysicsActor::DeactivateAndReturnToPool()
+{
+    bIsActiveInWorld = false;
+    ResetToDefaultPoolState();
+    SetActorEnableCollision(false);
+    SetActorHiddenInGame(true);
+
+    if (HasAuthority())
+    {
+        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        {
+            GS->ReleasePhysicsActorToPool(this);
+        }
+    }
+}
+
+void ADynamicPhysicsActor::OnRep_ActorArchetypeTag()
+{
     if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
     {
-        return GS->GetLimbData(LimbId);
+        if (const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ActorArchetypeTag))
+        {
+            ApplyArchetypePresentationAndTopology(*Def);
+        }
     }
+}
+
+void ADynamicPhysicsActor::OnRep_IsActiveInWorld()
+{
+    SetActorHiddenInGame(!bIsActiveInWorld);
+    SetActorEnableCollision(bIsActiveInWorld);
+}
+
+const FPhysicsLimbConfig* ADynamicPhysicsActor::ResolveActorLimbConfig(uint8 LimbId) const
+{
+    if (const FPhysicsLimbConfig* const* LocalLimbPtr = LocalLimbLookupMap.Find(LimbId)) return *LocalLimbPtr;
+    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr) return GS->GetLimbData(LimbId);
     return nullptr;
 }
 
 uint8 ADynamicPhysicsActor::ResolveLimbIdForBone(const FName& BoneName) const
 {
-    if (const uint8* LocalId = LocalBoneToLimbMap.Find(BoneName))
-    {
-        return *LocalId;
-    }
-    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
-    {
-        return GS->GetLimbIdForBone(BoneName);
-    }
+    if (const uint8* LocalId = LocalBoneToLimbMap.Find(BoneName)) return *LocalId;
+    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr) return GS->GetLimbIdForBone(BoneName);
     return 1;
 }
 
@@ -240,8 +429,7 @@ void ADynamicPhysicsActor::OnServerPrimitiveHit(UPrimitiveComponent* HitComponen
     const float ImpulseMagnitude = NormalImpulse.Size();
     if (ImpulseMagnitude <= KINDA_SMALL_NUMBER) return;
 
-    const FName HitBoneName = (Hit.MyBoneName != NAME_None) ? Hit.MyBoneName : Hit.BoneName;
-    ServerProcessAuthoritativeLimbHit(HitBoneName, ImpulseMagnitude, 1.0f, Hit.ImpactPoint, Hit.ImpactNormal, OtherActor);
+    ServerProcessAuthoritativeLimbHit(Hit.MyBoneName != NAME_None ? Hit.MyBoneName : Hit.BoneName, ImpulseMagnitude, 1.0f, Hit.ImpactPoint, Hit.ImpactNormal, OtherActor);
 }
 
 void ADynamicPhysicsActor::ServerProcessAuthoritativeLimbHit(const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor)
@@ -257,10 +445,7 @@ void ADynamicPhysicsActor::ServerProcessAuthoritativeLimbHit(const FName& HitBon
     const uint8 ResolvedLimbId = ResolveLimbIdForBone(HitBoneName);
     const float ClampedImpulse = FMath::Min(RawImpulseMagnitude, Settings.MaxImpulseCap);
 
-    if (ForceComponent)
-    {
-        ForceComponent->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, ClampedImpulse, HitLocation, HitNormal);
-    }
+    if (ForceComponent) ForceComponent->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, ClampedImpulse, HitLocation, HitNormal);
 }
 
 void ADynamicPhysicsActor::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren)
@@ -268,54 +453,5 @@ void ADynamicPhysicsActor::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCasc
 }
 
 void ADynamicPhysicsActor::ApplyJointMotorMultipliers_Implementation(FName BoneName, uint8 JointChainIndex, float AngularSpringMultiplier, float LinearSpringMultiplier, float DampingMultiplier)
-{
-}
-
-void ADynamicPhysicsActor::ResetToDefaultPoolState()
-{
-    if (HasAuthority())
-    {
-        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
-        {
-            GS->UnregisterSpatialRoleActor(this);
-        }
-    }
-
-    if (UPrimitiveComponent* Prim = GetActivePhysicsPrimitive())
-    {
-        Prim->SetSimulatePhysics(false);
-        Prim->SetPhysicsLinearVelocity(FVector::ZeroVector);
-        Prim->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
-    }
-
-    SetActorHiddenInGame(true);
-    SetActorEnableCollision(false);
-    SetActorTickEnabled(false);
-
-    if (ContainerComponent)
-    {
-        ContainerComponent->ClearContainerForPooling();
-    }
-}
-
-void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerSlotItem& Snapshot)
-{
-}
-
-void ADynamicPhysicsActor::DeactivateAndReturnToPool()
-{
-    if (!HasAuthority()) return;
-
-    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
-    {
-        GS->ReleasePhysicsActorToPool(this);
-    }
-}
-
-void ADynamicPhysicsActor::OnRep_ActorArchetypeTag()
-{
-}
-
-void ADynamicPhysicsActor::OnRep_IsActiveInWorld()
 {
 }

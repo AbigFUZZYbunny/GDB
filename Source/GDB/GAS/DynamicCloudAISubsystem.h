@@ -37,7 +37,6 @@ struct FCloudAIDirectiveResponse
     TArray<FCloudAICommand> Commands;
 };
 
-// Standard C++ Delegate supporting BindLambda
 DECLARE_DELEGATE_TwoParams(FOnCloudAIDirectiveReceived, bool, const FCloudAIDirectiveResponse&);
 DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
 
@@ -78,10 +77,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "Cloud AI")
     static FString SanitizeMarkdownJson(const FString& RawResponse);
 
-    TSharedPtr<FJsonObject> GenerateCloudAIJsonSchema() const;
+    TSharedPtr<FJsonObject> GenerateCloudAIJsonSchema();
 
     void ExecuteRuleBasedFallback(ADynamicCharacter* Character, FCloudAIDirectiveResponse& OutFallbackResponse);
 
 private:
     TMap<FGuid, FOnCloudAIResponseDirectCallback> ActiveDirectCallbacks;
+
+    // Cached pre-built JSON schema avoiding tag reflection heap allocations per call
+    TSharedPtr<FJsonObject> CachedCloudAISchema;
+    void BuildAndCacheJsonSchema();
 };

@@ -17,6 +17,7 @@
 #include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
 #include "Engine/OverlapResult.h"
+#include "DynamicPhysicsActor.h"
 #include "Net/UnrealNetwork.h"
 
 ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -24,7 +25,7 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     bReplicates = true;
     SetReplicateMovement(false);
     bIsRagdolling = false;
-    bIsHangingPhysical = false;
+    //bIsHangingPhysical = false;
     bCurrentFootingActive = false;
 
     CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
@@ -134,6 +135,7 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
     {
         PreviousVelocity = GetVelocity();
 
+        // 1. Snapshot generation
         if (CapsuleComponent && MeshComponent)
         {
             const double CurrentTime = GetWorld()->GetTimeSeconds();
@@ -156,6 +158,7 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
             HistoryBufferCount = FMath::Min(HistoryBufferCount + 1, HistoryRingBufferSize);
         }
 
+        // 2. Evaluate Dynamic Multi-Attribute Scalars
         if (AttributeSet && ActiveMovementStateTag.IsValid())
         {
             if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
@@ -189,14 +192,17 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
             }
         }
 
+        // 3. Evaluate Climbing and Hanging States
         static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
         static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
+        
         if (ActiveMovementStateTag.MatchesTag(HangTag) || ActiveMovementStateTag.MatchesTag(ClimbTag))
         {
-            UpdateClimbingFootingState();
+            UpdateAutomatedClimbingState(DeltaSeconds);
         }
     }
 
+    // 4. Smooth Capsule Stance Update
     if (CapsuleComponent && CachedTargetCapsuleHalfHeight > 0.0f)
     {
         const float CurrentHeight = CapsuleComponent->GetUnscaledCapsuleHalfHeight();
@@ -204,6 +210,383 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
         {
             const float NewHeight = FMath::FInterpTo(CurrentHeight, CachedTargetCapsuleHalfHeight, DeltaSeconds, 12.0f);
             CapsuleComponent->SetCapsuleHalfHeight(NewHeight, true);
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Mass & Climbing Systems
+// ----------------------------------------------------------------------------
+
+float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
+{
+    float TotalMassKg = 80.0f; // Default baseline character body mass
+
+    if (const UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        for (const FDynamicEquipmentSlotItem& Slot : EquipComp->ReplicatedEquipmentSlots.Items)
+        {
+            if (Slot.EquippedItemArchetypeTag.IsValid())
+            {
+                for (const FDynamicAttributeItem& Attr : Slot.SavedItemAttributeState)
+                {
+                    static const FGameplayTag WeightTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Object.Weight"), false);
+                    if (Attr.AttributeTag == WeightTag) TotalMassKg += Attr.Value;
+                }
+            }
+        }
+    }
+
+    if (const UDynamicContainerComponent* Container = FindComponentByClass<UDynamicContainerComponent>())
+    {
+        TotalMassKg += Container->GetCurrentTotalWeight();
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
+        {
+            ADynamicPhysicsActor* PhysActor = *It;
+            if (PhysActor && !PhysActor->IsPendingKillPending())
+            {
+                if (PhysActor->GetAttachParentActor() == this || FVector::DistSquared(PhysActor->GetActorLocation(), GetActorLocation()) <= FMath::Square(300.0f))
+                {
+                    if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                    {
+                        TotalMassKg += Prim->GetMass();
+                    }
+                }
+            }
+        }
+    }
+    return TotalMassKg;
+}
+
+float ADynamicCharacter::GetEffectiveClimbingLoad() const
+{
+    const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
+    return FMath::Max(0.5f, TotalMass / 80.0f); // 80kg is the 1.0x baseline
+}
+
+void ADynamicCharacter::UpdateAutomatedClimbingState(float DeltaSeconds)
+{
+    if (!HasAuthority() || !CapsuleComponent || !AttributeSet || !PhysicsControlComponent) return;
+
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS) return;
+
+    const FPhysicsCalculationSettings& Settings = GS->GetCalculationSettings();
+    const float EffectiveLoad = GetEffectiveClimbingLoad();
+    
+    // 1. Drain Grip/Stamina based on load
+    static const FGameplayTag StaminaTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.Stamina"), false);
+    if (StaminaTag.IsValid())
+    {
+        float CurStamina = AttributeSet->GetDynamicAttributeValue(StaminaTag, 0);
+        const float BaseDrain = bCurrentFootingActive ? 5.0f : 15.0f;
+        CurStamina -= (BaseDrain * EffectiveLoad * DeltaSeconds);
+
+        if (CurStamina <= 0.0f)
+        {
+            AttributeSet->SetDynamicAttributeValue(StaminaTag, 0.0f, 0);
+            StartRagdoll();
+            return;
+        }
+        AttributeSet->SetDynamicAttributeValue(StaminaTag, CurStamina, 0);
+    }
+
+    // 2. Dynamic Traversal Detection Bounds (Speed & Attribute Modifiers)
+    float RadiusBonus = 0.0f;
+    for (const auto& Pair : Settings.SweepRadiusAttributeScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid()) RadiusBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+    }
+
+    float DistBonus = 0.0f;
+    for (const auto& Pair : Settings.SweepDistanceAttributeScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid()) DistBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+    }
+
+    const float DynamicSweepRadius = FMath::Max(10.0f, Settings.BaseHoldSweepRadius + RadiusBonus);
+    const float CurrentSpeed = PreviousVelocity.Size();
+    const float DynamicSweepDist = FMath::Max(20.0f, Settings.BaseHoldSweepDistance + DistBonus + (CurrentSpeed * Settings.VelocityLookaheadScalar));
+
+    // 3. Automated Hold Sweeps for limbs
+    const FVector BaseLoc = GetActorLocation();
+    const FVector Forward = GetActorForwardVector();
+    
+    auto TraceForHold = [&](const FVector& StartLoc, const FName& TargetTagStr) -> FTransform
+    {
+        TArray<FHitResult> Hits;
+        FCollisionShape Sphere = FCollisionShape::MakeSphere(DynamicSweepRadius);
+        FCollisionQueryParams Params(SCENE_QUERY_STAT(HoldSweep), false, this);
+        World->SweepMultiByChannel(Hits, StartLoc, StartLoc + (Forward * DynamicSweepDist), FQuat::Identity, ECC_Visibility, Sphere, Params);
+
+        for (const FHitResult& Hit : Hits)
+        {
+            if (AActor* HitActor = Hit.GetActor())
+            {
+                if (UDynamicInteractableComponent* Interactable = HitActor->FindComponentByClass<UDynamicInteractableComponent>())
+                {
+                    FTransform HoldTransform;
+                    USceneComponent* DummyComp;
+                    FGameplayTag HoldTag = FGameplayTag::RequestGameplayTag(TargetTagStr, false);
+                    if (HoldTag.IsValid() && Interactable->ResolveKinematicTargetTransform(HoldTag, HoldTransform, DummyComp))
+                    {
+                        return HoldTransform;
+                    }
+                }
+            }
+        }
+        return FTransform::Identity;
+    };
+
+    FTransform RHandHold = TraceForHold(BaseLoc + FVector(30.0f, 30.0f, 50.0f), FName("KinematicTarget.Handhold.Right"));
+    if (!RHandHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("hand_r"), RHandHold);
+
+    FTransform LHandHold = TraceForHold(BaseLoc + FVector(30.0f, -30.0f, 50.0f), FName("KinematicTarget.Handhold.Left"));
+    if (!LHandHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("hand_l"), LHandHold);
+
+    FTransform RFootHold = TraceForHold(BaseLoc + FVector(30.0f, 20.0f, -50.0f), FName("KinematicTarget.Foothold.Right"));
+    FTransform LFootHold = TraceForHold(BaseLoc + FVector(30.0f, -20.0f, -50.0f), FName("KinematicTarget.Foothold.Left"));
+
+    bool bHasAnyFooting = !RFootHold.Equals(FTransform::Identity) || !LFootHold.Equals(FTransform::Identity);
+    if (bHasAnyFooting != bCurrentFootingActive)
+    {
+        bCurrentFootingActive = bHasAnyFooting;
+        ConfigureClimbingPhysics(true, bCurrentFootingActive);
+    }
+
+    if (!RFootHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("foot_r"), RFootHold);
+    if (!LFootHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("foot_l"), LFootHold);
+
+    for (const auto& Pair : ActiveLimbHolds)
+    {
+        const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *Pair.Key.ToString()));
+        PhysicsControlComponent->SetControlTargetPositionAndOrientation(
+            ControlName, 
+            Pair.Value.GetLocation(), 
+            Pair.Value.GetRotation().Rotator(), 
+            100.0f, 
+            true
+        );
+    }
+}
+
+void ADynamicCharacter::ConfigureClimbingPhysics(bool bEnableClimbing, bool bHasFooting)
+{
+    if (bIsClimbingPhysical == bEnableClimbing && bCurrentFootingActive == bHasFooting) return;
+    bIsClimbingPhysical = bEnableClimbing;
+    bCurrentFootingActive = bHasFooting;
+
+    if (!MeshComponent || !PhysicsControlComponent) return;
+
+    if (bEnableClimbing)
+    {
+        MeshComponent->SetSimulatePhysics(true);
+
+        // Hands firmly anchor to hold targets
+        static const TArray<FName> UpperBodyControls = { FName("Control_hand_r"), FName("Control_hand_l") };
+        for (const FName& Control : UpperBodyControls)
+        {
+            FPhysicsControlMultiplier Mult;
+            Mult.LinearStrengthMultiplier = FVector(5.0f);
+            Mult.AngularStrengthMultiplier = 5.0f;
+            Mult.LinearExtraDampingMultiplier = FVector(1.0f);
+            Mult.AngularExtraDampingMultiplier = 1.0f;
+            PhysicsControlComponent->SetControlMultiplier(Control, Mult);
+        }
+
+        // Spine and pelvis allow natural mass settling and swaying
+        static const TArray<FName> CoreControls = { FName("Control_pelvis"), FName("Control_spine_01") };
+        for (const FName& Control : CoreControls)
+        {
+            FPhysicsControlMultiplier SlackMult;
+            SlackMult.LinearStrengthMultiplier = bHasFooting ? FVector(0.8f) : FVector(0.0f);
+            SlackMult.AngularStrengthMultiplier = bHasFooting ? 0.8f : 0.05f;
+            SlackMult.LinearExtraDampingMultiplier = FVector(0.4f);
+            SlackMult.AngularExtraDampingMultiplier = 0.4f;
+            PhysicsControlComponent->SetControlMultiplier(Control, SlackMult);
+        }
+
+        // Feet: Planted rigidly if footing exists, otherwise physically dangle under gravity
+        static const TArray<FName> FootControls = { FName("Control_foot_r"), FName("Control_foot_l"), FName("Control_calf_r"), FName("Control_calf_l") };
+        for (const FName& Control : FootControls)
+        {
+            FPhysicsControlMultiplier FootMult;
+            if (bHasFooting) 
+            {
+                FootMult.LinearStrengthMultiplier = FVector(3.0f);
+                FootMult.AngularStrengthMultiplier = 3.0f;
+            } 
+            else 
+            {
+                FootMult.LinearStrengthMultiplier = FVector(0.0f);
+                FootMult.AngularStrengthMultiplier = 0.04f;
+            }
+            FootMult.LinearExtraDampingMultiplier = FVector(0.2f);
+            FootMult.AngularExtraDampingMultiplier = 0.2f;
+            PhysicsControlComponent->SetControlMultiplier(Control, FootMult);
+        }
+    }
+    else
+    {
+        ActiveLimbHolds.Empty();
+        RecalculateLimbPhysicsMotors(0, true);
+
+        if (!bIsRagdolling)
+        {
+            MeshComponent->SetSimulatePhysics(false);
+            MeshComponent->AttachToComponent(CapsuleComponent, FAttachmentTransformRules::KeepRelativeTransform);
+            MeshComponent->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, -88.0f), FRotator(0.0f, -90.0f, 0.0f));
+            MeshComponent->SetCollisionProfileName(TEXT("CharacterMesh"));
+        }
+    }
+}
+
+void ADynamicCharacter::HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag)
+{
+    static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
+    static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
+
+    if (NewStateTag.MatchesTag(HangTag))
+    {
+        ConfigureClimbingPhysics(true, false);
+    }
+    else if (NewStateTag.MatchesTag(ClimbTag))
+    {
+        ConfigureClimbingPhysics(true, true);
+    }
+    else if (OldStateTag.MatchesTag(HangTag) || OldStateTag.MatchesTag(ClimbTag))
+    {
+        ConfigureClimbingPhysics(false, false);
+    }
+}
+
+void ADynamicCharacter::OnServerCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+{
+    if (!HasAuthority() || !OtherActor || OtherActor == this) return;
+
+    const float ImpactSpeed = PreviousVelocity.Size();
+    if (ImpactSpeed <= 100.0f) return;
+
+    // Detect steep wall/cliff surfaces vs. hard ground landings
+    if (FMath::Abs(Hit.ImpactNormal.Z) < 0.35f)
+    {
+        static const FGameplayTag WallSlamTag = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.WallSlam"), false);
+        ProcessDynamicImpact(WallSlamTag, Hit, ImpactSpeed);
+    }
+    else if (Hit.ImpactNormal.Z >= 0.35f && PreviousVelocity.Z < -500.0f)
+    {
+        // High downward velocity on a floor surface
+        static const FGameplayTag HardLandingTag = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.FallLanding"), false);
+        ProcessDynamicImpact(HardLandingTag, Hit, FMath::Abs(PreviousVelocity.Z));
+    }
+}
+
+void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, const FHitResult& Hit, float ImpactVelocity)
+{
+    if (!HasAuthority() || !AttributeSet || !ImpactTypeTag.IsValid()) return;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    const FPhysicsCalculationSettings& Settings = GS->GetCalculationSettings();
+    const FDynamicImpactReactionRule* Rule = Settings.ImpactReactionRules.Find(ImpactTypeTag);
+    if (!Rule) return;
+
+    const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
+    const float MassFactor = 1.0f + ((TotalMass - 80.0f) * Rule->MassImpactMultiplier);
+
+    if (ImpactVelocity <= (Rule->BaseImpactVelocityThreshold / FMath::Max(1.0f, MassFactor))) return;
+
+    FName HitBoneName = Hit.MyBoneName;
+    if (HitBoneName == NAME_None && MeshComponent)
+    {
+        HitBoneName = MeshComponent->FindClosestBone(Hit.ImpactPoint);
+    }
+    if (HitBoneName == NAME_None) HitBoneName = FName("pelvis");
+
+    const uint8 ResolvedLimbId = GS->GetLimbIdForBone(HitBoneName);
+    const FPhysicsLimbConfig* LimbData = GS->GetLimbData(ResolvedLimbId);
+
+    // Dynamic Velocity Mitigation
+    float TotalVelocityDamping = 0.0f;
+    for (const auto& Pair : Rule->VelocityMitigationScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid())
+        {
+            const float GlobalVal = AttributeSet->GetDynamicAttributeValue(Pair.Key, 0);
+            const float LimbVal = (ResolvedLimbId > 0) ? AttributeSet->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) : 0.0f;
+            TotalVelocityDamping += (GlobalVal + LimbVal) * Pair.Value;
+        }
+    }
+
+    const float EffectiveVelocity = FMath::Max(0.0f, ImpactVelocity - TotalVelocityDamping);
+    const float ExcessVelocity = EffectiveVelocity - (Rule->BaseImpactVelocityThreshold / FMath::Max(1.0f, MassFactor));
+    if (ExcessVelocity <= 0.0f) return;
+
+    // Dynamic Damage Mitigation
+    float TotalDamageAbsorption = 0.0f;
+    for (const auto& Pair : Rule->DamageMitigationScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid())
+        {
+            const float GlobalVal = AttributeSet->GetDynamicAttributeValue(Pair.Key, 0);
+            const float LimbVal = (ResolvedLimbId > 0) ? AttributeSet->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) : 0.0f;
+            TotalDamageAbsorption += (GlobalVal + LimbVal) * Pair.Value;
+        }
+    }
+    
+    const float RawUnmitigatedDamage = ExcessVelocity * MassFactor;
+    const float MitigatedDamage = RawUnmitigatedDamage * FMath::Clamp(1.0f - TotalDamageAbsorption, 0.05f, 5.0f);
+
+    // Apply Modular Consequences (Health, Limb Health, Stamina, Status Tags)
+    for (const FDynamicImpactConsequence& Conseq : Rule->Consequences)
+    {
+        if (!Conseq.TargetAttributeTag.IsValid()) continue;
+        
+        const float AppliedDamage = MitigatedDamage * Conseq.DamageScalar;
+        const uint8 TargetLimb = Conseq.bIsLimbSpecific ? ResolvedLimbId : 0;
+        
+        const float CurVal = AttributeSet->GetDynamicAttributeValue(Conseq.TargetAttributeTag, TargetLimb);
+        AttributeSet->SetDynamicAttributeValue(Conseq.TargetAttributeTag, FMath::Max(0.0f, CurVal - AppliedDamage), TargetLimb);
+
+        // Apply Status Effects (e.g. Broken Leg, Concussion) if unmitigated force exceeded threshold
+        if (AppliedDamage >= Conseq.StatusEffectThreshold && AbilitySystemComponent)
+        {
+            for (const FGameplayTag& EffectTag : Conseq.StatusEffectsToApply)
+            {
+                AbilitySystemComponent->AddLooseGameplayTags(FGameplayTagContainer(EffectTag));
+            }
+        }
+    }
+
+    // Dynamic Stability/Grip Retention
+    float StabilityBonus = 0.0f;
+    for (const auto& Pair : Rule->StabilityRetentionScalars.LocalLookupMap)
+    {
+        if (Pair.Key.IsValid())
+        {
+            StabilityBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+            if (ResolvedLimbId > 0) StabilityBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) * Pair.Value;
+        }
+    }
+
+    const float EffectiveStabilityThreshold = (Rule->BaseStabilityLossThreshold + StabilityBonus) / MassFactor;
+
+    if (MitigatedDamage > EffectiveStabilityThreshold || (LimbData && MitigatedDamage >= LimbData->BreakRagdollThreshold))
+    {
+        if (Rule->bTriggersRagdollOnInstability)
+        {
+            StartRagdoll();
+            if (ForceComponent)
+            {
+                const FVector ReboundDirection = (Hit.ImpactNormal + FVector::UpVector * 0.35f).GetSafeNormal();
+                ForceComponent->QueueInstantMovementImpulse(ReboundDirection, MitigatedDamage * 25.0f);
+            }
         }
     }
 }
@@ -284,241 +667,6 @@ void ADynamicCharacter::RecoverFromRagdoll()
         MeshComponent->SetCollisionProfileName(TEXT("CharacterMesh"));
     }
     if (MoverComponent) MoverComponent->Activate(true);
-}
-
-void ADynamicCharacter::OnServerCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
-{
-    if (!HasAuthority() || !OtherActor || OtherActor == this) return;
-
-    // Detect steep wall/cliff surfaces
-    if (FMath::Abs(Hit.ImpactNormal.Z) < 0.35f)
-    {
-        const float ImpactSpeed = PreviousVelocity.Size();
-        if (ImpactSpeed > 0.0f)
-        {
-            ProcessWallImpact(Hit, ImpactSpeed);
-        }
-    }
-}
-
-void ADynamicCharacter::ProcessWallImpact(const FHitResult& Hit, float ImpactVelocity)
-{
-    if (!HasAuthority() || !AttributeSet) return;
-
-    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS) return;
-
-    const FPhysicsCalculationSettings& Settings = GS->GetCalculationSettings();
-    const FPhysicsImpactCalculationConfig& ImpactConfig = Settings.WallImpactSettings;
-
-    if (ImpactVelocity <= ImpactConfig.BaseImpactVelocityThreshold) return;
-
-    // 1. Identify specific collided bone using skeletal mesh geometry
-    FName HitBoneName = Hit.MyBoneName;
-    if (HitBoneName == NAME_None && MeshComponent)
-    {
-        HitBoneName = MeshComponent->FindClosestBone(Hit.ImpactPoint);
-    }
-    if (HitBoneName == NAME_None)
-    {
-        HitBoneName = FName("pelvis");
-    }
-
-    const uint8 ResolvedLimbId = GS->GetLimbIdForBone(HitBoneName);
-    const FPhysicsLimbConfig* LimbData = GS->GetLimbData(ResolvedLimbId);
-
-    // 2. Velocity Mitigation evaluated dynamically via JSON scalars
-    float TotalVelocityDamping = 0.0f;
-    for (const auto& Pair : ImpactConfig.VelocityMitigationScalars.LocalLookupMap)
-    {
-        if (Pair.Key.IsValid())
-        {
-            const float GlobalVal = AttributeSet->GetDynamicAttributeValue(Pair.Key, 0);
-            const float LimbVal = (ResolvedLimbId > 0) ? AttributeSet->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) : 0.0f;
-            TotalVelocityDamping += (GlobalVal + LimbVal) * Pair.Value;
-        }
-    }
-
-    const float EffectiveVelocity = FMath::Max(0.0f, ImpactVelocity - TotalVelocityDamping);
-    if (EffectiveVelocity <= ImpactConfig.BaseImpactVelocityThreshold) return;
-
-    // 3. Raw Damage Calculation & Per-Limb Damage Multiplier (e.g. Head = 3.0x, Feet = 0.4x)
-    const float ExcessVelocity = EffectiveVelocity - ImpactConfig.BaseImpactVelocityThreshold;
-    const float BaseDamage = ExcessVelocity * ImpactConfig.BaseImpactDamageScalar;
-    const float LimbMultiplier = LimbData ? LimbData->DamageMultiplier : 1.0f;
-    const float UnmitigatedDamage = BaseDamage * LimbMultiplier;
-
-    // 4. Damage Mitigation evaluated dynamically via JSON scalars (Toughness, Armor, Conditioning)
-    float TotalDamageAbsorption = 0.0f;
-    for (const auto& Pair : ImpactConfig.DamageMitigationScalars.LocalLookupMap)
-    {
-        if (Pair.Key.IsValid())
-        {
-            const float GlobalVal = AttributeSet->GetDynamicAttributeValue(Pair.Key, 0);
-            const float LimbVal = (ResolvedLimbId > 0) ? AttributeSet->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) : 0.0f;
-            TotalDamageAbsorption += (GlobalVal + LimbVal) * Pair.Value;
-        }
-    }
-
-    const float FinalDamage = UnmitigatedDamage * FMath::Clamp(1.0f - TotalDamageAbsorption, 0.05f, 5.0f);
-
-    // 5. Authoritatively apply damage to per-limb integrity and global health
-    if (LimbData && LimbData->IntegrityAttributeTag.IsValid())
-    {
-        const float CurLimbVal = AttributeSet->GetDynamicAttributeValue(LimbData->IntegrityAttributeTag, ResolvedLimbId);
-        AttributeSet->SetDynamicAttributeValue(LimbData->IntegrityAttributeTag, FMath::Max(0.0f, CurLimbVal - FinalDamage), ResolvedLimbId);
-    }
-
-    if (Settings.PrimaryDamageTargetAttributeTag.IsValid())
-    {
-        const float CurHealth = AttributeSet->GetDynamicAttributeValue(Settings.PrimaryDamageTargetAttributeTag, 0);
-        AttributeSet->SetDynamicAttributeValue(Settings.PrimaryDamageTargetAttributeTag, FMath::Max(0.0f, CurHealth - FinalDamage), 0);
-    }
-
-    // 6. Dynamic Grip Retention Evaluation (Resisting grip loss and falling)
-    float GripBonus = 0.0f;
-    const uint8 RightHandLimb = GS->GetLimbIdForBone(FName("hand_r"));
-    const uint8 LeftHandLimb = GS->GetLimbIdForBone(FName("hand_l"));
-
-    for (const auto& Pair : ImpactConfig.GripRetentionScalars.LocalLookupMap)
-    {
-        if (Pair.Key.IsValid())
-        {
-            GripBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
-            if (ResolvedLimbId > 0) GripBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) * Pair.Value;
-            if (RightHandLimb != ResolvedLimbId) GripBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, RightHandLimb) * Pair.Value;
-            if (LeftHandLimb != ResolvedLimbId) GripBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, LeftHandLimb) * Pair.Value;
-        }
-    }
-
-    const float EffectiveGripThreshold = ImpactConfig.BaseGripLossThreshold + GripBonus;
-
-    // Slam force breaks grip: Knockout or fall into full ragdoll
-    if (FinalDamage > EffectiveGripThreshold || (LimbData && FinalDamage >= LimbData->BreakRagdollThreshold))
-    {
-        StartRagdoll();
-        if (ForceComponent)
-        {
-            const FVector ReboundDirection = (Hit.ImpactNormal + FVector::UpVector * 0.35f).GetSafeNormal();
-            ForceComponent->QueueInstantMovementImpulse(ReboundDirection, FinalDamage * 25.0f);
-        }
-    }
-}
-
-void ADynamicCharacter::UpdateClimbingFootingState()
-{
-    if (!HasAuthority() || !CapsuleComponent) return;
-
-    // Trace from below pelvis against wall to determine if footholds/surface exist
-    const FVector TraceStart = GetActorLocation() + FVector(0.0f, 0.0f, -40.0f);
-    const FVector TraceEnd = TraceStart + (GetActorForwardVector() * 70.0f);
-
-    FHitResult WallHit;
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(ClimbingFootingTrace), false, this);
-    const bool bWallFound = GetWorld()->LineTraceSingleByChannel(WallHit, TraceStart, TraceEnd, ECC_WorldStatic, Params);
-
-    if (bWallFound != bCurrentFootingActive)
-    {
-        bCurrentFootingActive = bWallFound;
-        ConfigureHangingPhysics(true, bCurrentFootingActive);
-    }
-}
-
-void ADynamicCharacter::ConfigureHangingPhysics(bool bEnableHanging, bool bHasFooting)
-{
-    if (bIsHangingPhysical == bEnableHanging && bCurrentFootingActive == bHasFooting) return;
-    bIsHangingPhysical = bEnableHanging;
-    bCurrentFootingActive = bHasFooting;
-
-    if (!MeshComponent || !PhysicsControlComponent) return;
-
-    if (bEnableHanging)
-    {
-        MeshComponent->SetSimulatePhysics(true);
-
-        // Hands firmly anchor to handholds
-        static const TArray<FName> UpperBodyControls = { 
-            FName("Control_hand_r"), FName("Control_hand_l"), FName("Control_spine_03") 
-        };
-        for (const FName& Control : UpperBodyControls)
-        {
-            FPhysicsControlMultiplier Mult;
-            Mult.LinearStrengthMultiplier = FVector(2.0f);
-            Mult.AngularStrengthMultiplier = 2.0f;
-            Mult.LinearExtraDampingMultiplier = FVector(1.0f);
-            Mult.AngularExtraDampingMultiplier = 1.0f;
-            PhysicsControlComponent->SetControlMultiplier(Control, Mult);
-        }
-
-        // Spine and pelvis allow natural active ragdoll flexion
-        static const TArray<FName> CoreControls = { 
-            FName("Control_pelvis"), FName("Control_spine_01"), FName("Control_thigh_r"), FName("Control_thigh_l") 
-        };
-        for (const FName& Control : CoreControls)
-        {
-            FPhysicsControlMultiplier SlackMult;
-            SlackMult.LinearStrengthMultiplier = bHasFooting ? FVector(0.8f) : FVector(0.0f);
-            SlackMult.AngularStrengthMultiplier = bHasFooting ? 0.8f : 0.05f;
-            SlackMult.LinearExtraDampingMultiplier = FVector(0.4f);
-            SlackMult.AngularExtraDampingMultiplier = 0.4f;
-            PhysicsControlComponent->SetControlMultiplier(Control, SlackMult);
-        }
-
-        // Feet: Planted rigidly if footing exists, otherwise physically dangle and sway under Chaos gravity
-        static const TArray<FName> FootControls = { 
-            FName("Control_foot_r"), FName("Control_foot_l"), FName("Control_calf_r"), FName("Control_calf_l") 
-        };
-        for (const FName& Control : FootControls)
-        {
-            FPhysicsControlMultiplier FootMult;
-            if (bHasFooting) 
-            {
-                FootMult.LinearStrengthMultiplier = FVector(2.0f);
-                FootMult.AngularStrengthMultiplier = 2.0f;
-                FootMult.LinearExtraDampingMultiplier = FVector(1.0f);
-                FootMult.AngularExtraDampingMultiplier = 1.0f;
-            } 
-            else 
-            {
-                FootMult.LinearStrengthMultiplier = FVector(0.0f);
-                FootMult.AngularStrengthMultiplier = 0.04f;
-                FootMult.LinearExtraDampingMultiplier = FVector(0.2f);
-                FootMult.AngularExtraDampingMultiplier = 0.2f;
-            }
-            PhysicsControlComponent->SetControlMultiplier(Control, FootMult);
-        }
-    }
-    else
-    {
-        RecalculateLimbPhysicsMotors(0, true);
-
-        if (!bIsRagdolling)
-        {
-            MeshComponent->SetSimulatePhysics(false);
-            MeshComponent->AttachToComponent(CapsuleComponent, FAttachmentTransformRules::KeepRelativeTransform);
-            MeshComponent->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, -88.0f), FRotator(0.0f, -90.0f, 0.0f));
-            MeshComponent->SetCollisionProfileName(TEXT("CharacterMesh"));
-        }
-    }
-}
-
-void ADynamicCharacter::HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag)
-{
-    static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
-    static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
-
-    if (NewStateTag.MatchesTag(HangTag))
-    {
-        ConfigureHangingPhysics(true, false);
-    }
-    else if (NewStateTag.MatchesTag(ClimbTag))
-    {
-        ConfigureHangingPhysics(true, true);
-    }
-    else if (OldStateTag.MatchesTag(HangTag) || OldStateTag.MatchesTag(ClimbTag))
-    {
-        ConfigureHangingPhysics(false, false);
-    }
 }
 
 bool ADynamicCharacter::ServerSetMovementState(FGameplayTag NewStateTag)

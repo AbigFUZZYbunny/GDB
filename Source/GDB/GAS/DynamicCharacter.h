@@ -99,11 +99,18 @@ public:
     UFUNCTION()
     void OnRep_ActiveMovementState();
 
-    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
-    void ConfigureHangingPhysics(bool bEnableHanging, bool bHasFooting = false);
+    // --- Mass & Climbing Physics API ---
+    UFUNCTION(BlueprintPure, Category = "DynamicGAS|Physics|Mass")
+    float CalculateTotalInventoryAndEquipmentMass() const;
+
+    UFUNCTION(BlueprintPure, Category = "DynamicGAS|Physics|Mass")
+    float GetEffectiveClimbingLoad() const;
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
-    void UpdateClimbingFootingState();
+    void ConfigureClimbingPhysics(bool bEnableClimbing, bool bHasFooting = false);
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
+    void UpdateAutomatedClimbingState(float DeltaSeconds);
 
 protected:
     virtual void BeginPlay() override;
@@ -117,7 +124,8 @@ protected:
     void OnServerCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
     void HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag);
-    void ProcessWallImpact(const FHitResult& Hit, float ImpactVelocity);
+    
+    void ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, const FHitResult& Hit, float ImpactVelocity);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     UCapsuleComponent* CapsuleComponent;
@@ -165,8 +173,11 @@ private:
 
     bool bPreRewindSimulatingPhysics = false;
     bool bPreRewindMoverActive = false;
-    bool bIsHangingPhysical = false;
+    
+    // Climbing state trackers
+    bool bIsClimbingPhysical = false;
     bool bCurrentFootingActive = false;
+    TMap<FName, FTransform> ActiveLimbHolds;
     
     float CachedTargetCapsuleHalfHeight = 88.0f;
     FVector PreviousVelocity = FVector::ZeroVector;

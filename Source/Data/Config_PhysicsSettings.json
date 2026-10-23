@@ -1,34 +1,114 @@
 ﻿{
-  "_comment": "Authoritative Physics & Limb-Accurate Collision Impact Calculations",
+  "_comment": "Authoritative Physics, Scaled Collision Consequences, and Dynamic Climbing Footing",
   "CalculationSettings": {
     "PrimaryDamageTargetAttributeTag": "Attribute.Resource.Health",
     "MinImpulseThreshold": 300.0,
     "MaxImpulseCap": 15000.0,
     "ImpulseToDamageScalar": 0.01,
     "CooldownBetweenHitsPerLimb": 0.1,
-    "WallImpactSettings": {
-      "BaseImpactVelocityThreshold": 750.0,
-      "BaseImpactDamageScalar": 0.04,
-      "BaseGripLossThreshold": 30.0,
-      "VelocityMitigationScalars": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Stat.Agility", "Value": 8.0 },
-          { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 12.0 },
-          { "KeyTag": "Attribute.Limb.Flexibility", "Value": 5.0 }
+
+    "BaseHoldSweepRadius": 40.0,
+    "BaseHoldSweepDistance": 50.0,
+    "VelocityLookaheadScalar": 0.15,
+    "SweepRadiusAttributeScalars": {
+      "ReplicatedEntries": [
+        { "KeyTag": "Attribute.Stat.Perception", "Value": 0.5 },
+        { "KeyTag": "Attribute.Skill.Climbing", "Value": 0.2 }
+      ]
+    },
+    "SweepDistanceAttributeScalars": {
+      "ReplicatedEntries": [
+        { "KeyTag": "Attribute.Stat.Agility", "Value": 0.8 },
+        { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 1.2 }
+      ]
+    },
+
+    "ImpactReactionRules": {
+      "Impact.Type.WallSlam": {
+        "BaseImpactVelocityThreshold": 750.0,
+        "BaseStabilityLossThreshold": 35.0,
+        "MassImpactMultiplier": 0.015,
+        "bTriggersRagdollOnInstability": true,
+        "VelocityMitigationScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Agility", "Value": 8.0 },
+            { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 12.0 }
+          ]
+        },
+        "DamageMitigationScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.005 },
+            { "KeyTag": "Attribute.Limb.Armor", "Value": 0.01 }
+          ]
+        },
+        "StabilityRetentionScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Strength", "Value": 2.5 },
+            { "KeyTag": "Attribute.Skill.Climbing", "Value": 4.0 },
+            { "KeyTag": "Attribute.Limb.GripStrength", "Value": 3.0 }
+          ]
+        },
+        "Consequences": [
+          {
+            "TargetAttributeTag": "Attribute.Limb.Integrity",
+            "DamageScalar": 0.04,
+            "bIsLimbSpecific": true,
+            "StatusEffectThreshold": 60.0,
+            "StatusEffectsToApply": ["State.Debuff.Fracture"]
+          },
+          {
+            "TargetAttributeTag": "Attribute.Resource.Health",
+            "DamageScalar": 0.02,
+            "bIsLimbSpecific": false,
+            "StatusEffectThreshold": 100.0,
+            "StatusEffectsToApply": []
+          }
         ]
       },
-      "DamageMitigationScalars": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.005 },
-          { "KeyTag": "Attribute.Limb.Armor", "Value": 0.01 },
-          { "KeyTag": "Attribute.Limb.Conditioning", "Value": 0.003 }
-        ]
-      },
-      "GripRetentionScalars": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Attribute.Stat.Strength", "Value": 2.5 },
-          { "KeyTag": "Attribute.Skill.Climbing", "Value": 4.0 },
-          { "KeyTag": "Attribute.Limb.GripStrength", "Value": 3.0 }
+      "Impact.Type.FallLanding": {
+        "BaseImpactVelocityThreshold": 900.0,
+        "BaseStabilityLossThreshold": 40.0,
+        "MassImpactMultiplier": 0.02,
+        "bTriggersRagdollOnInstability": true,
+        "VelocityMitigationScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Agility", "Value": 10.0 },
+            { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 20.0 }
+          ]
+        },
+        "DamageMitigationScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.005 }
+          ]
+        },
+        "StabilityRetentionScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Balance", "Value": 5.0 },
+            { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 3.0 }
+          ]
+        },
+        "Consequences": [
+          {
+            "TargetAttributeTag": "Attribute.Limb.Integrity",
+            "DamageScalar": 0.08,
+            "bIsLimbSpecific": true,
+            "StatusEffectThreshold": 40.0,
+            "StatusEffectsToApply": ["State.Debuff.BrokenLeg", "State.Debuff.Crippled"]
+          },
+          {
+            "TargetAttributeTag": "Attribute.Resource.Health",
+            "DamageScalar": 0.04,
+            "bIsLimbSpecific": false,
+            "StatusEffectThreshold": 200.0,
+            "StatusEffectsToApply": ["State.Debuff.Concussion"]
+          },
+          {
+            "TargetAttributeTag": "Attribute.Resource.Stamina",
+            "DamageScalar": 0.1,
+            "bIsLimbSpecific": false,
+            "StatusEffectThreshold": 999.0,
+            "StatusEffectsToApply": []
+          }
         ]
       }
     }

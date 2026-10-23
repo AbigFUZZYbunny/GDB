@@ -327,12 +327,27 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             if (RootObject->HasField(TEXT("CalculationSettings")))
             {
                 TSharedPtr<FJsonObject> CalcObj = RootObject->GetObjectField(TEXT("CalculationSettings"));
-                if (CalcObj->HasField(TEXT("WallImpactSettings")))
+                
+                PhysicsConfig.CalculationSettings.BaseHoldSweepRadius = CalcObj->HasField(TEXT("BaseHoldSweepRadius")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepRadius"))) : 50.0f;
+                PhysicsConfig.CalculationSettings.BaseHoldSweepDistance = CalcObj->HasField(TEXT("BaseHoldSweepDistance")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepDistance"))) : 60.0f;
+                PhysicsConfig.CalculationSettings.VelocityLookaheadScalar = CalcObj->HasField(TEXT("VelocityLookaheadScalar")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("VelocityLookaheadScalar"))) : 0.15f;
+                
+                DeserializeMapWrapper(CalcObj, TEXT("SweepRadiusAttributeScalars"), PhysicsConfig.CalculationSettings.SweepRadiusAttributeScalars);
+                DeserializeMapWrapper(CalcObj, TEXT("SweepDistanceAttributeScalars"), PhysicsConfig.CalculationSettings.SweepDistanceAttributeScalars);
+
+                if (CalcObj->HasField(TEXT("ImpactReactionRules")))
                 {
-                    TSharedPtr<FJsonObject> ImpactObj = CalcObj->GetObjectField(TEXT("WallImpactSettings"));
-                    DeserializeMapWrapper(ImpactObj, TEXT("VelocityMitigationScalars"), PhysicsConfig.CalculationSettings.WallImpactSettings.VelocityMitigationScalars);
-                    DeserializeMapWrapper(ImpactObj, TEXT("DamageMitigationScalars"), PhysicsConfig.CalculationSettings.WallImpactSettings.DamageMitigationScalars);
-                    DeserializeMapWrapper(ImpactObj, TEXT("GripRetentionScalars"), PhysicsConfig.CalculationSettings.WallImpactSettings.GripRetentionScalars);
+                    TSharedPtr<FJsonObject> RulesMap = CalcObj->GetObjectField(TEXT("ImpactReactionRules"));
+                    for (auto& Pair : RulesMap->Values)
+                    {
+                        FGameplayTag ImpactTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+                        if (ImpactTag.IsValid() && Pair.Value.IsValid() && Pair.Value->AsObject().IsValid())
+                        {
+                            FDynamicImpactReactionRule Rule;
+                            DeserializeImpactReactionRule(Pair.Value->AsObject(), Rule);
+                            PhysicsConfig.CalculationSettings.ImpactReactionRules.Add(ImpactTag, Rule);
+                        }
+                    }
                 }
             }
 
@@ -344,14 +359,29 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
     {
         TSharedPtr<FJsonObject> CalcObj = RootObject->GetObjectField(TEXT("CalculationSettings"));
         FPhysicsCalculationSettings CalcSettings;
+        
         if (FJsonObjectConverter::JsonObjectToUStruct(CalcObj.ToSharedRef(), &CalcSettings, 0, 0))
         {
-            if (CalcObj->HasField(TEXT("WallImpactSettings")))
+            CalcSettings.BaseHoldSweepRadius = CalcObj->HasField(TEXT("BaseHoldSweepRadius")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepRadius"))) : 50.0f;
+            CalcSettings.BaseHoldSweepDistance = CalcObj->HasField(TEXT("BaseHoldSweepDistance")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepDistance"))) : 60.0f;
+            CalcSettings.VelocityLookaheadScalar = CalcObj->HasField(TEXT("VelocityLookaheadScalar")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("VelocityLookaheadScalar"))) : 0.15f;
+            
+            DeserializeMapWrapper(CalcObj, TEXT("SweepRadiusAttributeScalars"), CalcSettings.SweepRadiusAttributeScalars);
+            DeserializeMapWrapper(CalcObj, TEXT("SweepDistanceAttributeScalars"), CalcSettings.SweepDistanceAttributeScalars);
+
+            if (CalcObj->HasField(TEXT("ImpactReactionRules")))
             {
-                TSharedPtr<FJsonObject> ImpactObj = CalcObj->GetObjectField(TEXT("WallImpactSettings"));
-                DeserializeMapWrapper(ImpactObj, TEXT("VelocityMitigationScalars"), CalcSettings.WallImpactSettings.VelocityMitigationScalars);
-                DeserializeMapWrapper(ImpactObj, TEXT("DamageMitigationScalars"), CalcSettings.WallImpactSettings.DamageMitigationScalars);
-                DeserializeMapWrapper(ImpactObj, TEXT("GripRetentionScalars"), CalcSettings.WallImpactSettings.GripRetentionScalars);
+                TSharedPtr<FJsonObject> RulesMap = CalcObj->GetObjectField(TEXT("ImpactReactionRules"));
+                for (auto& Pair : RulesMap->Values)
+                {
+                    FGameplayTag ImpactTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+                    if (ImpactTag.IsValid() && Pair.Value.IsValid() && Pair.Value->AsObject().IsValid())
+                    {
+                        FDynamicImpactReactionRule Rule;
+                        DeserializeImpactReactionRule(Pair.Value->AsObject(), Rule);
+                        CalcSettings.ImpactReactionRules.Add(ImpactTag, Rule);
+                    }
+                }
             }
 
             OutStaging.bHasCalcSettings = true;
@@ -1366,4 +1396,43 @@ void UDynamicDataSerializer::DeserializeMovementStatConfig(const TSharedPtr<FJso
 
     OutConfig.BaseValue = StatObj->HasField(TEXT("BaseValue")) ? static_cast<float>(StatObj->GetNumberField(TEXT("BaseValue"))) : 0.0f;
     DeserializeMapWrapper(StatObj, TEXT("AttributeScalars"), OutConfig.AttributeScalars);
+}
+
+void UDynamicDataSerializer::DeserializeImpactReactionRule(const TSharedPtr<FJsonObject>& InObject, FDynamicImpactReactionRule& OutRule)
+{
+    if (!InObject.IsValid()) return;
+
+    OutRule.BaseImpactVelocityThreshold = InObject->HasField(TEXT("BaseImpactVelocityThreshold")) ? static_cast<float>(InObject->GetNumberField(TEXT("BaseImpactVelocityThreshold"))) : 750.0f;
+    OutRule.BaseStabilityLossThreshold = InObject->HasField(TEXT("BaseStabilityLossThreshold")) ? static_cast<float>(InObject->GetNumberField(TEXT("BaseStabilityLossThreshold"))) : 30.0f;
+    OutRule.MassImpactMultiplier = InObject->HasField(TEXT("MassImpactMultiplier")) ? static_cast<float>(InObject->GetNumberField(TEXT("MassImpactMultiplier"))) : 0.015f;
+    OutRule.bTriggersRagdollOnInstability = InObject->HasField(TEXT("bTriggersRagdollOnInstability")) ? InObject->GetBoolField(TEXT("bTriggersRagdollOnInstability")) : true;
+
+    DeserializeMapWrapper(InObject, TEXT("VelocityMitigationScalars"), OutRule.VelocityMitigationScalars);
+    DeserializeMapWrapper(InObject, TEXT("DamageMitigationScalars"), OutRule.DamageMitigationScalars);
+    DeserializeMapWrapper(InObject, TEXT("StabilityRetentionScalars"), OutRule.StabilityRetentionScalars);
+
+    if (InObject->HasField(TEXT("Consequences")))
+    {
+        for (const auto& ConseqVal : InObject->GetArrayField(TEXT("Consequences")))
+        {
+            TSharedPtr<FJsonObject> ConseqObj = ConseqVal->AsObject();
+            if (!ConseqObj.IsValid()) continue;
+
+            FDynamicImpactConsequence Conseq;
+            Conseq.TargetAttributeTag = FGameplayTag::RequestGameplayTag(FName(*ConseqObj->GetStringField(TEXT("TargetAttributeTag"))), false);
+            Conseq.DamageScalar = ConseqObj->HasField(TEXT("DamageScalar")) ? static_cast<float>(ConseqObj->GetNumberField(TEXT("DamageScalar"))) : 1.0f;
+            Conseq.bIsLimbSpecific = ConseqObj->HasField(TEXT("bIsLimbSpecific")) ? ConseqObj->GetBoolField(TEXT("bIsLimbSpecific")) : false;
+            Conseq.StatusEffectThreshold = ConseqObj->HasField(TEXT("StatusEffectThreshold")) ? static_cast<float>(ConseqObj->GetNumberField(TEXT("StatusEffectThreshold"))) : 50.0f;
+
+            if (ConseqObj->HasField(TEXT("StatusEffectsToApply")))
+            {
+                for (const auto& EffectVal : ConseqObj->GetArrayField(TEXT("StatusEffectsToApply")))
+                {
+                    FGameplayTag EffectTag = FGameplayTag::RequestGameplayTag(FName(*EffectVal->AsString()), false);
+                    if (EffectTag.IsValid()) Conseq.StatusEffectsToApply.Add(EffectTag);
+                }
+            }
+            OutRule.Consequences.Add(Conseq);
+        }
+    }
 }

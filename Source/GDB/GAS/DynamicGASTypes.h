@@ -1821,37 +1821,71 @@ struct FEvolutionProfileDef
 };
 
 // ============================================================================
-// PHYSICS CALCULATION SETTINGS
+// DATA-DRIVEN PHYSICS & IMPACT CALCULATION CONFIG
 // ============================================================================
+
+// ============================================================================
+// DATA-DRIVEN PHYSICS & IMPACT CALCULATION CONFIG
+// ============================================================================
+
 USTRUCT(BlueprintType)
-struct FPhysicsImpactCalculationConfig
+struct FDynamicImpactConsequence
 {
     GENERATED_BODY()
 
-    // Minimum impact velocity to trigger wall impact calculations (units/sec)
+    // The attribute to damage (e.g., Attribute.Resource.Health, Attribute.Limb.Integrity, Attribute.Resource.Stamina)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    FGameplayTag TargetAttributeTag;
+
+    // Multiplier for the raw excess impact force directed to this attribute
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    float DamageScalar = 1.0f;
+
+    // If true, targets the specific LimbId struck. If false, targets the global entity (LimbId = 0).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    bool bIsLimbSpecific = false;
+
+    // If the unmitigated damage to this entry exceeds this threshold, the StatusEffects are applied.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    float StatusEffectThreshold = 50.0f;
+
+    // Effects to apply if the threshold is broken (e.g., State.Debuff.BrokenLeg, State.Debuff.Concussion)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    TArray<FGameplayTag> StatusEffectsToApply;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicImpactReactionRule
+{
+    GENERATED_BODY()
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     float BaseImpactVelocityThreshold = 750.0f;
 
-    // Base damage multiplier per unit of unmitigated excess velocity
+    // Threshold at which the character breaks stance, loses grip, or falls over
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
-    float BaseImpactDamageScalar = 0.04f;
+    float BaseStabilityLossThreshold = 30.0f;
 
-    // Base damage threshold at which impact force breaks character hand grip
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
-    float BaseGripLossThreshold = 30.0f;
+    float MassImpactMultiplier = 0.015f;
 
-    // Attributes that reduce effective impact velocity (e.g. Attribute.Stat.Agility, Attribute.Skill.Acrobatics)
-    // Evaluates both global (LimbId = 0) and limb-specific attributes (LimbId of impacted bone)
+    // Attributes reducing effective impact velocity (e.g., Attribute.Skill.Acrobatics, Attribute.Stat.Agility)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     FDynamicTagFloatMapWrapper VelocityMitigationScalars;
 
-    // Attributes that absorb or mitigate raw damage (e.g. Attribute.Stat.Toughness, Attribute.Limb.Armor)
+    // Attributes reducing final damage (e.g., Attribute.Stat.Toughness, Attribute.Limb.Armor)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     FDynamicTagFloatMapWrapper DamageMitigationScalars;
 
-    // Attributes that increase grip retention / break-ragdoll threshold (e.g. Attribute.Stat.Strength, Attribute.Limb.GripStrength, Attribute.Skill.Climbing)
+    // Attributes increasing grip/stability retention (e.g., Attribute.Stat.Strength, Attribute.Stat.Balance)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
-    FDynamicTagFloatMapWrapper GripRetentionScalars;
+    FDynamicTagFloatMapWrapper StabilityRetentionScalars;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    TArray<FDynamicImpactConsequence> Consequences;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    bool bTriggersRagdollOnInstability = true;
 };
 
 // ============================================================================
@@ -1878,9 +1912,25 @@ struct FPhysicsCalculationSettings
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     float CooldownBetweenHitsPerLimb = 0.1f;
 
-    // Data-driven wall and physical surface collision impact mechanics
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
-    FPhysicsImpactCalculationConfig WallImpactSettings;
+    // Maps Impact Type (e.g., Impact.Type.WallSlam, Impact.Type.FallLanding) to Reaction Rules
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    TMap<FGameplayTag, FDynamicImpactReactionRule> ImpactReactionRules;
+
+    // --- Dynamic Traversable & Hold Detection Settings ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
+    float BaseHoldSweepRadius = 50.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
+    float BaseHoldSweepDistance = 60.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
+    float VelocityLookaheadScalar = 0.15f; // Extends the trace distance based on current movement speed
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
+    FDynamicTagFloatMapWrapper SweepRadiusAttributeScalars; // Attributes expanding window size (Perception, Reach)
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
+    FDynamicTagFloatMapWrapper SweepDistanceAttributeScalars; // Attributes expanding trace length (Agility, Reflexes)
 };
 
 USTRUCT(BlueprintType)

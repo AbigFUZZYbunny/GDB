@@ -53,6 +53,7 @@ public:
     static bool DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots);
     
     static void DeserializeMovementStatConfig(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FMovementStatConfig& OutConfig);
+    static void DeserializeImpactReactionRule(const TSharedPtr<FJsonObject>& InObject, FDynamicImpactReactionRule& OutRule);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
     static bool SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload);

@@ -1,45 +1,47 @@
 ﻿// DynamicCloudAISubsystem.cpp
 #include "DynamicCloudAISubsystem.h"
+#include "DynamicAILinkComponent.h"
 #include "DynamicCharacter.h"
 #include "DynamicSocialComponent.h"
-#include "GameplayTagsManager.h"
-#include "HttpModule.h"
-#include "Interfaces/IHttpRequest.h"
-#include "Interfaces/IHttpResponse.h"
+#include "DynamicAttributeSet.h"
+#include "AbilitySystemComponent.h"
+#include "Engine/World.h"
 #include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonWriter.h"
 #include "JsonObjectConverter.h"
-
-static void CollectAllGameplayTagChildrenRecursively(const UGameplayTagsManager& TagManager, const FGameplayTag& RootTag, FGameplayTagContainer& OutContainer)
-{
-    if (!RootTag.IsValid()) return;
-
-    const FGameplayTagContainer DirectChildren = TagManager.RequestGameplayTagChildren(RootTag);
-    for (const FGameplayTag& ChildTag : DirectChildren)
-    {
-        OutContainer.AddTag(ChildTag);
-        CollectAllGameplayTagChildrenRecursively(TagManager, ChildTag, OutContainer);
-    }
-}
 
 void UDynamicCloudAISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-    ActiveBackend = ECloudAIExecutionBackend::LocalRuleBasedFallback;
-    BuildAndCacheJsonSchema();
+    MiningRewardAttributeTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.MiningXP"), false);
 }
 
 void UDynamicCloudAISubsystem::Deinitialize()
 {
-    CachedCloudAISchema.Reset();
-    ActiveDirectCallbacks.Empty();
+    TaskQueue.Empty();
+    ActiveTasks.Empty();
+    ConnectedMiners.Empty();
     Super::Deinitialize();
+}
+
+void UDynamicCloudAISubsystem::RegisterMinerNode(UDynamicAILinkComponent* Miner)
+{
+    if (Miner)
+    {
+        ConnectedMiners.AddUnique(Miner);
+    }
+}
+
+void UDynamicCloudAISubsystem::UnregisterMinerNode(UDynamicAILinkComponent* Miner)
+{
+    if (Miner)
+    {
+        ConnectedMiners.Remove(Miner);
+    }
 }
 
 FString UDynamicCloudAISubsystem::SanitizeMarkdownJson(const FString& RawResponse)
 {
     FString Trimmed = RawResponse.TrimStartAndEnd();
-
     if (Trimmed.StartsWith(TEXT("```json")))
     {
         Trimmed.RemoveFromStart(TEXT("```json"));
@@ -48,202 +50,258 @@ FString UDynamicCloudAISubsystem::SanitizeMarkdownJson(const FString& RawRespons
     {
         Trimmed.RemoveFromStart(TEXT("```"));
     }
-
     if (Trimmed.EndsWith(TEXT("```")))
     {
         Trimmed.RemoveFromEnd(TEXT("```"));
     }
-
     return Trimmed.TrimStartAndEnd();
 }
 
-void UDynamicCloudAISubsystem::BuildAndCacheJsonSchema()
+FGuid UDynamicCloudAISubsystem::DispatchDistributedAIRequest(
+    APawn* AgentPawn,
+    ECloudAIRequestType RequestType,
+    ECloudAITaskPriority Priority,
+    const FString& ContextJsonPrompt,
+    float TimeoutSeconds,
+    FCloudAIQueuedTask::FOnTokenStream TokenStreamCallback,
+    FOnCloudAIResponseDirectCallback DirectCallback,
+    FCloudAIQueuedTask::FOnTaskAssigned AssignedCallback)
 {
-    TSharedRef<FJsonObject> SchemaObj = MakeShareable(new FJsonObject());
-    SchemaObj->SetStringField(TEXT("type"), TEXT("object"));
+    UWorld* World = AgentPawn ? AgentPawn->GetWorld() : this->GetWorld();
+    const double CurrentTime = World ? World->GetTimeSeconds() : 0.0;
 
-    TSharedPtr<FJsonObject> PropertiesObj = MakeShareable(new FJsonObject());
-    TSharedPtr<FJsonObject> CommandsObj = MakeShareable(new FJsonObject());
-    CommandsObj->SetStringField(TEXT("type"), TEXT("array"));
+    FCloudAIQueuedTask NewTask;
+    NewTask.TaskId = FGuid::NewGuid();
+    NewTask.Priority = Priority;
+    NewTask.ContextPrompt = ContextJsonPrompt;
+    NewTask.TimeQueued = CurrentTime;
+    NewTask.TimeoutSeconds = TimeoutSeconds;
+    NewTask.TokenStreamDelegate = TokenStreamCallback;
+    NewTask.FinalCompletionDelegate = DirectCallback;
+    NewTask.TaskAssignedDelegate = AssignedCallback;
 
-    TSharedPtr<FJsonObject> ItemsObj = MakeShareable(new FJsonObject());
-    ItemsObj->SetStringField(TEXT("type"), TEXT("object"));
-
-    TSharedPtr<FJsonObject> ItemPropsObj = MakeShareable(new FJsonObject());
-
-    TSharedPtr<FJsonObject> ActionTagObj = MakeShareable(new FJsonObject());
-    ActionTagObj->SetStringField(TEXT("type"), TEXT("string"));
-
-    TArray<TSharedPtr<FJsonValue>> ValidActionTagsEnum;
-    FGameplayTagContainer AllValidActionTags;
-    const UGameplayTagsManager& TagManager = UGameplayTagsManager::Get();
-
-    static const FGameplayTag RootAction = FGameplayTag::RequestGameplayTag(TEXT("Action"), false);
-    static const FGameplayTag RootSchedule = FGameplayTag::RequestGameplayTag(TEXT("Schedule"), false);
-    static const FGameplayTag RootSocial = FGameplayTag::RequestGameplayTag(TEXT("Social"), false);
-    static const FGameplayTag RootAbility = FGameplayTag::RequestGameplayTag(TEXT("Ability"), false);
-
-    if (RootAction.IsValid())
-    {
-        AllValidActionTags.AddTag(RootAction);
-        CollectAllGameplayTagChildrenRecursively(TagManager, RootAction, AllValidActionTags);
-    }
-    if (RootSchedule.IsValid())
-    {
-        AllValidActionTags.AddTag(RootSchedule);
-        CollectAllGameplayTagChildrenRecursively(TagManager, RootSchedule, AllValidActionTags);
-    }
-    if (RootSocial.IsValid())
-    {
-        AllValidActionTags.AddTag(RootSocial);
-        CollectAllGameplayTagChildrenRecursively(TagManager, RootSocial, AllValidActionTags);
-    }
-    if (RootAbility.IsValid())
-    {
-        AllValidActionTags.AddTag(RootAbility);
-        CollectAllGameplayTagChildrenRecursively(TagManager, RootAbility, AllValidActionTags);
-    }
-
-    for (const FGameplayTag& Tag : AllValidActionTags)
-    {
-        ValidActionTagsEnum.Add(MakeShareable(new FJsonValueString(Tag.ToString())));
-    }
-    ActionTagObj->SetArrayField(TEXT("enum"), ValidActionTagsEnum);
-    ItemPropsObj->SetObjectField(TEXT("CommandActionTag"), ActionTagObj);
-
-    TSharedPtr<FJsonObject> TargetTagObj = MakeShareable(new FJsonObject());
-    TargetTagObj->SetStringField(TEXT("type"), TEXT("string"));
-
-    TArray<TSharedPtr<FJsonValue>> ValidRoleTagsEnum;
-    FGameplayTagContainer AllRoleTags;
-    static const FGameplayTag RootRole = FGameplayTag::RequestGameplayTag(TEXT("Role"), false);
-    if (RootRole.IsValid())
-    {
-        AllRoleTags.AddTag(RootRole);
-        CollectAllGameplayTagChildrenRecursively(TagManager, RootRole, AllRoleTags);
-    }
-
-    for (const FGameplayTag& Tag : AllRoleTags)
-    {
-        ValidRoleTagsEnum.Add(MakeShareable(new FJsonValueString(Tag.ToString())));
-    }
-    ValidRoleTagsEnum.Add(MakeShareable(new FJsonValueString(TEXT(""))));
-    TargetTagObj->SetArrayField(TEXT("enum"), ValidRoleTagsEnum);
-    ItemPropsObj->SetObjectField(TEXT("TargetEntityOrPlaceRoleTag"), TargetTagObj);
-
-    TSharedPtr<FJsonObject> UtteranceObj = MakeShareable(new FJsonObject());
-    UtteranceObj->SetStringField(TEXT("type"), TEXT("string"));
-    ItemPropsObj->SetObjectField(TEXT("UtteranceText"), UtteranceObj);
-
-    TSharedPtr<FJsonObject> PriorityObj = MakeShareable(new FJsonObject());
-    PriorityObj->SetStringField(TEXT("type"), TEXT("number"));
-    ItemPropsObj->SetObjectField(TEXT("PriorityWeight"), PriorityObj);
-
-    ItemsObj->SetObjectField(TEXT("properties"), ItemPropsObj);
-
-    TArray<TSharedPtr<FJsonValue>> RequiredArray;
-    RequiredArray.Add(MakeShareable(new FJsonValueString(TEXT("CommandActionTag"))));
-    RequiredArray.Add(MakeShareable(new FJsonValueString(TEXT("PriorityWeight"))));
-    ItemsObj->SetArrayField(TEXT("required"), RequiredArray);
-
-    CommandsObj->SetObjectField(TEXT("items"), ItemsObj);
-    PropertiesObj->SetObjectField(TEXT("Commands"), CommandsObj);
-    SchemaObj->SetObjectField(TEXT("properties"), PropertiesObj);
-
-    CachedCloudAISchema = SchemaObj;
+    TaskQueue.Add(NewTask);
+    return NewTask.TaskId;
 }
 
-TSharedPtr<FJsonObject> UDynamicCloudAISubsystem::GenerateCloudAIJsonSchema()
+void UDynamicCloudAISubsystem::CancelRemoteAIRequest(const FGuid& RequestGuid)
 {
-    if (!CachedCloudAISchema.IsValid())
-    {
-        BuildAndCacheJsonSchema();
-    }
-    return CachedCloudAISchema;
+    TaskQueue.RemoveAll([&](const FCloudAIQueuedTask& Task) { return Task.TaskId == RequestGuid; });
+    ActiveTasks.RemoveAll([&](const FCloudAIQueuedTask& Task) { return Task.TaskId == RequestGuid; });
 }
 
-void UDynamicCloudAISubsystem::RequestCloudAIDirective(ADynamicCharacter* Character, const FString& ContextPrompt, FOnCloudAIDirectiveReceived OnCompleted)
+void UDynamicCloudAISubsystem::Tick(float DeltaTime)
 {
-    if (!Character)
+    ProcessTaskQueue();
+
+    UWorld* World = this->GetWorld();
+    const double Now = World ? World->GetTimeSeconds() : 0.0;
+
+    for (int32 i = ActiveTasks.Num() - 1; i >= 0; --i)
     {
-        OnCompleted.ExecuteIfBound(false, FCloudAIDirectiveResponse());
-        return;
-    }
-
-    if (ActiveBackend == ECloudAIExecutionBackend::LocalRuleBasedFallback)
-    {
-        FCloudAIDirectiveResponse FallbackResponse;
-        ExecuteRuleBasedFallback(Character, FallbackResponse);
-        OnCompleted.ExecuteIfBound(true, FallbackResponse);
-        return;
-    }
-
-    FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
-    Request->SetVerb(TEXT("POST"));
-    Request->SetURL(EndpointUrl);
-    Request->SetTimeout(10.0f);
-    Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-    if (!ApiKey.IsEmpty())
-    {
-        Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *ApiKey));
-    }
-
-    TSharedRef<FJsonObject> RootPayload = MakeShareable(new FJsonObject());
-    RootPayload->SetStringField(TEXT("model"), ModelName);
-
-    TArray<TSharedPtr<FJsonValue>> Messages;
-    TSharedRef<FJsonObject> UserMessage = MakeShareable(new FJsonObject());
-    UserMessage->SetStringField(TEXT("role"), TEXT("user"));
-    UserMessage->SetStringField(TEXT("content"), ContextPrompt);
-    Messages.Add(MakeShareable(new FJsonValueObject(UserMessage)));
-    RootPayload->SetArrayField(TEXT("messages"), Messages);
-
-    TSharedPtr<FJsonObject> ResponseFormat = MakeShareable(new FJsonObject());
-    ResponseFormat->SetStringField(TEXT("type"), TEXT("json_object"));
-    ResponseFormat->SetObjectField(TEXT("schema"), GenerateCloudAIJsonSchema());
-    RootPayload->SetObjectField(TEXT("response_format"), ResponseFormat);
-
-    FString OutputString;
-    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
-    FJsonSerializer::Serialize(RootPayload, Writer);
-    Request->SetContentAsString(OutputString);
-
-    TWeakObjectPtr<ADynamicCharacter> WeakChar(Character);
-    Request->OnProcessRequestComplete().BindLambda([this, WeakChar, OnCompleted](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bConnected)
-    {
-        if (!bConnected || !Res.IsValid() || Res->GetResponseCode() < 200 || Res->GetResponseCode() >= 300)
+        if ((Now - ActiveTasks[i].TimeQueued) > ActiveTasks[i].TimeoutSeconds)
         {
-            if (WeakChar.IsValid())
-            {
-                FCloudAIDirectiveResponse FallbackResponse;
-                ExecuteRuleBasedFallback(WeakChar.Get(), FallbackResponse);
-                OnCompleted.ExecuteIfBound(true, FallbackResponse);
-                return;
-            }
-            OnCompleted.ExecuteIfBound(false, FCloudAIDirectiveResponse());
-            return;
+            ActiveTasks[i].FinalCompletionDelegate.ExecuteIfBound(TArray<FCloudAICommandOutput>());
+            ActiveTasks.RemoveAt(i);
         }
+    }
+}
 
-        const FString CleanJson = SanitizeMarkdownJson(Res->GetContentAsString());
-        FCloudAIDirectiveResponse Directives;
-        if (FJsonObjectConverter::JsonObjectStringToUStruct(CleanJson, &Directives, 0, 0))
-        {
-            OnCompleted.ExecuteIfBound(true, Directives);
-        }
-        else
-        {
-            if (WeakChar.IsValid())
-            {
-                FCloudAIDirectiveResponse FallbackResponse;
-                ExecuteRuleBasedFallback(WeakChar.Get(), FallbackResponse);
-                OnCompleted.ExecuteIfBound(true, FallbackResponse);
-                return;
-            }
-            OnCompleted.ExecuteIfBound(false, FCloudAIDirectiveResponse());
-        }
+void UDynamicCloudAISubsystem::ProcessTaskQueue()
+{
+    if (TaskQueue.Num() == 0 || ConnectedMiners.Num() < 2) return;
+
+    ConnectedMiners.RemoveAll([](const TWeakObjectPtr<UDynamicAILinkComponent>& M) { return !M.IsValid(); });
+
+    TaskQueue.Sort([](const FCloudAIQueuedTask& A, const FCloudAIQueuedTask& B) {
+        if (A.Priority != B.Priority) return A.Priority > B.Priority;
+        return A.TimeQueued < B.TimeQueued;
     });
 
-    Request->ProcessRequest();
+    for (int32 i = TaskQueue.Num() - 1; i >= 0; --i)
+    {
+        TArray<UDynamicAILinkComponent*> AvailableMiners;
+        for (const auto& WeakMiner : ConnectedMiners)
+        {
+            if (UDynamicAILinkComponent* Miner = WeakMiner.Get())
+            {
+                if (!Miner->NodeStats.bIsCurrentlyProcessing && Miner->NodeStats.TrustScore > 0.5f)
+                {
+                    AvailableMiners.Add(Miner);
+                }
+            }
+        }
+
+        if (AvailableMiners.Num() < 2) break;
+
+        AvailableMiners.Sort([](const UDynamicAILinkComponent& A, const UDynamicAILinkComponent& B) {
+            return A.NodeStats.AveragePingMs < B.NodeStats.AveragePingMs;
+        });
+
+        FCloudAIQueuedTask& Task = TaskQueue[i];
+
+        if (Task.Priority == ECloudAITaskPriority::High && AvailableMiners[0]->NodeStats.AveragePingMs > 150.0f)
+        {
+            continue;
+        }
+
+        UDynamicAILinkComponent* Primary = AvailableMiners[0];
+        UDynamicAILinkComponent* Validator = AvailableMiners[AvailableMiners.Num() - 1];
+
+        Primary->NodeStats.bIsCurrentlyProcessing = true;
+        Validator->NodeStats.bIsCurrentlyProcessing = true;
+
+        Task.PrimaryMiner = Primary;
+        Task.ValidatorMiner = Validator;
+
+        const float EstimatedLatency = (Primary->NodeStats.AveragePingMs + Validator->NodeStats.AveragePingMs) / 2000.0f;
+        Task.TaskAssignedDelegate.ExecuteIfBound(EstimatedLatency);
+
+        Primary->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ModelName, EndpointUrl, ApiKey);
+        Validator->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ModelName, EndpointUrl, ApiKey);
+
+        ActiveTasks.Add(Task);
+        TaskQueue.RemoveAt(i);
+    }
+}
+
+FString UDynamicCloudAISubsystem::ParseSseDeltaToJsonString(const FString& SsePayload)
+{
+    FString ExtractedText = TEXT("");
+    TArray<FString> Lines;
+    SsePayload.ParseIntoArrayLines(Lines);
+
+    for (const FString& Line : Lines)
+    {
+        if (Line.StartsWith(TEXT("data: ")) && !Line.Contains(TEXT("[DONE]")))
+        {
+            const FString JsonStr = Line.Mid(6);
+            TSharedPtr<FJsonObject> JsonObj;
+            if (FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(JsonStr), JsonObj) && JsonObj.IsValid())
+            {
+                const TArray<TSharedPtr<FJsonValue>>* Choices;
+                if (JsonObj->TryGetArrayField(TEXT("choices"), Choices) && Choices->Num() > 0)
+                {
+                    TSharedPtr<FJsonObject> DeltaObj = (*Choices)[0]->AsObject()->GetObjectField(TEXT("delta"));
+                    FString ContentStr;
+                    if (DeltaObj->TryGetStringField(TEXT("content"), ContentStr))
+                    {
+                        ExtractedText += ContentStr;
+                    }
+                }
+            }
+        }
+    }
+    return ExtractedText;
+}
+
+void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Miner, const FGuid& TaskId, const FString& Chunk)
+{
+    FCloudAIQueuedTask* Task = ActiveTasks.FindByPredicate([&](const FCloudAIQueuedTask& T) { return T.TaskId == TaskId; });
+    if (!Task || Task->PrimaryMiner.Get() != Miner) return;
+
+    const FString ParsedContent = ParseSseDeltaToJsonString(Chunk);
+    if (ParsedContent.IsEmpty()) return;
+
+    Task->PrimaryAccumulatedJson += ParsedContent;
+
+    if (!Task->bStartedStreamingUtterance)
+    {
+        const int32 UtteranceIdx = Task->PrimaryAccumulatedJson.Find(TEXT("\"UtteranceText\":\""));
+        if (UtteranceIdx != INDEX_NONE)
+        {
+            Task->bStartedStreamingUtterance = true;
+            Task->UtteranceStartIndex = UtteranceIdx + 17;
+            Task->LastBroadcastedLength = Task->UtteranceStartIndex;
+        }
+    }
+
+    if (Task->bStartedStreamingUtterance)
+    {
+        const int32 EndQuoteIdx = Task->PrimaryAccumulatedJson.Find(TEXT("\""), ESearchCase::IgnoreCase, ESearchDir::FromStart, Task->UtteranceStartIndex);
+        const int32 ReadToIdx = (EndQuoteIdx != INDEX_NONE) ? EndQuoteIdx : Task->PrimaryAccumulatedJson.Len();
+
+        if (ReadToIdx > Task->LastBroadcastedLength)
+        {
+            const FString NewUtteranceChunk = Task->PrimaryAccumulatedJson.Mid(Task->LastBroadcastedLength, ReadToIdx - Task->LastBroadcastedLength);
+            Task->LastBroadcastedLength = ReadToIdx;
+            Task->TokenStreamDelegate.ExecuteIfBound(NewUtteranceChunk);
+        }
+    }
+}
+
+void UDynamicCloudAISubsystem::HandleMinerCompletion(UDynamicAILinkComponent* Miner, const FGuid& TaskId, const FString& ResultStatus)
+{
+    FCloudAIQueuedTask* Task = ActiveTasks.FindByPredicate([&](const FCloudAIQueuedTask& T) { return T.TaskId == TaskId; });
+    if (!Task) return;
+
+    if (Task->PrimaryMiner.Get() == Miner) Task->bPrimaryFinished = true;
+    if (Task->ValidatorMiner.Get() == Miner) Task->bValidatorFinished = true;
+
+    if (Task->bPrimaryFinished && Task->bValidatorFinished)
+    {
+        EvaluateConsensusAndReward(*Task);
+        ActiveTasks.RemoveAll([&](const FCloudAIQueuedTask& T) { return T.TaskId == TaskId; });
+    }
+}
+
+void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Task)
+{
+    const FString CleanPrimary = SanitizeMarkdownJson(Task.PrimaryAccumulatedJson);
+    const FString CleanValidator = SanitizeMarkdownJson(Task.ValidatorAccumulatedJson);
+
+    FCloudAIDirectiveResponse PrimaryResponse, ValidatorResponse;
+    const bool bPrimaryValid = FJsonObjectConverter::JsonObjectStringToUStruct(CleanPrimary, &PrimaryResponse, 0, 0);
+    const bool bValidatorValid = FJsonObjectConverter::JsonObjectStringToUStruct(CleanValidator, &ValidatorResponse, 0, 0);
+
+    bool bConsensusReached = false;
+    if (bPrimaryValid && bValidatorValid && PrimaryResponse.Commands.Num() > 0 && ValidatorResponse.Commands.Num() > 0)
+    {
+        if (PrimaryResponse.Commands[0].CommandActionTag == ValidatorResponse.Commands[0].CommandActionTag &&
+            PrimaryResponse.Commands[0].TargetEntityOrPlaceRoleTag == ValidatorResponse.Commands[0].TargetEntityOrPlaceRoleTag)
+        {
+            bConsensusReached = true;
+        }
+    }
+
+    if (bConsensusReached)
+    {
+        if (MiningRewardAttributeTag.IsValid())
+        {
+            auto GrantReward = [&](UDynamicAILinkComponent* Miner) {
+                if (!Miner) return;
+                Miner->NodeStats.TasksCompleted++;
+                Miner->NodeStats.TrustScore = FMath::Min(1.0f, Miner->NodeStats.TrustScore + 0.05f);
+                if (UAbilitySystemComponent* ASC = Miner->GetOwner()->FindComponentByClass<UAbilitySystemComponent>())
+                {
+                    if (UDynamicAttributeSet* Attr = const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))))
+                    {
+                        Attr->SetDynamicAttributeValue(MiningRewardAttributeTag, Attr->GetDynamicAttributeValue(MiningRewardAttributeTag) + 1.0f);
+                    }
+                }
+            };
+            GrantReward(Task.PrimaryMiner.Get());
+            GrantReward(Task.ValidatorMiner.Get());
+        }
+
+        TArray<FCloudAICommandOutput> Output;
+        for (const FCloudAICommand& Cmd : PrimaryResponse.Commands)
+        {
+            FCloudAICommandOutput OutCmd;
+            OutCmd.CommandActionTag = Cmd.CommandActionTag;
+            OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
+            OutCmd.UtteranceText = Cmd.UtteranceText;
+            Output.Add(OutCmd);
+        }
+        Task.FinalCompletionDelegate.ExecuteIfBound(Output);
+    }
+    else
+    {
+        if (Task.PrimaryMiner.IsValid()) Task.PrimaryMiner->NodeStats.TrustScore -= 0.2f;
+        if (Task.ValidatorMiner.IsValid()) Task.ValidatorMiner->NodeStats.TrustScore -= 0.2f;
+
+        Task.FinalCompletionDelegate.ExecuteIfBound(TArray<FCloudAICommandOutput>());
+    }
 }
 
 void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Character, FCloudAIDirectiveResponse& OutFallbackResponse)
@@ -252,7 +310,6 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
     if (!Character) return;
 
     FCloudAICommand DefaultCommand;
-
     if (const UDynamicSocialComponent* SocialComp = Character->FindComponentByClass<UDynamicSocialComponent>())
     {
         float HungerVal = 0.0f;
@@ -271,68 +328,4 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
     DefaultCommand.TargetEntityOrPlaceRoleTag = FGameplayTag::RequestGameplayTag(TEXT("Role.Place.Workplace"), false);
     DefaultCommand.PriorityWeight = 10.0f;
     OutFallbackResponse.Commands.Add(DefaultCommand);
-}
-
-FGuid UDynamicCloudAISubsystem::DispatchRemoteAIRequestNative(
-    APawn* AgentPawn,
-    ECloudAIRequestType RequestType,
-    const FString& ContextJsonPrompt,
-    float TimeoutSeconds,
-    FOnCloudAIResponseDirectCallback DirectCallback)
-{
-    const FGuid RequestGuid = FGuid::NewGuid();
-    ADynamicCharacter* DynChar = Cast<ADynamicCharacter>(AgentPawn);
-
-    if (ActiveBackend == ECloudAIExecutionBackend::LocalRuleBasedFallback || !DynChar)
-    {
-        FCloudAIDirectiveResponse FallbackResponse;
-        ExecuteRuleBasedFallback(DynChar, FallbackResponse);
-
-        TArray<FCloudAICommandOutput> OutputCommands;
-        for (const FCloudAICommand& Cmd : FallbackResponse.Commands)
-        {
-            FCloudAICommandOutput OutCmd;
-            OutCmd.CommandActionTag = Cmd.CommandActionTag;
-            OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
-            OutCmd.UtteranceText = Cmd.UtteranceText;
-            OutCmd.PriorityWeight = Cmd.PriorityWeight;
-            OutputCommands.Add(OutCmd);
-        }
-
-        DirectCallback.ExecuteIfBound(OutputCommands);
-        return RequestGuid;
-    }
-
-    ActiveDirectCallbacks.Add(RequestGuid, DirectCallback);
-
-    TWeakObjectPtr<UDynamicCloudAISubsystem> WeakThis(this);
-    FOnCloudAIDirectiveReceived WrappedDelegate;
-    WrappedDelegate.BindLambda([WeakThis, RequestGuid](bool bSuccess, const FCloudAIDirectiveResponse& Response)
-    {
-        if (!WeakThis.IsValid()) return;
-
-        FOnCloudAIResponseDirectCallback FoundCallback;
-        if (WeakThis->ActiveDirectCallbacks.RemoveAndCopyValue(RequestGuid, FoundCallback))
-        {
-            TArray<FCloudAICommandOutput> OutputCommands;
-            for (const FCloudAICommand& Cmd : Response.Commands)
-            {
-                FCloudAICommandOutput OutCmd;
-                OutCmd.CommandActionTag = Cmd.CommandActionTag;
-                OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
-                OutCmd.UtteranceText = Cmd.UtteranceText;
-                OutCmd.PriorityWeight = Cmd.PriorityWeight;
-                OutputCommands.Add(OutCmd);
-            }
-            FoundCallback.ExecuteIfBound(OutputCommands);
-        }
-    });
-
-    RequestCloudAIDirective(DynChar, ContextJsonPrompt, WrappedDelegate);
-    return RequestGuid;
-}
-
-void UDynamicCloudAISubsystem::CancelRemoteAIRequest(const FGuid& RequestGuid)
-{
-    ActiveDirectCallbacks.Remove(RequestGuid);
 }

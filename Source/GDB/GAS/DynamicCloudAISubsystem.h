@@ -8,7 +8,10 @@
 #include "DynamicCloudAISubsystem.generated.h"
 
 class ADynamicCharacter;
+class UDynamicAILinkComponent;
 class FJsonObject;
+
+DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
 
 USTRUCT(BlueprintType)
 struct FCloudAICommand
@@ -37,20 +40,71 @@ struct FCloudAIDirectiveResponse
     TArray<FCloudAICommand> Commands;
 };
 
-DECLARE_DELEGATE_TwoParams(FOnCloudAIDirectiveReceived, bool, const FCloudAIDirectiveResponse&);
-DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
+USTRUCT()
+struct GDB_API FCloudAIQueuedTask
+{
+    GENERATED_BODY()
+
+    DECLARE_DELEGATE_OneParam(FOnTokenStream, const FString&);
+    DECLARE_DELEGATE_OneParam(FOnTaskAssigned, float /*EstimatedLatencySeconds*/);
+
+    UPROPERTY()
+    FGuid TaskId;
+
+    UPROPERTY()
+    ECloudAITaskPriority Priority = ECloudAITaskPriority::Medium;
+
+    UPROPERTY()
+    FString ContextPrompt;
+
+    UPROPERTY()
+    double TimeQueued = 0.0;
+
+    UPROPERTY()
+    float TimeoutSeconds = 8.0f;
+
+    UPROPERTY()
+    TWeakObjectPtr<class UDynamicAILinkComponent> PrimaryMiner;
+
+    UPROPERTY()
+    TWeakObjectPtr<class UDynamicAILinkComponent> ValidatorMiner;
+
+    UPROPERTY()
+    FString PrimaryAccumulatedJson;
+
+    UPROPERTY()
+    FString ValidatorAccumulatedJson;
+
+    UPROPERTY()
+    bool bPrimaryFinished = false;
+
+    UPROPERTY()
+    bool bValidatorFinished = false;
+
+    UPROPERTY()
+    bool bStartedStreamingUtterance = false;
+
+    UPROPERTY()
+    int32 UtteranceStartIndex = 0;
+
+    UPROPERTY()
+    int32 LastBroadcastedLength = 0;
+
+    FOnCloudAIResponseDirectCallback FinalCompletionDelegate;
+    FOnTokenStream TokenStreamDelegate;
+    FOnTaskAssigned TaskAssignedDelegate;
+};
 
 UCLASS()
-class GDB_API UDynamicCloudAISubsystem : public UWorldSubsystem
+class GDB_API UDynamicCloudAISubsystem : public UTickableWorldSubsystem
 {
     GENERATED_BODY()
 
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
-    ECloudAIExecutionBackend ActiveBackend = ECloudAIExecutionBackend::LocalRuleBasedFallback;
+    virtual void Tick(float DeltaTime) override;
+    virtual TStatId GetStatId() const override { return TStatId(); }
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
     FString EndpointUrl = TEXT("http://127.0.0.1:8000/v1/chat/completions");
@@ -61,30 +115,39 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
     FString ModelName = TEXT("default-model");
 
-    void RequestCloudAIDirective(ADynamicCharacter* Character, const FString& ContextPrompt, FOnCloudAIDirectiveReceived OnCompleted);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Rewards")
+    FGameplayTag MiningRewardAttributeTag;
 
-    FGuid DispatchRemoteAIRequestNative(
+    void RegisterMinerNode(UDynamicAILinkComponent* Miner);
+    void UnregisterMinerNode(UDynamicAILinkComponent* Miner);
+
+    UFUNCTION(BlueprintPure, Category = "Cloud AI")
+    static FString SanitizeMarkdownJson(const FString& RawResponse);
+
+    FGuid DispatchDistributedAIRequest(
         APawn* AgentPawn,
         ECloudAIRequestType RequestType,
+        ECloudAITaskPriority Priority,
         const FString& ContextJsonPrompt,
         float TimeoutSeconds,
-        FOnCloudAIResponseDirectCallback DirectCallback
+        FCloudAIQueuedTask::FOnTokenStream TokenStreamCallback,
+        FOnCloudAIResponseDirectCallback DirectCallback,
+        FCloudAIQueuedTask::FOnTaskAssigned AssignedCallback
     );
 
     UFUNCTION(BlueprintCallable, Category = "Cloud AI")
     void CancelRemoteAIRequest(const FGuid& RequestGuid);
 
-    UFUNCTION(BlueprintPure, Category = "Cloud AI")
-    static FString SanitizeMarkdownJson(const FString& RawResponse);
-
-    TSharedPtr<FJsonObject> GenerateCloudAIJsonSchema();
-
+    void HandleMinerTokenChunk(UDynamicAILinkComponent* Miner, const FGuid& TaskId, const FString& Chunk);
+    void HandleMinerCompletion(UDynamicAILinkComponent* Miner, const FGuid& TaskId, const FString& ResultStatus);
     void ExecuteRuleBasedFallback(ADynamicCharacter* Character, FCloudAIDirectiveResponse& OutFallbackResponse);
 
 private:
-    TMap<FGuid, FOnCloudAIResponseDirectCallback> ActiveDirectCallbacks;
+    TArray<TWeakObjectPtr<UDynamicAILinkComponent>> ConnectedMiners;
+    TArray<FCloudAIQueuedTask> TaskQueue;
+    TArray<FCloudAIQueuedTask> ActiveTasks;
 
-    // Cached pre-built JSON schema avoiding tag reflection heap allocations per call
-    TSharedPtr<FJsonObject> CachedCloudAISchema;
-    void BuildAndCacheJsonSchema();
+    void ProcessTaskQueue();
+    void EvaluateConsensusAndReward(FCloudAIQueuedTask& Task);
+    FString ParseSseDeltaToJsonString(const FString& SsePayload);
 };

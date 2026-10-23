@@ -10,7 +10,7 @@
 
 UBTTask_RequestCloudDirective::UBTTask_RequestCloudDirective()
 {
-    NodeName = "Request Cloud Directive";
+    NodeName = "Request Distributed Cloud Directive";
     bNotifyTick = true;
     bCreateNodeInstance = true;
 
@@ -28,7 +28,10 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
 {
     ActiveRequestGuid.Invalidate();
     ElapsedTaskTime = 0.0f;
+    DynamicTimeoutLimit = BaseRequestTimeoutSeconds;
     bVampingStarted = false;
+    bUtteranceStarted = false;
+    LiveUtteranceBuffer.Empty();
     ActiveVampingMontage.Reset();
 
     AAIController* AICon = OwnerComp.GetAIOwner();
@@ -39,24 +42,28 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
     }
 
     UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>();
-    if (!SocialComp)
-    {
-        return EBTNodeResult::Failed;
-    }
-
     UWorld* World = ControlledPawn->GetWorld();
     UDynamicCloudAISubsystem* CloudSubsystem = World ? World->GetSubsystem<UDynamicCloudAISubsystem>() : nullptr;
-    if (!CloudSubsystem)
+    if (!SocialComp || !CloudSubsystem)
     {
         return EBTNodeResult::Failed;
     }
-    CachedCloudSubsystem = CloudSubsystem;
 
+    CachedCloudSubsystem = CloudSubsystem;
     SocialComp->ServerSetCloudAISuspension(true);
     const FString ContextJson = SocialComp->SerializeAgentContextForLLM(RequestType);
 
     TWeakObjectPtr<UBTTask_RequestCloudDirective> WeakThis(this);
     TWeakObjectPtr<UBehaviorTreeComponent> WeakOwnerComp(&OwnerComp);
+
+    FCloudAIQueuedTask::FOnTokenStream StreamCallback;
+    StreamCallback.BindLambda([WeakThis, WeakOwnerComp](const FString& Chunk)
+    {
+        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get())
+        {
+            StrongThis->HandleTokenStream(Chunk, WeakOwnerComp);
+        }
+    });
 
     FOnCloudAIResponseDirectCallback DirectCallback;
     DirectCallback.BindLambda([WeakThis, WeakOwnerComp](const TArray<FCloudAICommandOutput>& Commands)
@@ -67,12 +74,24 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
         }
     });
 
-    ActiveRequestGuid = CloudSubsystem->DispatchRemoteAIRequestNative(
+    FCloudAIQueuedTask::FOnTaskAssigned AssignedCallback;
+    AssignedCallback.BindLambda([WeakThis](float EstimatedLatency)
+    {
+        if (UBTTask_RequestCloudDirective* StrongThis = WeakThis.Get())
+        {
+            StrongThis->HandleTaskAssigned(EstimatedLatency);
+        }
+    });
+
+    ActiveRequestGuid = CloudSubsystem->DispatchDistributedAIRequest(
         ControlledPawn,
         RequestType,
+        TaskPriority,
         ContextJson,
-        RequestTimeoutSeconds,
-        DirectCallback
+        BaseRequestTimeoutSeconds,
+        StreamCallback,
+        DirectCallback,
+        AssignedCallback
     );
 
     return EBTNodeResult::InProgress;
@@ -81,10 +100,27 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::ExecuteTask(UBehaviorTreeComp
 void UBTTask_RequestCloudDirective::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
     Super::TickTask(OwnerComp, NodeMemory, DeltaSeconds);
-
     ElapsedTaskTime += DeltaSeconds;
 
-    if (VampingConfig.bEnableVamping && !bVampingStarted && ElapsedTaskTime >= VampingConfig.VampingStartDelay)
+    // Timeout guard adjusted dynamically by network latency
+    if (ElapsedTaskTime >= DynamicTimeoutLimit)
+    {
+        AAIController* AICon = OwnerComp.GetAIOwner();
+        APawn* ControlledPawn = AICon ? AICon->GetPawn() : nullptr;
+        if (ControlledPawn)
+        {
+            StopVampingBehavior(ControlledPawn);
+            if (UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>())
+            {
+                SocialComp->ServerSetCloudAISuspension(false);
+            }
+        }
+        FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+        return;
+    }
+
+    // Trigger latency-masking vamping chatter/animation
+    if (VampingConfig.bEnableVamping && !bVampingStarted && !bUtteranceStarted && ElapsedTaskTime >= VampingConfig.VampingStartDelay)
     {
         AAIController* AICon = OwnerComp.GetAIOwner();
         APawn* ControlledPawn = AICon ? AICon->GetPawn() : nullptr;
@@ -123,7 +159,6 @@ void UBTTask_RequestCloudDirective::StartVampingBehavior(APawn* ControlledPawn, 
     {
         const int32 RandIdx = FMath::RandRange(0, VampingConfig.FillerUtterances.Num() - 1);
         const FString FillerText = VampingConfig.FillerUtterances[RandIdx];
-
         UBlackboardComponent* BB = OwnerComp.GetBlackboardComponent();
         if (BB && UtteranceTextKey.SelectedKeyName != NAME_None)
         {
@@ -170,6 +205,36 @@ EBTNodeResult::Type UBTTask_RequestCloudDirective::AbortTask(UBehaviorTreeCompon
 
     ActiveRequestGuid.Invalidate();
     return EBTNodeResult::Aborted;
+}
+
+void UBTTask_RequestCloudDirective::HandleTaskAssigned(float EstimatedLatencySeconds)
+{
+    DynamicTimeoutLimit = BaseRequestTimeoutSeconds + EstimatedLatencySeconds;
+}
+
+void UBTTask_RequestCloudDirective::HandleTokenStream(const FString& TokenChunk, TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp)
+{
+    UBehaviorTreeComponent* BTC = OwnerTreeComp.Get();
+    if (!BTC) return;
+
+    if (!bUtteranceStarted)
+    {
+        bUtteranceStarted = true;
+        if (AAIController* AICon = BTC->GetAIOwner())
+        {
+            StopVampingBehavior(AICon->GetPawn());
+        }
+    }
+
+    LiveUtteranceBuffer += TokenChunk;
+
+    if (UBlackboardComponent* BB = BTC->GetBlackboardComponent())
+    {
+        if (UtteranceTextKey.SelectedKeyName != NAME_None)
+        {
+            BB->SetValueAsString(UtteranceTextKey.SelectedKeyName, LiveUtteranceBuffer);
+        }
+    }
 }
 
 void UBTTask_RequestCloudDirective::HandleDirectCloudResponse(TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp, const TArray<FCloudAICommandOutput>& Commands)

@@ -377,6 +377,15 @@ enum class ENetworkNodeType : uint8
     Transporter   // Connects nodes, transfers up to FlowLimit (e.g., Pipe, Wire)
 };
 
+// Priority levels for task queue distribution
+UENUM(BlueprintType)
+enum class ECloudAITaskPriority : uint8
+{
+    Low = 0,    // immediate tasks > Group schedules > Individual schedules (Assigned to High Latency Miners)
+    Medium = 1, // Ambient background chatter > immediate tasks
+    High = 2    // Direct Player Conversation > Ambient background chatter (Strictly Assigned to Low Latency and High Accuracy Miners)
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -4349,3 +4358,16 @@ struct FCloudAIContextFilterConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Token Economy")
     bool bDeltaOnlySerialization = true;
 };
+
+// Miner Node Statistics for Priority & Trust Routing
+USTRUCT(BlueprintType)
+struct GDB_API FMinerNodeStats
+{
+    GENERATED_BODY()
+    UPROPERTY() float AveragePingMs = 50.0f;
+    UPROPERTY() float TrustScore = 1.0f; // Drops on consensus mismatch
+    UPROPERTY() int32 TasksCompleted = 0;
+    UPROPERTY() bool bIsCurrentlyProcessing = false;
+};
+
+// Internal Task State for the Subsystem Queue

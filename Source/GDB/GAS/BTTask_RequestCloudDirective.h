@@ -8,10 +8,6 @@
 
 class UDynamicCloudAISubsystem;
 
-/**
- * Behavior Tree Task that dispatches remote or local LLM requests.
- * Features an intermediate vamping system to mask HTTP latency via animations and filler chatter.
- */
 UCLASS()
 class GDB_API UBTTask_RequestCloudDirective : public UBTTaskNode
 {
@@ -19,16 +15,18 @@ class GDB_API UBTTask_RequestCloudDirective : public UBTTaskNode
 
 public:
     UBTTask_RequestCloudDirective();
-
     virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
     virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
     virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 
     UPROPERTY(EditAnywhere, Category = "Cloud AI")
     ECloudAIRequestType RequestType = ECloudAIRequestType::ComplexDecision;
+    
+    UPROPERTY(EditAnywhere, Category = "Cloud AI")
+    ECloudAITaskPriority TaskPriority = ECloudAITaskPriority::Medium;
 
     UPROPERTY(EditAnywhere, Category = "Cloud AI")
-    float RequestTimeoutSeconds = 8.0f;
+    float BaseRequestTimeoutSeconds = 8.0f;
 
     UPROPERTY(EditAnywhere, Category = "Cloud AI|Vamping")
     FCloudAIVampingConfig VampingConfig;
@@ -43,6 +41,8 @@ public:
     FBlackboardKeySelector UtteranceTextKey;
 
 protected:
+    void HandleTaskAssigned(float EstimatedLatencySeconds);
+    void HandleTokenStream(const FString& TokenChunk, TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp);
     void HandleDirectCloudResponse(TWeakObjectPtr<UBehaviorTreeComponent> OwnerTreeComp, const TArray<FCloudAICommandOutput>& Commands);
     void StartVampingBehavior(APawn* ControlledPawn, UBehaviorTreeComponent& OwnerComp);
     void StopVampingBehavior(APawn* ControlledPawn);
@@ -50,8 +50,13 @@ protected:
 private:
     FGuid ActiveRequestGuid;
     TWeakObjectPtr<UDynamicCloudAISubsystem> CachedCloudSubsystem;
-
+    
     float ElapsedTaskTime = 0.0f;
+    float DynamicTimeoutLimit = 8.0f;
+    
     bool bVampingStarted = false;
+    bool bUtteranceStarted = false;
+    FString LiveUtteranceBuffer;
+
     TWeakObjectPtr<UAnimMontage> ActiveVampingMontage;
 };

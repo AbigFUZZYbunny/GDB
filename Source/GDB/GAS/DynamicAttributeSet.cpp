@@ -42,6 +42,7 @@ void UDynamicAttributeSet::HandleSingleAttributeReplicated(const FDynamicAttribu
 {
     if (!Item.AttributeTag.IsValid()) return;
 
+    // Relies on the updated MakeCompositeKey using GetComparisonIndex()
     const uint64 Key = MakeCompositeKey(Item.LimbId, Item.AttributeTag);
     if (!FastCompositeLookupMap.Contains(Key))
     {

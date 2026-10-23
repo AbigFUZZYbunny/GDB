@@ -1,6 +1,5 @@
 ﻿// DynamicAttributeSet.h
 #pragma once
-
 #include "CoreMinimal.h"
 #include "AttributeSet.h"
 #include "GameplayTagContainer.h"
@@ -10,7 +9,6 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FDynamicLimbAttributeChangedSignature, uint8, LimbId, FGameplayTag, AttributeTag, float, NewValue);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FDynamicAttributeChangedSignature, FGameplayTag, AttributeTag, float, NewValue);
 
-// RAII Scope Guard: Guarantees InOutEvaluationStack.Remove() is invoked on any exit path
 struct FScopedAttributeEvaluationGuard
 {
     TSet<uint64>& StackRef;
@@ -26,7 +24,6 @@ struct FScopedAttributeEvaluationGuard
             bPushed = true;
         }
     }
-
     ~FScopedAttributeEvaluationGuard()
     {
         if (bPushed)
@@ -34,7 +31,6 @@ struct FScopedAttributeEvaluationGuard
             StackRef.Remove(Key);
         }
     }
-
     bool IsCycleDetected() const { return !bPushed; }
 };
 
@@ -59,6 +55,7 @@ public:
     void OnRep_FastAttributes();
 
     void HandleSingleAttributeReplicated(const FDynamicAttributeItem& Item);
+
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Attributes")
@@ -73,9 +70,10 @@ public:
     TArray<FTagFloatPair> GetAttributesByParentTag(FGameplayTag ParentTag, bool bIncludeAllSubAttributes = false, uint8 LimbId = 0) const;
 
 private:
+    // GUARANTEED NO COLLISIONS: Uses UE's internal exact FName comparison index instead of a hash function.
     static FORCEINLINE uint64 MakeCompositeKey(uint8 LimbId, const FGameplayTag& Tag)
     {
-        return (static_cast<uint64>(LimbId) << 32) | static_cast<uint64>(GetTypeHash(Tag));
+        return (static_cast<uint64>(LimbId) << 32) | static_cast<uint64>(Tag.GetTagName().GetComparisonIndex().ToUnstableInt());
     }
 
     TMap<uint64, float> FastCompositeLookupMap;
@@ -87,6 +85,5 @@ private:
     void ApplyOrUndoMilestoneStep(const FDynamicMilestoneAction& Action, bool bIsUndo, UAbilitySystemComponent* TargetASC, uint8 LimbId);
 
     TSet<uint64> ActiveThresholdEvaluationKeys;
-
     void SetDynamicAttributeValueInternal(FGameplayTag AttributeTag, float NewVal, uint8 LimbId, TSet<uint64>& InOutEvaluationStack);
 };

@@ -75,7 +75,8 @@ void UDynamicContainerComponent::OnRep_ReplicatedSlots()
 
 void UDynamicContainerComponent::RebuildLocalSlotCache()
 {
-    FlatKeyToArrayIndexMap.Empty(ReplicatedSlots.Items.Num());
+    FlatKeyToReplicationIDMap.Empty(ReplicatedSlots.Items.Num());
+    ReplicationIDToIndexMap.Empty(ReplicatedSlots.Items.Num());
     CachedTotalWeight = 0.0f;
     PendingTombstoneCount = 0;
 
@@ -87,9 +88,10 @@ void UDynamicContainerComponent::RebuildLocalSlotCache()
             PendingTombstoneCount++;
             continue;
         }
-
         const int32 FlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
-        FlatKeyToArrayIndexMap.Add(FlatKey, i);
+        FlatKeyToReplicationIDMap.Add(FlatKey, Item.ReplicationID);
+        ReplicationIDToIndexMap.Add(Item.ReplicationID, i);
+
         CachedTotalWeight += ResolveArchetypeUnitWeight(Item.StoredActorArchetypeTag, Item.SavedAttributeState) * static_cast<float>(Item.StackCount);
     }
 }
@@ -102,7 +104,8 @@ void UDynamicContainerComponent::ClearContainerForPooling()
     }
     ReplicatedSlots.Items.Empty();
     ReplicatedSlots.MarkArrayDirty();
-    FlatKeyToArrayIndexMap.Empty();
+    FlatKeyToReplicationIDMap.Empty();
+    ReplicationIDToIndexMap.Empty();
     CachedTotalWeight = 0.0f;
     PendingTombstoneCount = 0;
 }
@@ -153,7 +156,7 @@ float UDynamicContainerComponent::ResolveArchetypeUnitWeight(FGameplayTag Archet
     return 0.0f;
 }
 
-bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32 SizeX, int32 SizeY, int32 IgnoreFlatKey) const
+bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32 SizeX, int32 SizeY, int32 IgnoreReplicationID) const
 {
     if (GridX < 0 || GridY < 0 || (GridX + SizeX) > ContainerConfig.GridWidth || (GridY + SizeY) > ContainerConfig.GridHeight) return false;
 
@@ -170,10 +173,7 @@ bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32
 
     for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
     {
-        if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid()) continue;
-
-        const int32 ItemFlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
-        if (ItemFlatKey == IgnoreFlatKey) continue;
+        if (Item.StackCount <= 0 || !Item.StoredActorArchetypeTag.IsValid() || Item.ReplicationID == IgnoreReplicationID) continue;
 
         const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(Item.StoredActorArchetypeTag);
         if (!Def) continue;
@@ -187,7 +187,6 @@ bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32
             return false;
         }
     }
-
     return true;
 }
 
@@ -359,11 +358,15 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToWorld(int3
     if (!GetOwner() || !GetOwner()->HasAuthority() || QuantityToExtract <= 0) return nullptr;
 
     const int32 TargetFlatKey = GridY * ContainerConfig.GridWidth + GridX;
-    const int32* FoundIdxPtr = FlatKeyToArrayIndexMap.Find(TargetFlatKey);
+    const int32* FoundRepID = FlatKeyToReplicationIDMap.Find(TargetFlatKey);
+    if (!FoundRepID) return nullptr;
+    
+    const int32* FoundIdxPtr = ReplicationIDToIndexMap.Find(*FoundRepID);
     if (!FoundIdxPtr || !ReplicatedSlots.Items.IsValidIndex(*FoundIdxPtr)) return nullptr;
 
     const int32 FoundIndex = *FoundIdxPtr;
     FDynamicContainerSlotItem Snapshot = ReplicatedSlots.Items[FoundIndex];
+
     if (Snapshot.StackCount < QuantityToExtract) return nullptr;
 
     ReplicatedSlots.Items[FoundIndex].StackCount -= QuantityToExtract;
@@ -375,7 +378,6 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToWorld(int3
         ReplicatedSlots.Items[FoundIndex].SavedAttributeState.Empty();
         ReplicatedSlots.Items[FoundIndex].SavedInteractableStates.Reset();
         ReplicatedSlots.MarkItemDirty(ReplicatedSlots.Items[FoundIndex]);
-
         PendingTombstoneCount++;
         ScheduleTombstoneCompression();
     }
@@ -478,12 +480,15 @@ void UDynamicContainerComponent::ServerCompressContainerSlots()
 bool UDynamicContainerComponent::GetSlotItemAtGrid(int32 GridX, int32 GridY, FDynamicContainerSlotItem& OutSlotItem) const
 {
     const int32 FlatKey = GridY * ContainerConfig.GridWidth + GridX;
-    if (const int32* FoundIdx = FlatKeyToArrayIndexMap.Find(FlatKey))
+    if (const int32* FoundRepID = FlatKeyToReplicationIDMap.Find(FlatKey))
     {
-        if (ReplicatedSlots.Items.IsValidIndex(*FoundIdx))
+        if (const int32* FoundIdx = ReplicationIDToIndexMap.Find(*FoundRepID))
         {
-            OutSlotItem = ReplicatedSlots.Items[*FoundIdx];
-            return true;
+            if (ReplicatedSlots.Items.IsValidIndex(*FoundIdx))
+            {
+                OutSlotItem = ReplicatedSlots.Items[*FoundIdx];
+                return true;
+            }
         }
     }
     return false;

@@ -32,6 +32,7 @@ void ADynamicGameState::BeginPlay()
 
     if (HasAuthority())
     {
+        WarmGameplayEffectCache();
         const FString DataDir = FPaths::ProjectContentDir() / TEXT("Data");
         TArray<FString> ShippedJsonFiles;
         IFileManager::Get().FindFiles(ShippedJsonFiles, *(DataDir / TEXT("*.json")), true, false);
@@ -535,50 +536,17 @@ UGameplayEffect* ADynamicGameState::GetOrCreateCachedEffectObject(FGameplayTag E
 {
     if (!EffectTag.IsValid()) return nullptr;
 
+    const FDynamicEffectDef* FoundDef = MasterEffectRegistry.Find(EffectTag);
+    if (!FoundDef) return nullptr;
+
+    switch (FoundDef->DurationPolicy)
     {
-        FScopeLock Lock(&EffectCacheCriticalSection);
-        if (TObjectPtr<UGameplayEffect>* Found = DynamicEffectCDOCache.Find(EffectTag))
-        {
-            return Found->Get();
-        }
+    case EEffectDurationPolicy::Instant:     return GenericInstantEffect;
+    case EEffectDurationPolicy::HasDuration: return GenericDurationEffect;
+    case EEffectDurationPolicy::Infinite:    return GenericInfiniteEffect;
     }
 
-    if (const FDynamicEffectDef* FoundDef = MasterEffectRegistry.Find(EffectTag))
-    {
-        UGameplayEffect* NewEffect = UDynamicEffectFactory::ConstructGameplayEffectObject(this, *FoundDef, EffectTag);
-        {
-            FScopeLock Lock(&EffectCacheCriticalSection);
-            DynamicEffectCDOCache.Add(EffectTag, NewEffect);
-        }
-        return NewEffect;
-    }
-    return nullptr;
-}
-
-void ADynamicGameState::WarmGameplayEffectCache()
-{
-    // Gather all effect tags from MasterEffectRegistry and AbilityMasterRegistry
-    TSet<FGameplayTag> AllRequiredEffects;
-    for (const auto& Pair : MasterEffectRegistry)
-    {
-        AllRequiredEffects.Add(Pair.Key);
-    }
-    for (const auto& AbilityPair : AbilityMasterRegistry)
-    {
-        for (const FGameplayTag& EffTag : AbilityPair.Value.SpatialDelivery.EffectsToApply)
-        {
-            if (EffTag.IsValid()) AllRequiredEffects.Add(EffTag);
-        }
-        for (const FGameplayTag& EffTag : AbilityPair.Value.InteractionConfig.EffectsToApplyToTarget)
-        {
-            if (EffTag.IsValid()) AllRequiredEffects.Add(EffTag);
-        }
-    }
-
-    for (const FGameplayTag& Tag : AllRequiredEffects)
-    {
-        GetOrCreateCachedEffectObject(Tag);
-    }
+    return GenericInstantEffect;
 }
 
 void ADynamicGameState::WarmGameplayEffectCacheAsync(TFunction<void()> OnComplete, float MaxBudgetPerFrameSeconds)
@@ -663,10 +631,9 @@ void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem&
     }
 }
 
-float ADynamicGameState::ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath)
+float ADynamicGameState::ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath) const
 {
     if (!StructMemory || !StructType || PropertyPath.IsNone()) return 0.0f;
-
     FString LeftStr, RightStr;
     const FString FullPath = PropertyPath.ToString();
     if (FullPath.Split(TEXT("."), &LeftStr, &RightStr))
@@ -1127,7 +1094,6 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
 void ADynamicGameState::ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn)
 {
     if (!HasAuthority() || !IsValid(ActorToReturn)) return;
-
     if (AController* CharController = ActorToReturn->GetController())
     {
         CharController->Destroy();
@@ -1137,4 +1103,27 @@ void ADynamicGameState::ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn)
     ActorToReturn->SetActorEnableCollision(false);
     ActorToReturn->SetActorLocation(FVector(0, 0, -10000.0f));
     InactiveCharacterPool.AddUnique(ActorToReturn);
+}
+
+void ADynamicGameState::WarmGameplayEffectCache()
+{
+    // Generates completely generic base effects once during startup. 
+    // Effect details are driven exclusively by the DynamicGameplayEffectContext executing the dynamic definitions.
+    GenericInstantEffect = NewObject<UGameplayEffect>(this, FName("DynamicGeneric_Instant"));
+    GenericInstantEffect->DurationPolicy = EGameplayEffectDurationType::Instant;
+    FGameplayEffectExecutionDefinition ExecDefInst;
+    ExecDefInst.CalculationClass = FindObject<UClass>(nullptr, TEXT("/Script/GDB.DynamicEffectExecution"));
+    GenericInstantEffect->Executions.Add(ExecDefInst);
+
+    GenericDurationEffect = NewObject<UGameplayEffect>(this, FName("DynamicGeneric_Duration"));
+    GenericDurationEffect->DurationPolicy = EGameplayEffectDurationType::HasDuration;
+    FGameplayEffectExecutionDefinition ExecDefDur;
+    ExecDefDur.CalculationClass = ExecDefInst.CalculationClass;
+    GenericDurationEffect->Executions.Add(ExecDefDur);
+
+    GenericInfiniteEffect = NewObject<UGameplayEffect>(this, FName("DynamicGeneric_Infinite"));
+    GenericInfiniteEffect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+    FGameplayEffectExecutionDefinition ExecDefInf;
+    ExecDefInf.CalculationClass = ExecDefInst.CalculationClass;
+    GenericInfiniteEffect->Executions.Add(ExecDefInf);
 }

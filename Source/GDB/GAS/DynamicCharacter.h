@@ -1,6 +1,5 @@
 ﻿// DynamicCharacter.h
 #pragma once
-
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "AbilitySystemInterface.h"
@@ -9,6 +8,7 @@
 #include "PhysicsControlComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/SphereComponent.h"
 #include "DynamicGASTypes.h"
 #include "DynamicCharacter.generated.h"
 
@@ -17,24 +17,7 @@ class UDynamicAttributeSet;
 class UDynamicGASManagerComponent;
 class UDynamicForceComponent;
 class UDynamicCustomizationComponent;
-
-USTRUCT()
-struct FCharacterTransformHistorySnapshot
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    double ServerTimestamp = 0.0;
-
-    UPROPERTY()
-    FVector CapsuleLocation = FVector::ZeroVector;
-
-    UPROPERTY()
-    FQuat CapsuleRotation = FQuat::Identity;
-
-    UPROPERTY()
-    TMap<FName, FTransform> BoneTransforms;
-};
+class UDynamicInteractableComponent;
 
 UCLASS()
 class GDB_API ADynamicCharacter : public APawn, public IAbilitySystemInterface, public IDynamicPoolScrubbableInterface
@@ -49,7 +32,6 @@ public:
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
     USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
-    USkeletalMeshComponent* GetMesh() const { return MeshComponent; }
     UPhysicsControlComponent* GetPhysicsControlComponent() const { return PhysicsControlComponent; }
     UDynamicAttributeSet* GetDynamicAttributeSet() const { return AttributeSet; }
 
@@ -57,7 +39,7 @@ public:
 
     UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category = "DynamicGAS|Combat")
     void Server_RequestAimedStrike(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, double ClientTargetTimestamp);
-
+    
     void ServerProcessAuthoritativeLimbHit(ADynamicCharacter* TargetCharacter, const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor);
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
@@ -122,14 +104,24 @@ protected:
     UFUNCTION()
     void OnServerCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
+    UFUNCTION()
+    void OnClimbProximityOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
+    UFUNCTION()
+    void OnClimbProximityEndOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
     void HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag);
     void ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, const FHitResult& Hit, float ImpactVelocity);
+    bool CalculatePseudoBoneIntersection(const FCharacterTransformHistorySnapshot& Snapshot, const FVector& StartTrace, const FVector& EndTrace, FName& OutHitBone);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     UCapsuleComponent* CapsuleComponent;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     USkeletalMeshComponent* MeshComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+    USphereComponent* ClimbProximitySphere;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
     UMoverComponent* MoverComponent;
@@ -168,12 +160,15 @@ private:
 
     FCharacterTransformHistorySnapshot PreRewindCachedTransform;
     bool bIsCurrentlyRewound = false;
-
     bool bPreRewindSimulatingPhysics = false;
     bool bPreRewindMoverActive = false;
 
     bool bIsClimbingPhysical = false;
     bool bCurrentFootingActive = false;
+
+    UPROPERTY()
+    TArray<TWeakObjectPtr<UDynamicInteractableComponent>> NearbyClimbHolds;
+
     TMap<FName, FTransform> ActiveLimbHolds;
 
     float CachedTargetCapsuleHalfHeight = 88.0f;
@@ -181,5 +176,5 @@ private:
     FGameplayTagContainer GrantedMovementTags;
 
     FVector LastHoldSweepLocation = FVector::ZeroVector;
-    float AccumulatedHoldSweepTime = 0.0f;
+    float AccumulatedHoldSweepTime = 0.0;
 };

@@ -671,34 +671,51 @@ struct FDynamicItemDef
 // ITEM & CONTAINER GRID SYSTEM (NESTED CONTAINERS VIA GUID)
 // ============================================================================
 USTRUCT(BlueprintType)
+struct FCharacterTransformHistorySnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    double ServerTimestamp = 0.0;
+
+    UPROPERTY()
+    FVector CapsuleLocation = FVector::ZeroVector;
+
+    UPROPERTY()
+    FQuat CapsuleRotation = FQuat::Identity;
+
+    UPROPERTY()
+    float ViewPitch = 0.0f;
+
+    UPROPERTY()
+    FGameplayTag ActiveMovementState;
+};
+
+USTRUCT(BlueprintType)
 struct FDynamicContainerSlotItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    UPROPERTY()
     int32 GridX = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    UPROPERTY()
     int32 GridY = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    UPROPERTY()
     bool bIsRotated = false;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    UPROPERTY()
     FGameplayTag StoredActorArchetypeTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
-    int32 StackCount = 1;
+    UPROPERTY()
+    int32 StackCount = 0;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    UPROPERTY()
     TArray<FDynamicAttributeItem> SavedAttributeState;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
+    UPROPERTY()
     FGameplayTagContainer SavedInteractableStates;
-
-    // Lightweight GUID reference replacing raw JSON string replication
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
-    FGuid NestedContainerInstanceGuid;
 
     void PreReplicatedRemove(const struct FFastContainerSlotArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastContainerSlotArray& InArrayOwner);

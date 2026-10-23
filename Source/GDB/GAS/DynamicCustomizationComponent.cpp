@@ -171,17 +171,36 @@ void UDynamicCustomizationComponent::SetSignificanceState(bool bNewSignificant)
 
 void UDynamicCustomizationComponent::FlushDeferredMorphs()
 {
-    if (DeferredMorphSliders.Num() == 0) return;
+    if (DeferredMorphSliders.Num() == 0 || FlushTickerHandle.IsValid()) return;
 
-    for (const FGameplayTag& SliderTag : DeferredMorphSliders)
+    TWeakObjectPtr<UDynamicCustomizationComponent> WeakThis(this);
+
+    // TIME-SLICED OPTIMIZATION: Spreads hundreds of bone scaling and morph ops over multiple frames based on 0.5ms time budget
+    FlushTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis](float DeltaTime) -> bool
     {
-        if (const float* Val = LocalMorphCache.Find(SliderTag))
+        if (!WeakThis.IsValid()) return false;
+        
+        UDynamicCustomizationComponent* StrongThis = WeakThis.Get();
+        const double StartTime = FPlatformTime::Seconds();
+        constexpr double MaxBudgetPerFrameSeconds = 0.0005; 
+
+        while (StrongThis->DeferredMorphSliders.Num() > 0 && (FPlatformTime::Seconds() - StartTime < MaxBudgetPerFrameSeconds))
         {
-            ApplySingleSliderDeformation(SliderTag, *Val);
-            OnMorphUpdated.Broadcast(SliderTag, *Val);
+            FGameplayTag SliderTag = StrongThis->DeferredMorphSliders.Pop();
+            if (const float* Val = StrongThis->LocalMorphCache.Find(SliderTag))
+            {
+                StrongThis->ApplySingleSliderDeformation(SliderTag, *Val);
+                StrongThis->OnMorphUpdated.Broadcast(SliderTag, *Val);
+            }
         }
-    }
-    DeferredMorphSliders.Empty();
+
+        if (StrongThis->DeferredMorphSliders.Num() == 0)
+        {
+            StrongThis->FlushTickerHandle.Reset();
+            return false; // Stop ticking
+        }
+        return true; 
+    }));
 }
 
 void UDynamicCustomizationComponent::HandleSingleMorphReplicated(const FDynamicCharacterMorphItem& MorphItem)

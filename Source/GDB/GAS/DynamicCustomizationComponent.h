@@ -16,7 +16,6 @@ class GDB_API UDynamicCustomizationComponent : public UActorComponent
 
 public:
     UDynamicCustomizationComponent();
-
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -94,14 +93,14 @@ public:
 private:
     float ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const;
     void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value);
-
     void UpdateSignificanceEvaluation();
 
     TMap<FGameplayTag, float> LocalMorphCache;
-    TSet<FGameplayTag> DeferredMorphSliders;
-
+    TArray<FGameplayTag> DeferredMorphSliders; // Replaced TSet with TArray for iterative slicing
     bool bIsSignificantlyVisible = true;
+    
     FTimerHandle TimerHandle_SignificancePoll;
+    FTSTicker::FDelegateHandle FlushTickerHandle;
 
     UPROPERTY(Replicated)
     bool bCachedInvertsHealingToDamage = false;

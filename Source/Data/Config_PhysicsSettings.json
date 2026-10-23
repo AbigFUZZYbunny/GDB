@@ -1,116 +1,146 @@
 ﻿{
-  "_comment": "Authoritative Physics, Scaled Collision Consequences, and Dynamic Climbing Footing",
   "CalculationSettings": {
-    "PrimaryDamageTargetAttributeTag": "Attribute.Resource.Health",
-    "MinImpulseThreshold": 300.0,
-    "MaxImpulseCap": 15000.0,
-    "ImpulseToDamageScalar": 0.01,
-    "CooldownBetweenHitsPerLimb": 0.1,
-
-    "BaseHoldSweepRadius": 40.0,
-    "BaseHoldSweepDistance": 50.0,
+    "BaseHoldSweepRadius": 50.0,
+    "BaseHoldSweepDistance": 60.0,
     "VelocityLookaheadScalar": 0.15,
+    "MinImpulseThreshold": 100.0,
+    "MaxImpulseCap": 5000.0,
+    "PrimaryDamageTargetAttributeTag": "Attribute.Resource.Health",
+    "ImpulseToDamageScalar": 0.05,
+    "CooldownBetweenHitsPerLimb": 0.5,
     "SweepRadiusAttributeScalars": {
       "ReplicatedEntries": [
-        { "KeyTag": "Attribute.Stat.Perception", "Value": 0.5 },
-        { "KeyTag": "Attribute.Skill.Climbing", "Value": 0.2 }
+        {
+          "KeyTag": "Attribute.Stat.Agility",
+          "Value": 0.1
+        }
       ]
     },
     "SweepDistanceAttributeScalars": {
       "ReplicatedEntries": [
-        { "KeyTag": "Attribute.Stat.Agility", "Value": 0.8 },
-        { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 1.2 }
+        {
+          "KeyTag": "Attribute.Stat.Perception",
+          "Value": 0.05
+        }
       ]
     },
-
     "ImpactReactionRules": {
       "Impact.Type.WallSlam": {
         "BaseImpactVelocityThreshold": 750.0,
-        "BaseStabilityLossThreshold": 35.0,
+        "BaseStabilityLossThreshold": 30.0,
         "MassImpactMultiplier": 0.015,
         "bTriggersRagdollOnInstability": true,
         "VelocityMitigationScalars": {
           "ReplicatedEntries": [
-            { "KeyTag": "Attribute.Stat.Agility", "Value": 8.0 },
-            { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 12.0 }
+            {
+              "KeyTag": "Attribute.Stat.Endurance",
+              "Value": 0.2
+            }
           ]
         },
         "DamageMitigationScalars": {
           "ReplicatedEntries": [
-            { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.005 },
-            { "KeyTag": "Attribute.Limb.Armor", "Value": 0.01 }
+            {
+              "KeyTag": "Attribute.Stat.Armor",
+              "Value": 0.15
+            }
           ]
         },
         "StabilityRetentionScalars": {
           "ReplicatedEntries": [
-            { "KeyTag": "Attribute.Stat.Strength", "Value": 2.5 },
-            { "KeyTag": "Attribute.Skill.Climbing", "Value": 4.0 },
-            { "KeyTag": "Attribute.Limb.GripStrength", "Value": 3.0 }
+            {
+              "KeyTag": "Attribute.Stat.Strength",
+              "Value": 0.1
+            }
           ]
         },
         "Consequences": [
           {
-            "TargetAttributeTag": "Attribute.Limb.Integrity",
-            "DamageScalar": 0.04,
-            "bIsLimbSpecific": true,
-            "StatusEffectThreshold": 60.0,
-            "StatusEffectsToApply": ["State.Debuff.Fracture"]
-          },
-          {
             "TargetAttributeTag": "Attribute.Resource.Health",
-            "DamageScalar": 0.02,
+            "DamageScalar": 1.0,
             "bIsLimbSpecific": false,
-            "StatusEffectThreshold": 100.0,
-            "StatusEffectsToApply": []
+            "StatusEffectThreshold": 50.0,
+            "StatusEffectsToApply": [
+              "Status.Effect.Stunned"
+            ]
           }
         ]
       },
       "Impact.Type.FallLanding": {
-        "BaseImpactVelocityThreshold": 900.0,
-        "BaseStabilityLossThreshold": 40.0,
+        "BaseImpactVelocityThreshold": 500.0,
+        "BaseStabilityLossThreshold": 20.0,
         "MassImpactMultiplier": 0.02,
         "bTriggersRagdollOnInstability": true,
         "VelocityMitigationScalars": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Attribute.Stat.Agility", "Value": 10.0 },
-            { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 20.0 }
-          ]
+          "ReplicatedEntries": []
         },
         "DamageMitigationScalars": {
           "ReplicatedEntries": [
-            { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.005 }
+            {
+              "KeyTag": "Attribute.Stat.Acrobatics",
+              "Value": 0.25
+            }
           ]
         },
         "StabilityRetentionScalars": {
-          "ReplicatedEntries": [
-            { "KeyTag": "Attribute.Stat.Balance", "Value": 5.0 },
-            { "KeyTag": "Attribute.Skill.Acrobatics", "Value": 3.0 }
-          ]
+          "ReplicatedEntries": []
         },
         "Consequences": [
           {
-            "TargetAttributeTag": "Attribute.Limb.Integrity",
-            "DamageScalar": 0.08,
-            "bIsLimbSpecific": true,
-            "StatusEffectThreshold": 40.0,
-            "StatusEffectsToApply": ["State.Debuff.BrokenLeg", "State.Debuff.Crippled"]
-          },
-          {
             "TargetAttributeTag": "Attribute.Resource.Health",
-            "DamageScalar": 0.04,
+            "DamageScalar": 0.8,
             "bIsLimbSpecific": false,
-            "StatusEffectThreshold": 200.0,
-            "StatusEffectsToApply": ["State.Debuff.Concussion"]
-          },
-          {
-            "TargetAttributeTag": "Attribute.Resource.Stamina",
-            "DamageScalar": 0.1,
-            "bIsLimbSpecific": false,
-            "StatusEffectThreshold": 999.0,
-            "StatusEffectsToApply": []
+            "StatusEffectThreshold": 40.0,
+            "StatusEffectsToApply": [
+              "Status.Effect.KnockedDown"
+            ]
           }
         ]
       }
     }
-  }
+  },
+  "Limbs": [
+    {
+      "LimbId": 1,
+      "LimbName": "PelvisCore",
+      "ParentLimbId": 0,
+      "DamageMultiplier": 1.0,
+      "BreakRagdollThreshold": 1200.0,
+      "StumbleThreshold": 600.0,
+      "ImpulseMultiplier": 1.0,
+      "IntegrityAttributeTag": "Attribute.Resource.Health.Pelvis",
+      "MaxIntegrityAttributeTag": "Attribute.Resource.Health.Pelvis.Max",
+      "EnduranceAttributeTag": "Attribute.Resource.Endurance.Pelvis",
+      "MaxEnduranceAttributeTag": "Attribute.Resource.Endurance.Pelvis.Max",
+      "Localization": {
+        "ReplicatedEntries": [
+          {
+            "KeyTag": "Localization.Lang.En",
+            "Value": "Pelvis & Torso Core"
+          }
+        ]
+      },
+      "DefaultLimbAttributes": {
+        "ReplicatedEntries": [
+          {
+            "KeyTag": "Attribute.Resource.Health.Pelvis",
+            "Value": 100.0
+          }
+        ]
+      },
+      "AngularMotorAttributeScalars": {
+        "ReplicatedEntries": []
+      },
+      "LinearMotorAttributeScalars": {
+        "ReplicatedEntries": []
+      },
+      "JointChain": [
+        {
+          "BoneName": "pelvis",
+          "JointChainIndex": 0,
+          "MotorDriveWeight": 1.0
+        }
+      ]
+    }
+  ]
 }

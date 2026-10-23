@@ -1,6 +1,5 @@
 ﻿// DynamicContainerComponent.h
 #pragma once
-
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
@@ -43,8 +42,9 @@ public:
     void HandleSingleSlotReplicated(const FDynamicContainerSlotItem& Item, bool bWasRemoved = false);
     void InitializeContainerFromDef(const FDynamicContainerDef& InDef);
 
+    // FIXED: Replaced INDEX_NONE with -1 to pass UHT parsing
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
-    bool IsGridSpaceFree(int32 GridX, int32 GridY, int32 SizeX, int32 SizeY, int32 IgnoreFlatKey = -1) const;
+    bool IsGridSpaceFree(int32 GridX, int32 GridY, int32 SizeX, int32 SizeY, int32 IgnoreReplicationID = -1) const;
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
     bool FindSpaceForItem(FGameplayTag ArchetypeTag, int32& OutGridX, int32& OutGridY, bool& OutRotated) const;
@@ -75,20 +75,21 @@ public:
 
     FFastContainerSlotArray& GetMutableReplicatedSlots() { return ReplicatedSlots; }
     const FFastContainerSlotArray& GetReplicatedSlots() const { return ReplicatedSlots; }
+
     void ClearContainerForPooling();
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     void ServerCompressContainerSlots();
-
     void ScheduleTombstoneCompression(float DelaySeconds = 15.0f);
 
 private:
     void RebuildLocalSlotCache();
     float ResolveArchetypeUnitWeight(FGameplayTag ArchetypeTag, const TArray<FDynamicAttributeItem>& AttributeOverrides) const;
 
-    TMap<int32, int32> FlatKeyToArrayIndexMap;
+    TMap<int32, int32> FlatKeyToReplicationIDMap;
+    TMap<int32, int32> ReplicationIDToIndexMap;
+    
     float CachedTotalWeight = 0.0f;
-
     FTimerHandle TimerHandle_TombstoneCompression;
     int32 PendingTombstoneCount = 0;
 };

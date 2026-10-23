@@ -148,10 +148,8 @@ void UDynamicAttributeSet::SetDynamicAttributeValue(FGameplayTag AttributeTag, f
 void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag AttributeTag, float NewVal, uint8 LimbId, TSet<uint64>& InOutEvaluationStack)
 {
     if (!AttributeTag.IsValid()) return;
-
     const uint64 CompositeKey = MakeCompositeKey(LimbId, AttributeTag);
 
-    // Guaranteed RAII Scope Tracker
     FScopedAttributeEvaluationGuard CycleGuard(InOutEvaluationStack, CompositeKey);
     if (CycleGuard.IsCycleDetected())
     {
@@ -160,6 +158,7 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
     }
 
     AActor* OwningActor = GetOwningActor();
+    const bool bHasAuthority = OwningActor ? OwningActor->HasAuthority() : false;
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
 
@@ -167,8 +166,8 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
     const float OldVal = FastCompositeLookupMap.FindRef(CompositeKey);
     float Delta = NewVal - OldVal;
 
-    // 1. Threshold rules modifier check
-    if (GS && !FMath::IsNearlyZero(Delta))
+    // 1. Threshold rules modifier check (Authority only)
+    if (bHasAuthority && GS && !FMath::IsNearlyZero(Delta))
     {
         if (FDynamicThresholdContainer* Container = GS->MasterThresholdRegistry.Find(AttributeTag))
         {
@@ -193,12 +192,14 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
 
     if (FMath::IsNearlyEqual(OldVal, NewVal) && !bIsNewAttribute) return;
 
+    // Update local O(1) map representation
     FastCompositeLookupMap.Add(CompositeKey, NewVal);
     if (bIsNewAttribute)
     {
         IndexAttributeTagIntoHierarchyCache(AttributeTag);
     }
 
+    // Update FastArray storage
     int32 FoundIdx = FastAttributes.Items.IndexOfByPredicate([LimbId, AttributeTag](const FDynamicAttributeItem& Element) {
         return Element.LimbId == LimbId && Element.AttributeTag == AttributeTag;
     });
@@ -206,7 +207,11 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
     if (FoundIdx != INDEX_NONE)
     {
         FastAttributes.Items[FoundIdx].Value = NewVal;
-        FastAttributes.MarkItemDirty(FastAttributes.Items[FoundIdx]);
+        // Only authority marks FastArray dirty to replicate down to network proxies
+        if (bHasAuthority)
+        {
+            FastAttributes.MarkItemDirty(FastAttributes.Items[FoundIdx]);
+        }
     }
     else
     {
@@ -215,9 +220,13 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
         NewItem.AttributeTag = AttributeTag;
         NewItem.Value = NewVal;
         FastAttributes.Items.Add(NewItem);
-        FastAttributes.MarkArrayDirty();
+        if (bHasAuthority)
+        {
+            FastAttributes.MarkArrayDirty();
+        }
     }
 
+    // Broadcast UI updates immediately (runs for both server authority and local prediction)
     if (LimbId == 0)
     {
         OnDynamicAttributeChanged.Broadcast(AttributeTag, NewVal);
@@ -230,6 +239,12 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
         {
             DynChar->RecalculateLimbPhysicsMotors(LimbId);
         }
+    }
+
+    // Predictive client mutations exit here to keep progressions server-authoritative
+    if (!bHasAuthority)
+    {
+        return;
     }
 
     // 2. High-Performance Milestone Evaluation
@@ -258,7 +273,6 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
                         const float RemainingProgress = NewVal - MaxCapValue;
                         SetDynamicAttributeValueInternal(Rule.MonitoredAttributeTag, RemainingProgress, LimbId, InOutEvaluationStack);
                         SetDynamicAttributeValueInternal(Rule.TargetEvolvedAttributeTag, GetDynamicAttributeValue(Rule.TargetEvolvedAttributeTag, LimbId) + 1.0f, LimbId, InOutEvaluationStack);
-
                         if (Rule.BroadcastEventTag.IsValid())
                         {
                             if (UAbilitySystemComponent* ASC = OwningActor ? OwningActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr)

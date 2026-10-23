@@ -603,21 +603,31 @@ void ADynamicGameState::WarmGameplayEffectCacheAsync(TFunction<void()> OnComplet
     TSharedRef<int32> CurrentIndex = MakeShared<int32>(0);
     TSharedRef<TArray<FGameplayTag>> TagsToProcess = MakeShared<TArray<FGameplayTag>>(MoveTemp(PendingTags));
 
-    FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this, CurrentIndex, TagsToProcess, OnComplete, MaxBudgetPerFrameSeconds](float DeltaTime) -> bool
-    {
-        if (!IsValid(this)) return false;
+    TWeakObjectPtr<ADynamicGameState> WeakThis(this);
 
+    FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, CurrentIndex, TagsToProcess, OnComplete, MaxBudgetPerFrameSeconds](float DeltaTime) -> bool
+    {
+        if (!WeakThis.IsValid())
+        {
+            return false;
+        }
+
+        ADynamicGameState* StrongThis = WeakThis.Get();
         const double StartTime = FPlatformTime::Seconds();
+
         while (*CurrentIndex < TagsToProcess->Num() && (FPlatformTime::Seconds() - StartTime < MaxBudgetPerFrameSeconds))
         {
             const FGameplayTag& Tag = (*TagsToProcess)[*CurrentIndex];
-            GetOrCreateCachedEffectObject(Tag);
+            StrongThis->GetOrCreateCachedEffectObject(Tag);
             (*CurrentIndex)++;
         }
 
         if (*CurrentIndex >= TagsToProcess->Num())
         {
-            if (OnComplete) OnComplete();
+            if (OnComplete)
+            {
+                OnComplete();
+            }
             return false;
         }
         return true;

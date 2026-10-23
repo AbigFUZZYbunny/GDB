@@ -7,6 +7,7 @@
 #include "AbilitySystemComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
+#include "SignificanceManager.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -23,20 +24,54 @@ void UDynamicCustomizationComponent::BeginPlay()
     Super::BeginPlay();
     ReplicatedMorphs.OwningCustomizationComp = this;
 
-    // On non-dedicated servers (client and standalone), poll significance at low frequency (2.0s)
-    // for distant crowd characters to eliminate per-frame distance overhead.
     if (UWorld* World = GetWorld())
     {
         if (World->GetNetMode() != NM_DedicatedServer)
         {
-            World->GetTimerManager().SetTimer(
-                TimerHandle_SignificancePoll,
-                this,
-                &UDynamicCustomizationComponent::UpdateSignificanceEvaluation,
-                2.0f,
-                true,
-                FMath::FRandRange(0.1f, 1.5f) // Jitter start to distribute CPU spikes across crowd
-            );
+            if (USignificanceManager* SigMan = USignificanceManager::Get(World))
+            {
+                USignificanceManager::FManagedObjectSignificanceFunction SigFunc(
+                    [WeakThis = TWeakObjectPtr<UDynamicCustomizationComponent>(this)](
+                        USignificanceManager::FManagedObjectInfo* ObjectInfo, 
+                        const FTransform& Viewpoint) -> float
+                    {
+                        if (!WeakThis.IsValid()) return 0.0f;
+                        UDynamicCustomizationComponent* Comp = WeakThis.Get();
+                        AActor* Owner = Comp->GetOwner();
+                        if (!Owner) return 0.0f;
+
+                        APawn* PawnOwner = Cast<APawn>(Owner);
+                        if (PawnOwner && PawnOwner->IsLocallyControlled())
+                        {
+                            return 1.0f;
+                        }
+
+                        const float DistSq = FVector::DistSquared(Owner->GetActorLocation(), Viewpoint.GetLocation());
+                        return (DistSq <= FMath::Square(Comp->MorphSignificanceRadius)) ? 1.0f : 0.0f;
+                    }
+                );
+
+                USignificanceManager::FManagedObjectPostSignificanceFunction PostWork(
+                    [WeakThis = TWeakObjectPtr<UDynamicCustomizationComponent>(this)](
+                        USignificanceManager::FManagedObjectInfo* ObjectInfo, 
+                        float OldSig, 
+                        float NewSig, 
+                        bool bFinal)
+                    {
+                        if (!WeakThis.IsValid()) return;
+                        const bool bSignificant = (NewSig > 0.5f);
+                        WeakThis->SetSignificanceState(bSignificant);
+                    }
+                );
+
+                SigMan->RegisterObject(
+                    GetOwner(), 
+                    FName("DynamicCustomization"), 
+                    SigFunc, 
+                    USignificanceManager::EPostSignificanceType::Sequential, 
+                    PostWork
+                );
+            }
         }
     }
 }

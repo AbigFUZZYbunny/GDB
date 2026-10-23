@@ -11,6 +11,7 @@ class ADynamicPhysicsActor;
 class ADynamicCharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FDynamicContainerSlotChangedSignature, int32, GridX, int32, GridY, FGameplayTag, StoredArchetypeTag, int32, NewStackCount);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FDynamicContainerFullRebuildSignature);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicContainerComponent : public UActorComponent
@@ -26,6 +27,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Container")
     FDynamicContainerSlotChangedSignature OnContainerSlotChanged;
+
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Container")
+    FDynamicContainerFullRebuildSignature OnContainerFullRebuild;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Container")
     FDynamicContainerDef ContainerConfig;
@@ -66,11 +70,13 @@ public:
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
     float GetCurrentTotalWeight() const { return CachedTotalWeight; }
 
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
+    bool GetSlotItemAtGrid(int32 GridX, int32 GridY, FDynamicContainerSlotItem& OutSlotItem) const;
+
     FFastContainerSlotArray& GetMutableReplicatedSlots() { return ReplicatedSlots; }
     const FFastContainerSlotArray& GetReplicatedSlots() const { return ReplicatedSlots; }
     void ClearContainerForPooling();
 
-    // FastArray Tombstone Garbage Collection
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     void ServerCompressContainerSlots();
 

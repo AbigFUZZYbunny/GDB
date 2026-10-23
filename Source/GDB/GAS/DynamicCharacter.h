@@ -99,7 +99,6 @@ public:
     UFUNCTION()
     void OnRep_ActiveMovementState();
 
-    // --- Mass & Climbing Physics API ---
     UFUNCTION(BlueprintPure, Category = "DynamicGAS|Physics|Mass")
     float CalculateTotalInventoryAndEquipmentMass() const;
 
@@ -124,7 +123,6 @@ protected:
     void OnServerCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
     void HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag);
-    
     void ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, const FHitResult& Hit, float ImpactVelocity);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
@@ -173,13 +171,15 @@ private:
 
     bool bPreRewindSimulatingPhysics = false;
     bool bPreRewindMoverActive = false;
-    
-    // Climbing state trackers
+
     bool bIsClimbingPhysical = false;
     bool bCurrentFootingActive = false;
     TMap<FName, FTransform> ActiveLimbHolds;
-    
+
     float CachedTargetCapsuleHalfHeight = 88.0f;
     FVector PreviousVelocity = FVector::ZeroVector;
     FGameplayTagContainer GrantedMovementTags;
+
+    FVector LastHoldSweepLocation = FVector::ZeroVector;
+    float AccumulatedHoldSweepTime = 0.0f;
 };

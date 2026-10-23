@@ -1889,7 +1889,7 @@ struct FDynamicImpactReactionRule
 };
 
 // ============================================================================
-// PHYSICS CALCULATION SETTINGS
+// SKELETAL TOPOLOGY & PHYSICS MOTOR CONFIG
 // ============================================================================
 
 USTRUCT(BlueprintType)
@@ -1897,26 +1897,36 @@ struct FPhysicsCalculationSettings
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString CalculationMode = TEXT("ImpulseMagnitude");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FGameplayTag PrimaryDamageTargetAttributeTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
-    float MinImpulseThreshold = 300.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MinImpulseThreshold = 350.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
-    float MaxImpulseCap = 15000.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MaxImpulseCap = 25000.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
-    float ImpulseToDamageScalar = 0.01f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ImpulseToDamageScalar = 0.0085f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
-    float CooldownBetweenHitsPerLimb = 0.1f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MassRatioExponent = 0.75f;
 
-    // Maps Impact Type (e.g., Impact.Type.WallSlam, Impact.Type.FallLanding) to Reaction Rules
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MinRelativeVelocityThreshold = 200.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float VelocityToDamageScalar = 0.05f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float CooldownBetweenHitsPerLimb = 0.15f;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     TMap<FGameplayTag, FDynamicImpactReactionRule> ImpactReactionRules;
 
-    // --- Dynamic Traversable & Hold Detection Settings ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
     float BaseHoldSweepRadius = 50.0f;
 
@@ -1924,13 +1934,13 @@ struct FPhysicsCalculationSettings
     float BaseHoldSweepDistance = 60.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
-    float VelocityLookaheadScalar = 0.15f; // Extends the trace distance based on current movement speed
+    float VelocityLookaheadScalar = 0.15f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
-    FDynamicTagFloatMapWrapper SweepRadiusAttributeScalars; // Attributes expanding window size (Perception, Reach)
+    FDynamicTagFloatMapWrapper SweepRadiusAttributeScalars;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Traversal")
-    FDynamicTagFloatMapWrapper SweepDistanceAttributeScalars; // Attributes expanding trace length (Agility, Reflexes)
+    FDynamicTagFloatMapWrapper SweepDistanceAttributeScalars;
 };
 
 USTRUCT(BlueprintType)

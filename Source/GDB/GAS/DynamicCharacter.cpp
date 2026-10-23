@@ -131,10 +131,11 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
 
+    // Track frame velocity for both Authority and locally controlled clients
+    PreviousVelocity = GetVelocity();
+
     if (HasAuthority())
     {
-        PreviousVelocity = GetVelocity();
-
         // 1. Snapshot generation
         if (CapsuleComponent && MeshComponent)
         {
@@ -191,18 +192,21 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
                 }
             }
         }
+    }
 
-        // 3. Evaluate Climbing and Hanging States
-        static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
-        static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
-        
-        if (ActiveMovementStateTag.MatchesTag(HangTag) || ActiveMovementStateTag.MatchesTag(ClimbTag))
+    // 3. Evaluate Climbing and Hanging (Runs on Authority AND Locally Controlled Clients for Prediction)
+    static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
+    static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
+
+    if (ActiveMovementStateTag.MatchesTag(HangTag) || ActiveMovementStateTag.MatchesTag(ClimbTag))
+    {
+        if (HasAuthority() || IsLocallyControlled())
         {
             UpdateAutomatedClimbingState(DeltaSeconds);
         }
     }
 
-    // 4. Smooth Capsule Stance Update
+    // 4. Smooth Capsule Stance Interpolation
     if (CapsuleComponent && CachedTargetCapsuleHalfHeight > 0.0f)
     {
         const float CurrentHeight = CapsuleComponent->GetUnscaledCapsuleHalfHeight();
@@ -270,106 +274,177 @@ float ADynamicCharacter::GetEffectiveClimbingLoad() const
 
 void ADynamicCharacter::UpdateAutomatedClimbingState(float DeltaSeconds)
 {
-    if (!HasAuthority() || !CapsuleComponent || !AttributeSet || !PhysicsControlComponent) return;
+    if ((!HasAuthority() && !IsLocallyControlled()) || !CapsuleComponent || !AttributeSet || !PhysicsControlComponent) return;
 
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
     if (!World || !GS) return;
 
-    const FPhysicsCalculationSettings& Settings = GS->GetCalculationSettings();
     const float EffectiveLoad = GetEffectiveClimbingLoad();
-    
-    // 1. Drain Grip/Stamina based on load
-    static const FGameplayTag StaminaTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.Stamina"), false);
-    if (StaminaTag.IsValid())
-    {
-        float CurStamina = AttributeSet->GetDynamicAttributeValue(StaminaTag, 0);
-        const float BaseDrain = bCurrentFootingActive ? 5.0f : 15.0f;
-        CurStamina -= (BaseDrain * EffectiveLoad * DeltaSeconds);
 
-        if (CurStamina <= 0.0f)
-        {
-            AttributeSet->SetDynamicAttributeValue(StaminaTag, 0.0f, 0);
-            StartRagdoll();
-            return;
-        }
-        AttributeSet->SetDynamicAttributeValue(StaminaTag, CurStamina, 0);
-    }
-
-    // 2. Dynamic Traversal Detection Bounds (Speed & Attribute Modifiers)
-    float RadiusBonus = 0.0f;
-    for (const auto& Pair : Settings.SweepRadiusAttributeScalars.LocalLookupMap)
-    {
-        if (Pair.Key.IsValid()) RadiusBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
-    }
-
-    float DistBonus = 0.0f;
-    for (const auto& Pair : Settings.SweepDistanceAttributeScalars.LocalLookupMap)
-    {
-        if (Pair.Key.IsValid()) DistBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
-    }
-
-    const float DynamicSweepRadius = FMath::Max(10.0f, Settings.BaseHoldSweepRadius + RadiusBonus);
-    const float CurrentSpeed = PreviousVelocity.Size();
-    const float DynamicSweepDist = FMath::Max(20.0f, Settings.BaseHoldSweepDistance + DistBonus + (CurrentSpeed * Settings.VelocityLookaheadScalar));
-
-    // 3. Automated Hold Sweeps for limbs
+    // 1. Optimized Hold-Detection Sweep (Traced only when moved >= 15 units or 0.1s has elapsed)
+    AccumulatedHoldSweepTime += DeltaSeconds;
     const FVector BaseLoc = GetActorLocation();
-    const FVector Forward = GetActorForwardVector();
-    
-    auto TraceForHold = [&](const FVector& StartLoc, const FName& TargetTagStr) -> FTransform
-    {
-        TArray<FHitResult> Hits;
-        FCollisionShape Sphere = FCollisionShape::MakeSphere(DynamicSweepRadius);
-        FCollisionQueryParams Params(SCENE_QUERY_STAT(HoldSweep), false, this);
-        World->SweepMultiByChannel(Hits, StartLoc, StartLoc + (Forward * DynamicSweepDist), FQuat::Identity, ECC_Visibility, Sphere, Params);
+    const bool bMovedEnough = (BaseLoc - LastHoldSweepLocation).SizeSquared() >= FMath::Square(15.0f);
+    const bool bTimeElapsed = (AccumulatedHoldSweepTime >= 0.1f);
 
-        for (const FHitResult& Hit : Hits)
+    if (bMovedEnough || bTimeElapsed)
+    {
+        LastHoldSweepLocation = BaseLoc;
+        AccumulatedHoldSweepTime = 0.0f;
+
+        const FPhysicsCalculationSettings& Settings = GS->GetCalculationSettings();
+
+        float RadiusBonus = 0.0f;
+        for (const auto& Pair : Settings.SweepRadiusAttributeScalars.LocalLookupMap)
         {
-            if (AActor* HitActor = Hit.GetActor())
+            if (Pair.Key.IsValid()) RadiusBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+        }
+
+        float DistBonus = 0.0f;
+        for (const auto& Pair : Settings.SweepDistanceAttributeScalars.LocalLookupMap)
+        {
+            if (Pair.Key.IsValid()) DistBonus += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+        }
+
+        const float DynamicSweepRadius = FMath::Max(10.0f, Settings.BaseHoldSweepRadius + RadiusBonus);
+        const float CurrentSpeed = PreviousVelocity.Size();
+        const float DynamicSweepDist = FMath::Max(20.0f, Settings.BaseHoldSweepDistance + DistBonus + (CurrentSpeed * Settings.VelocityLookaheadScalar));
+        const FVector Forward = GetActorForwardVector();
+
+        auto CanLimbAcquireHold = [&](FName BoneName) -> bool
+        {
+            const uint8 LimbId = GS->GetLimbIdForBone(BoneName);
+            if (const FPhysicsLimbConfig* LimbData = GS->GetLimbData(LimbId))
             {
-                if (UDynamicInteractableComponent* Interactable = HitActor->FindComponentByClass<UDynamicInteractableComponent>())
+                if (LimbData->EnduranceAttributeTag.IsValid())
                 {
-                    FTransform HoldTransform;
-                    USceneComponent* DummyComp;
-                    FGameplayTag HoldTag = FGameplayTag::RequestGameplayTag(TargetTagStr, false);
-                    if (HoldTag.IsValid() && Interactable->ResolveKinematicTargetTransform(HoldTag, HoldTransform, DummyComp))
+                    return AttributeSet->GetDynamicAttributeValue(LimbData->EnduranceAttributeTag, LimbId) > 0.0f;
+                }
+            }
+            return true;
+        };
+
+        auto TraceForHold = [&](const FVector& StartLoc, const FName& TargetTagStr) -> FTransform
+        {
+            TArray<FHitResult> Hits;
+            FCollisionShape Sphere = FCollisionShape::MakeSphere(DynamicSweepRadius);
+            FCollisionQueryParams Params(SCENE_QUERY_STAT(HoldSweep), false, this);
+            World->SweepMultiByChannel(Hits, StartLoc, StartLoc + (Forward * DynamicSweepDist), FQuat::Identity, ECC_Visibility, Sphere, Params);
+
+            for (const FHitResult& Hit : Hits)
+            {
+                if (AActor* HitActor = Hit.GetActor())
+                {
+                    if (UDynamicInteractableComponent* Interactable = HitActor->FindComponentByClass<UDynamicInteractableComponent>())
                     {
-                        return HoldTransform;
+                        FTransform HoldTransform;
+                        USceneComponent* DummyComp = nullptr;
+                        FGameplayTag HoldTag = FGameplayTag::RequestGameplayTag(TargetTagStr, false);
+                        if (HoldTag.IsValid() && Interactable->ResolveKinematicTargetTransform(HoldTag, HoldTransform, DummyComp))
+                        {
+                            return HoldTransform;
+                        }
                     }
                 }
             }
+            return FTransform::Identity;
+        };
+
+        // Sweep for Hands (only if the limb is not exhausted)
+        if (CanLimbAcquireHold(FName("hand_r")))
+        {
+            FTransform RHandHold = TraceForHold(BaseLoc + FVector(30.0f, 30.0f, 50.0f), FName("KinematicTarget.Handhold.Right"));
+            if (!RHandHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("hand_r"), RHandHold);
         }
-        return FTransform::Identity;
-    };
 
-    FTransform RHandHold = TraceForHold(BaseLoc + FVector(30.0f, 30.0f, 50.0f), FName("KinematicTarget.Handhold.Right"));
-    if (!RHandHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("hand_r"), RHandHold);
+        if (CanLimbAcquireHold(FName("hand_l")))
+        {
+            FTransform LHandHold = TraceForHold(BaseLoc + FVector(30.0f, -30.0f, 50.0f), FName("KinematicTarget.Handhold.Left"));
+            if (!LHandHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("hand_l"), LHandHold);
+        }
 
-    FTransform LHandHold = TraceForHold(BaseLoc + FVector(30.0f, -30.0f, 50.0f), FName("KinematicTarget.Handhold.Left"));
-    if (!LHandHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("hand_l"), LHandHold);
+        // Sweep for Feet
+        if (CanLimbAcquireHold(FName("foot_r")))
+        {
+            FTransform RFootHold = TraceForHold(BaseLoc + FVector(30.0f, 20.0f, -50.0f), FName("KinematicTarget.Foothold.Right"));
+            if (!RFootHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("foot_r"), RFootHold);
+        }
 
-    FTransform RFootHold = TraceForHold(BaseLoc + FVector(30.0f, 20.0f, -50.0f), FName("KinematicTarget.Foothold.Right"));
-    FTransform LFootHold = TraceForHold(BaseLoc + FVector(30.0f, -20.0f, -50.0f), FName("KinematicTarget.Foothold.Left"));
+        if (CanLimbAcquireHold(FName("foot_l")))
+        {
+            FTransform LFootHold = TraceForHold(BaseLoc + FVector(30.0f, -20.0f, -50.0f), FName("KinematicTarget.Foothold.Left"));
+            if (!LFootHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("foot_l"), LFootHold);
+        }
 
-    bool bHasAnyFooting = !RFootHold.Equals(FTransform::Identity) || !LFootHold.Equals(FTransform::Identity);
-    if (bHasAnyFooting != bCurrentFootingActive)
-    {
-        bCurrentFootingActive = bHasAnyFooting;
-        ConfigureClimbingPhysics(true, bCurrentFootingActive);
+        const bool bHasAnyFooting = ActiveLimbHolds.Contains(FName("foot_r")) || ActiveLimbHolds.Contains(FName("foot_l"));
+        if (bHasAnyFooting != bCurrentFootingActive)
+        {
+            bCurrentFootingActive = bHasAnyFooting;
+            ConfigureClimbingPhysics(true, bCurrentFootingActive);
+        }
     }
 
-    if (!RFootHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("foot_r"), RFootHold);
-    if (!LFootHold.Equals(FTransform::Identity)) ActiveLimbHolds.Add(FName("foot_l"), LFootHold);
+    // 2. Data-Driven Limb Fatigue (Distributed endurance drain across active holds)
+    TArray<FName> FailedLimbHolds;
+    const float BaseDrainRate = bCurrentFootingActive ? 2.5f : 10.0f; // Footing reduces strain on hands
 
+    for (const auto& HoldPair : ActiveLimbHolds)
+    {
+        const uint8 LimbId = GS->GetLimbIdForBone(HoldPair.Key);
+        if (const FPhysicsLimbConfig* LimbData = GS->GetLimbData(LimbId))
+        {
+            if (LimbData->EnduranceAttributeTag.IsValid())
+            {
+                float CurEndurance = AttributeSet->GetDynamicAttributeValue(LimbData->EnduranceAttributeTag, LimbId);
+                const float DistributedDrain = (BaseDrainRate * EffectiveLoad * DeltaSeconds) / FMath::Max(1, ActiveLimbHolds.Num());
+                CurEndurance -= DistributedDrain;
+                AttributeSet->SetDynamicAttributeValue(LimbData->EnduranceAttributeTag, FMath::Max(0.0f, CurEndurance), LimbId);
+
+                if (CurEndurance <= 0.0f)
+                {
+                    FailedLimbHolds.Add(HoldPair.Key);
+                }
+            }
+        }
+    }
+
+    // 3. Process Localized Detachments
+    for (const FName& FailedBone : FailedLimbHolds)
+    {
+        ActiveLimbHolds.Remove(FailedBone);
+
+        const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *FailedBone.ToString()));
+        FPhysicsControlMultiplier DanglingMult;
+        DanglingMult.LinearStrengthMultiplier = FVector(0.0f);
+        DanglingMult.AngularStrengthMultiplier = 0.05f;
+        DanglingMult.LinearExtraDampingMultiplier = FVector(0.2f);
+        DanglingMult.AngularExtraDampingMultiplier = 0.2f;
+        PhysicsControlComponent->SetControlMultiplier(ControlName, DanglingMult);
+    }
+
+    // 4. Evaluate Total Failure (Both hands lost)
+    const bool bHasRightHand = ActiveLimbHolds.Contains(FName("hand_r"));
+    const bool bHasLeftHand = ActiveLimbHolds.Contains(FName("hand_l"));
+
+    if (!bHasRightHand && !bHasLeftHand)
+    {
+        if (HasAuthority())
+        {
+            StartRagdoll();
+        }
+        return;
+    }
+
+    // 5. Update Surviving Limb Targets to Physics Control Component
     for (const auto& Pair : ActiveLimbHolds)
     {
         const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *Pair.Key.ToString()));
         PhysicsControlComponent->SetControlTargetPositionAndOrientation(
-            ControlName, 
-            Pair.Value.GetLocation(), 
-            Pair.Value.GetRotation().Rotator(), 
-            100.0f, 
+            ControlName,
+            Pair.Value.GetLocation(),
+            Pair.Value.GetRotation().Rotator(),
+            100.0f,
             true
         );
     }
@@ -505,7 +580,19 @@ void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, 
     FName HitBoneName = Hit.MyBoneName;
     if (HitBoneName == NAME_None && MeshComponent)
     {
-        HitBoneName = MeshComponent->FindClosestBone(Hit.ImpactPoint);
+        FHitResult MeshHit;
+        FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ImpactBoneTrace), true, this);
+        const FVector Start = Hit.ImpactPoint + (Hit.ImpactNormal * 5.0f);
+        const FVector End = Hit.ImpactPoint - (Hit.ImpactNormal * 15.0f);
+
+        if (MeshComponent->LineTraceComponent(MeshHit, Start, End, QueryParams))
+        {
+            HitBoneName = MeshHit.BoneName;
+        }
+        else
+        {
+            HitBoneName = MeshComponent->FindClosestBone(Hit.ImpactPoint);
+        }
     }
     if (HitBoneName == NAME_None) HitBoneName = FName("pelvis");
 
@@ -539,7 +626,7 @@ void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, 
             TotalDamageAbsorption += (GlobalVal + LimbVal) * Pair.Value;
         }
     }
-    
+
     const float RawUnmitigatedDamage = ExcessVelocity * MassFactor;
     const float MitigatedDamage = RawUnmitigatedDamage * FMath::Clamp(1.0f - TotalDamageAbsorption, 0.05f, 5.0f);
 
@@ -547,14 +634,13 @@ void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, 
     for (const FDynamicImpactConsequence& Conseq : Rule->Consequences)
     {
         if (!Conseq.TargetAttributeTag.IsValid()) continue;
-        
+
         const float AppliedDamage = MitigatedDamage * Conseq.DamageScalar;
         const uint8 TargetLimb = Conseq.bIsLimbSpecific ? ResolvedLimbId : 0;
-        
+
         const float CurVal = AttributeSet->GetDynamicAttributeValue(Conseq.TargetAttributeTag, TargetLimb);
         AttributeSet->SetDynamicAttributeValue(Conseq.TargetAttributeTag, FMath::Max(0.0f, CurVal - AppliedDamage), TargetLimb);
 
-        // Apply Status Effects (e.g. Broken Leg, Concussion) if unmitigated force exceeded threshold
         if (AppliedDamage >= Conseq.StatusEffectThreshold && AbilitySystemComponent)
         {
             for (const FGameplayTag& EffectTag : Conseq.StatusEffectsToApply)

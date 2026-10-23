@@ -68,6 +68,9 @@ void UDynamicContainerComponent::OnRep_ReplicatedSlots()
         const int32 DisplayCount = (!Item.StoredActorArchetypeTag.IsValid() || Item.StackCount <= 0) ? 0 : Item.StackCount;
         OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, DisplayCount);
     }
+
+    // Fully flush and reconstruct UI slot widget layouts on array compression / net sync
+    OnContainerFullRebuild.Broadcast();
 }
 
 void UDynamicContainerComponent::RebuildLocalSlotCache()
@@ -468,4 +471,20 @@ void UDynamicContainerComponent::ServerCompressContainerSlots()
 
     ReplicatedSlots.MarkArrayDirty();
     RebuildLocalSlotCache();
+
+    OnContainerFullRebuild.Broadcast();
+}
+
+bool UDynamicContainerComponent::GetSlotItemAtGrid(int32 GridX, int32 GridY, FDynamicContainerSlotItem& OutSlotItem) const
+{
+    const int32 FlatKey = GridY * ContainerConfig.GridWidth + GridX;
+    if (const int32* FoundIdx = FlatKeyToArrayIndexMap.Find(FlatKey))
+    {
+        if (ReplicatedSlots.Items.IsValidIndex(*FoundIdx))
+        {
+            OutSlotItem = ReplicatedSlots.Items[*FoundIdx];
+            return true;
+        }
+    }
+    return false;
 }

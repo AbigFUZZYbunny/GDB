@@ -86,9 +86,7 @@ private:
     void EvaluateMilestoneChanges(FGameplayTag AttributeTag, float OldValue, float NewValue, AActor* TargetActor, uint8 LimbId);
     void ApplyOrUndoMilestoneStep(const FDynamicMilestoneAction& Action, bool bIsUndo, UAbilitySystemComponent* TargetASC, uint8 LimbId);
 
-    // Call-stack cycle detector: Replaces unsafe thread_local guards with deterministic recursion tracking
     TSet<uint64> ActiveThresholdEvaluationKeys;
 
-    // Internal implementation supporting cycle detection
     void SetDynamicAttributeValueInternal(FGameplayTag AttributeTag, float NewVal, uint8 LimbId, TSet<uint64>& InOutEvaluationStack);
 };

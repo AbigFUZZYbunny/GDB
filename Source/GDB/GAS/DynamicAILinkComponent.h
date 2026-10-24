@@ -1,6 +1,5 @@
 ﻿// DynamicAILinkComponent.h
 #pragma once
-
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "DynamicGASTypes.h"
@@ -30,10 +29,12 @@ public:
 	void Server_SubmitFinalResult(const FGuid& TaskId, const FString& FinalJsonResult);
 
 private:
-	// Update to UE5's 64-bit progress signature
 	void OnStreamProgress64(FHttpRequestPtr Request, uint64 BytesSent, uint64 BytesReceived);
 	void OnStreamComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 
 	FGuid ActiveTaskId;
 	int32 LastParsedSseIndex = 0;
+
+	// PREVENTS CRASHES: Thread-safe pointer allows safe cancellation if component is destroyed mid-stream
+	TSharedPtr<class IHttpRequest, ESPMode::ThreadSafe> ActiveHttpRequest;
 };

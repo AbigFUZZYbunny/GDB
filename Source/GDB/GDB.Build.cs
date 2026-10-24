@@ -25,7 +25,8 @@ public class GDB : ModuleRules
 			"MotionTrajectory",
 			"AIModule", 
 			"HTTP",
-			"SignificanceManager"
+			"SignificanceManager",
+			"ProceduralMeshComponent"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

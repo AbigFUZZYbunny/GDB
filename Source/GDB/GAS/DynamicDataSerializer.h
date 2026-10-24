@@ -55,6 +55,7 @@ public:
     static void DeserializeMovementStatConfig(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FMovementStatConfig& OutConfig);
     static void DeserializeImpactReactionRule(const TSharedPtr<FJsonObject>& InObject, FDynamicImpactReactionRule& OutRule);
     
+    static bool DeserializeVoxelMasterRegistry(const TSharedPtr<FJsonObject>& RootObject, FMasterRegistryStagingData& OutStaging);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
     static bool SerializePlayerToSnapshotJson(const ADynamicCharacter* InCharacter, FString& OutJsonPayload);

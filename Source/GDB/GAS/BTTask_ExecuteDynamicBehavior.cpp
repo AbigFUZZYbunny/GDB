@@ -195,15 +195,28 @@ void UBTTask_ExecuteDynamicBehavior::TickTask(UBehaviorTreeComponent& OwnerComp,
     }
 }
 
+// BTTask_ExecuteDynamicBehavior.cpp (AbortTask implementation)
 EBTNodeResult::Type UBTTask_ExecuteDynamicBehavior::AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-    if (CachedCharacter.IsValid() && ActiveBehaviorDef.MontageToPlay.IsValid())
+    if (CachedCharacter.IsValid())
     {
-        if (USkeletalMeshComponent* MeshComp = CachedCharacter->GetMeshComponent())
+        // FIX: Ensure GAS abilities activated by the behavior tree are properly canceled on BT aborts
+        if (ActiveBehaviorDef.ExecutionType == ENpcBehaviorExecutionType::Ability && ActiveBehaviorDef.AbilityTagToTrigger.IsValid())
         {
-            if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+            if (UAbilitySystemComponent* ASC = CachedCharacter->GetAbilitySystemComponent())
             {
-                AnimInst->Montage_Stop(0.2f);
+                FGameplayTagContainer TagsToCancel(ActiveBehaviorDef.AbilityTagToTrigger);
+                ASC->CancelAbilities(&TagsToCancel);
+            }
+        }
+        else if (ActiveBehaviorDef.ExecutionType == ENpcBehaviorExecutionType::Montage && ActiveBehaviorDef.MontageToPlay.IsValid())
+        {
+            if (USkeletalMeshComponent* MeshComp = CachedCharacter->GetMeshComponent())
+            {
+                if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+                {
+                    AnimInst->Montage_Stop(0.2f);
+                }
             }
         }
     }

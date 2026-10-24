@@ -56,6 +56,7 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
 
     UPROPERTY() FDynamicCalendarDef CalendarConfig;
     UPROPERTY() FPhysicsCalculationSettings CalculationSettings;
@@ -115,11 +116,19 @@ public:
     
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Ability Scoring")
     bool GetComputedAbilityScore(FGameplayTag AbilityTag, FComputedAbilityScoreInfo& OutScoreInfo) const;
+    
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    int32 GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    const TArray<FEnvironmentGridCellItem>& GetEnvironmentReadBuffer() const { return EnvironmentReadBuffer; }
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    TArray<FEnvironmentGridCellItem>& GetMutableEnvironmentReadBuffer() { return EnvironmentReadBuffer; }
 
 private:
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);
     void SpawnServerEnvironmentChunks();
-    int32 GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const;
     int32 ResolveElementArrayIndex(const FGameplayTag& Tag) const { return TrackedElementsMap.FindRef(Tag); }
     float ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath) const;
     float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;

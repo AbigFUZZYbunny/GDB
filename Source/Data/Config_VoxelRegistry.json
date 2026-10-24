@@ -1,0 +1,20 @@
+﻿{
+  "VoxelMasterRegistry": {
+    "Voxel.Type.Dirt": {
+      "VoxelTypeTag": "Voxel.Type.Dirt",
+      "ElementalContributionTag": "Element.Earth",
+      "EnvironmentDensityContribution": 5.0,
+      "MaxHP": 100,
+      "DestroyedItemArchetype": "Item.Resource.DirtBlock",
+      "VoxelMaterial": "MaterialInstanceConstant'/Game/Materials/Voxels/MI_Voxel_Dirt.MI_Voxel_Dirt'"
+    },
+    "Voxel.Type.Water": {
+      "VoxelTypeTag": "Voxel.Type.Water",
+      "ElementalContributionTag": "Element.Water",
+      "EnvironmentDensityContribution": 20.0,
+      "MaxHP": 10,
+      "DestroyedItemArchetype": "None",
+      "VoxelMaterial": "MaterialInstanceConstant'/Game/Materials/Voxels/MI_Voxel_Water.MI_Voxel_Water'"
+    }
+  }
+}

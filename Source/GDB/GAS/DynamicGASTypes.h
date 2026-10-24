@@ -1388,6 +1388,76 @@ struct FDynamicConditionTreeContainer
 };
 
 // ============================================================================
+// VOXEL WORLD DEFS
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicVoxelTypeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag VoxelTypeTag;
+
+    // The elemental contribution to the environment grid when this voxel exists in a cell
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag ElementalContributionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float EnvironmentDensityContribution = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 MaxHP = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag DestroyedItemArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UMaterialInterface> VoxelMaterial;
+};
+
+USTRUCT(BlueprintType)
+struct FVoxelDeltaItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    int32 VoxelIndex = 0;
+
+    UPROPERTY()
+    uint8 VoxelTypeID = 0;
+
+    UPROPERTY()
+    uint8 CurrentHP = 0;
+
+    void PreReplicatedRemove(const struct FFastVoxelDeltaArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastVoxelDeltaArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastVoxelDeltaArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastVoxelDeltaArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FVoxelDeltaItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class ADynamicVoxelChunkActor* OwningChunk = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FVoxelDeltaItem, FFastVoxelDeltaArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastVoxelDeltaArray> : public TStructOpsTypeTraitsBase2<FFastVoxelDeltaArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// ============================================================================
 // COMBO WINDOWS & ABILITY DEFINITIONS
 // ============================================================================
 
@@ -2445,26 +2515,6 @@ struct FDynamicCalendarDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Calendar")
     int32 SeasonsPerYear = 4;
 };
-
-/*
-USTRUCT(BlueprintType)
-struct FDynamicLifeStageDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
-    FGameplayTag StageTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
-    float MinimumAgeYears = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
-    float BaseScaleMultiplier = 1.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Aging")
-    TArray<FGenderAttributeModifier> StageAttributeModifiers;
-};
-*/
 
 USTRUCT(BlueprintType)
 struct FDynamicAlleleDef
@@ -4423,6 +4473,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
     TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
+    TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
 
     bool bHasCalendarConfig = false;
     FDynamicCalendarDef CalendarConfig;

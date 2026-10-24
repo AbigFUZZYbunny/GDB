@@ -30,6 +30,11 @@ void UDynamicAILinkComponent::BeginPlay()
 
 void UDynamicAILinkComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    if (ActiveHttpRequest.IsValid() && ActiveHttpRequest->GetStatus() == EHttpRequestStatus::Processing)
+    {
+        ActiveHttpRequest->CancelRequest();
+    }
+
     if (GetOwner() && GetOwner()->HasAuthority())
     {
         if (UWorld* World = GetWorld())
@@ -48,18 +53,19 @@ void UDynamicAILinkComponent::Client_AssignAITask_Implementation(const FGuid& Ta
     ActiveTaskId = TaskId;
     LastParsedSseIndex = 0;
 
-    FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
-    Request->SetVerb(TEXT("POST"));
-    Request->SetURL(Endpoint);
-    Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    ActiveHttpRequest = FHttpModule::Get().CreateRequest();
+    ActiveHttpRequest->SetVerb(TEXT("POST"));
+    ActiveHttpRequest->SetURL(Endpoint);
+    ActiveHttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+
     if (!ApiKey.IsEmpty())
     {
-        Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *ApiKey));
+        ActiveHttpRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *ApiKey));
     }
 
     TSharedRef<FJsonObject> RootPayload = MakeShareable(new FJsonObject());
     RootPayload->SetStringField(TEXT("model"), Model);
-    RootPayload->SetBoolField(TEXT("stream"), true); // Reactivate streaming
+    RootPayload->SetBoolField(TEXT("stream"), true);
 
     TArray<TSharedPtr<FJsonValue>> Messages;
     TSharedRef<FJsonObject> UserMessage = MakeShareable(new FJsonObject());
@@ -71,12 +77,11 @@ void UDynamicAILinkComponent::Client_AssignAITask_Implementation(const FGuid& Ta
     FString OutputString;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
     FJsonSerializer::Serialize(RootPayload, Writer);
-    Request->SetContentAsString(OutputString);
 
-    // Bind using UE5's updated 64-bit progress event
-    Request->OnRequestProgress64().BindUObject(this, &UDynamicAILinkComponent::OnStreamProgress64);
-    Request->OnProcessRequestComplete().BindUObject(this, &UDynamicAILinkComponent::OnStreamComplete);
-    Request->ProcessRequest();
+    ActiveHttpRequest->SetContentAsString(OutputString);
+    ActiveHttpRequest->OnRequestProgress64().BindUObject(this, &UDynamicAILinkComponent::OnStreamProgress64);
+    ActiveHttpRequest->OnProcessRequestComplete().BindUObject(this, &UDynamicAILinkComponent::OnStreamComplete);
+    ActiveHttpRequest->ProcessRequest();
 }
 
 void UDynamicAILinkComponent::OnStreamProgress64(FHttpRequestPtr Request, uint64 BytesSent, uint64 BytesReceived)
@@ -89,7 +94,32 @@ void UDynamicAILinkComponent::OnStreamProgress64(FHttpRequestPtr Request, uint64
     const FString NewChunk = FullResponse.Right(FullResponse.Len() - LastParsedSseIndex);
     LastParsedSseIndex = FullResponse.Len();
 
-    Server_SubmitTokenChunk(ActiveTaskId, NewChunk);
+    // OPTIMIZATION: Shifted SSE Header parsing from Server GameThread to individual Miners
+    FString ExtractedText = TEXT("");
+    TArray<FString> Lines;
+    NewChunk.ParseIntoArrayLines(Lines);
+
+    for (const FString& Line : Lines)
+    {
+        if (Line.StartsWith(TEXT("data: ")) && !Line.Contains(TEXT("[DONE]")))
+        {
+            const int32 ContentIdx = Line.Find(TEXT("\"content\":\""));
+            if (ContentIdx != INDEX_NONE)
+            {
+                const int32 StartIdx = ContentIdx + 11; 
+                const int32 EndIdx = Line.Find(TEXT("\""), ESearchCase::IgnoreCase, ESearchDir::FromStart, StartIdx);
+                if (EndIdx != INDEX_NONE)
+                {
+                    ExtractedText += Line.Mid(StartIdx, EndIdx - StartIdx);
+                }
+            }
+        }
+    }
+
+    if (!ExtractedText.IsEmpty())
+    {
+        Server_SubmitTokenChunk(ActiveTaskId, ExtractedText);
+    }
 }
 
 void UDynamicAILinkComponent::OnStreamComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
@@ -106,12 +136,18 @@ void UDynamicAILinkComponent::OnStreamComplete(FHttpRequestPtr Request, FHttpRes
 
 bool UDynamicAILinkComponent::Server_SubmitTokenChunk_Validate(const FGuid& TaskId, const FString& TokenChunk)
 {
-    return TaskId.IsValid();
+    return TaskId.IsValid() && !TokenChunk.IsEmpty();
 }
 
 void UDynamicAILinkComponent::Server_SubmitTokenChunk_Implementation(const FGuid& TaskId, const FString& TokenChunk)
 {
-    // Handled via server-side packet processing
+    if (UWorld* World = GetWorld())
+    {
+        if (UDynamicCloudAISubsystem* CloudSubsystem = World->GetSubsystem<UDynamicCloudAISubsystem>())
+        {
+            CloudSubsystem->HandleMinerTokenChunk(this, TaskId, TokenChunk);
+        }
+    }
 }
 
 bool UDynamicAILinkComponent::Server_SubmitFinalResult_Validate(const FGuid& TaskId, const FString& FinalJsonResult)
@@ -122,7 +158,6 @@ bool UDynamicAILinkComponent::Server_SubmitFinalResult_Validate(const FGuid& Tas
 void UDynamicAILinkComponent::Server_SubmitFinalResult_Implementation(const FGuid& TaskId, const FString& FinalJsonResult)
 {
     NodeStats.bIsCurrentlyProcessing = false;
-
     if (APlayerController* PC = Cast<APlayerController>(GetOwner()))
     {
         if (APlayerState* PS = PC->PlayerState)

@@ -1051,6 +1051,20 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.AIBehaviorMasterRegistry.Add(KeyTag, BehaviorDef);
         }
     }
+    
+    if (!RootObject->HasField(TEXT("VoxelMasterRegistry"))) return false;
+
+    for (auto& Pair : RootObject->GetObjectField(TEXT("VoxelMasterRegistry"))->Values)
+    {
+        FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+        if (!KeyTag.IsValid()) continue;
+
+        TSharedPtr<FJsonObject> VoxelObj = Pair.Value->AsObject();
+        FDynamicVoxelTypeDef VoxelDef;
+        FJsonObjectConverter::JsonObjectToUStruct(VoxelObj.ToSharedRef(), &VoxelDef, 0, 0);
+        
+        OutStaging.VoxelMasterRegistry.Add(KeyTag, VoxelDef);
+    }
 
     return true;
 }

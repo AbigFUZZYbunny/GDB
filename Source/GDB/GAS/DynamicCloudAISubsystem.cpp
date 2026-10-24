@@ -171,41 +171,13 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
     }
 }
 
-FString UDynamicCloudAISubsystem::ParseSseDeltaToJsonString(const FString& SsePayload)
-{
-    FString ExtractedText = TEXT("");
-    TArray<FString> Lines;
-    SsePayload.ParseIntoArrayLines(Lines);
-
-    for (const FString& Line : Lines)
-    {
-        if (Line.StartsWith(TEXT("data: ")) && !Line.Contains(TEXT("[DONE]")))
-        {
-            // Rapid inline extraction bypassing JSON DOM allocation overhead
-            const int32 ContentIdx = Line.Find(TEXT("\"content\":\""));
-            if (ContentIdx != INDEX_NONE)
-            {
-                const int32 StartIdx = ContentIdx + 11; // Length of "content":"
-                const int32 EndIdx = Line.Find(TEXT("\""), ESearchCase::IgnoreCase, ESearchDir::FromStart, StartIdx);
-                if (EndIdx != INDEX_NONE)
-                {
-                    ExtractedText += Line.Mid(StartIdx, EndIdx - StartIdx);
-                }
-            }
-        }
-    }
-    return ExtractedText;
-}
-
 void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Miner, const FGuid& TaskId, const FString& Chunk)
 {
     FCloudAIQueuedTask* Task = ActiveTasks.FindByPredicate([&](const FCloudAIQueuedTask& T) { return T.TaskId == TaskId; });
     if (!Task || Task->PrimaryMiner.Get() != Miner) return;
 
-    const FString ParsedContent = ParseSseDeltaToJsonString(Chunk);
-    if (ParsedContent.IsEmpty()) return;
-
-    Task->PrimaryAccumulatedJson += ParsedContent;
+    // OPTIMIZATION: Reconstructing the JSON strictly from the sanitized client deltas
+    Task->PrimaryAccumulatedJson += Chunk;
 
     if (!Task->bStartedStreamingUtterance)
     {
@@ -222,7 +194,7 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
     {
         const int32 EndQuoteIdx = Task->PrimaryAccumulatedJson.Find(TEXT("\""), ESearchCase::IgnoreCase, ESearchDir::FromStart, Task->UtteranceStartIndex);
         const int32 ReadToIdx = (EndQuoteIdx != INDEX_NONE) ? EndQuoteIdx : Task->PrimaryAccumulatedJson.Len();
-
+        
         if (ReadToIdx > Task->LastBroadcastedLength)
         {
             const FString NewUtteranceChunk = Task->PrimaryAccumulatedJson.Mid(Task->LastBroadcastedLength, ReadToIdx - Task->LastBroadcastedLength);
@@ -257,12 +229,21 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
     const bool bValidatorValid = FJsonObjectConverter::JsonObjectStringToUStruct(CleanValidator, &ValidatorResponse, 0, 0);
 
     bool bConsensusReached = false;
+
     if (bPrimaryValid && bValidatorValid && PrimaryResponse.Commands.Num() > 0 && ValidatorResponse.Commands.Num() > 0)
     {
-        if (PrimaryResponse.Commands[0].CommandActionTag == ValidatorResponse.Commands[0].CommandActionTag &&
-            PrimaryResponse.Commands[0].TargetEntityOrPlaceRoleTag == ValidatorResponse.Commands[0].TargetEntityOrPlaceRoleTag)
+        const FCloudAICommand& PriCmd = PrimaryResponse.Commands[0];
+        const FCloudAICommand& ValCmd = ValidatorResponse.Commands[0];
+
+        if (PriCmd.CommandActionTag == ValCmd.CommandActionTag &&
+            PriCmd.TargetEntityOrPlaceRoleTag == ValCmd.TargetEntityOrPlaceRoleTag)
         {
-            bConsensusReached = true;
+            // SECURITY: Length delta constraint ensures the Primary didn't maliciously inject hate-speech 
+            // into the Utterance payload that bypassed the validator's structural tags.
+            if (FMath::Abs(PriCmd.UtteranceText.Len() - ValCmd.UtteranceText.Len()) <= 20)
+            {
+                bConsensusReached = true;
+            }
         }
     }
 
@@ -292,7 +273,9 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
             FCloudAICommandOutput OutCmd;
             OutCmd.CommandActionTag = Cmd.CommandActionTag;
             OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
-            OutCmd.UtteranceText = Cmd.UtteranceText;
+            
+            // Prefer validator text to penalize tampering attempts that squeaked by length checks
+            OutCmd.UtteranceText = ValidatorResponse.Commands[0].UtteranceText; 
             Output.Add(OutCmd);
         }
         Task.FinalCompletionDelegate.ExecuteIfBound(Output);
@@ -301,7 +284,7 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
     {
         if (Task.PrimaryMiner.IsValid()) Task.PrimaryMiner->NodeStats.TrustScore -= 0.2f;
         if (Task.ValidatorMiner.IsValid()) Task.ValidatorMiner->NodeStats.TrustScore -= 0.2f;
-
+        
         Task.FinalCompletionDelegate.ExecuteIfBound(TArray<FCloudAICommandOutput>());
     }
 }

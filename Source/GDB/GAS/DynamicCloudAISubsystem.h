@@ -127,5 +127,5 @@ private:
 
     void ProcessTaskQueue();
     void EvaluateConsensusAndReward(FCloudAIQueuedTask& Task);
-    FString ParseSseDeltaToJsonString(const FString& SsePayload);
+    //FString ParseSseDeltaToJsonString(const FString& SsePayload);
 };

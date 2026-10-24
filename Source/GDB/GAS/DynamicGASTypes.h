@@ -1388,8 +1388,56 @@ struct FDynamicConditionTreeContainer
 };
 
 // ============================================================================
-// VOXEL WORLD DEFS
+// EXTERNAL VOXEL GENERATION & TERRAIN CONFIGURATION
 // ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicVoxelBiomeMapping
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FColor MapColorKey = FColor::Black;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag SurfaceVoxelTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag SubsurfaceVoxelTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag BedrockVoxelTag;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicVoxelGenerationConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UTexture2D> SurfaceHeightMap;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UTexture2D> BiomeMap;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UTexture2D> CaveDensityMap;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UTexture2D> EnergyLevelMap;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float WorldHeightScale = 10000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseElevation = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MapWorldBounds = 200000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FDynamicVoxelBiomeMapping> BiomeColorMappings;
+};
+
 USTRUCT(BlueprintType)
 struct FDynamicVoxelTypeDef
 {
@@ -1398,7 +1446,6 @@ struct FDynamicVoxelTypeDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FGameplayTag VoxelTypeTag;
 
-    // The elemental contribution to the environment grid when this voxel exists in a cell
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FGameplayTag ElementalContributionTag;
 
@@ -1415,6 +1462,9 @@ struct FDynamicVoxelTypeDef
     TSoftObjectPtr<UMaterialInterface> VoxelMaterial;
 };
 
+// ============================================================================
+// VOXEL NETWORK DELTAS (FastArray)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FVoxelDeltaItem : public FFastArraySerializerItem
 {
@@ -1937,7 +1987,9 @@ struct FDynamicEnvironmentSystemConfig
     float BorderDissipationRate = 0.15f;
 };
 
-// --- SPATIALIZED ENVIRONMENT CHUNK GRID ITEM & FAST ARRAY ---
+// ============================================================================
+// SPATIALIZED ENVIRONMENT CHUNK GRID ITEM & FAST ARRAY
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FEnvironmentGridCellItem : public FFastArraySerializerItem
 {
@@ -1970,6 +2022,7 @@ struct FEnvironmentGridCellItem : public FFastArraySerializerItem
     UPROPERTY(NotReplicated)
     float SustainedOutOfRangeHours = 0.0f;
 
+    // DECLARATIONS ONLY: Implementations must remain in .cpp
     void PreReplicatedRemove(const struct FFastEnvironmentGridArray& InArrayOwner) {}
     void PostReplicatedAdd(const struct FFastEnvironmentGridArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastEnvironmentGridArray& InArrayOwner);
@@ -4440,6 +4493,9 @@ struct GDB_API FDynamicAIBehaviorDef
     bool bInterruptible = true;
 };
 
+// ============================================================================
+// ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FMasterRegistryStagingData
 {
@@ -4474,6 +4530,9 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
     TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
+    
+    bool bHasVoxelGenerationConfig = false;
+    FDynamicVoxelGenerationConfig VoxelGenerationConfig;
 
     bool bHasCalendarConfig = false;
     FDynamicCalendarDef CalendarConfig;

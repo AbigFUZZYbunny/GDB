@@ -620,12 +620,23 @@ void ADynamicGameState::WarmGameplayEffectCacheAsync(TFunction<void()> OnComplet
 
 int32 ADynamicGameState::GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const
 {
-    if (GridWidth <= 0 || GridHeight <= 0 || CellSizeWorldUnits <= 0.0f) return 0;
+    if (CellSizeWorldUnits <= 0.0f || GridWidth <= 0 || GridHeight <= 0) return INDEX_NONE;
+
     const float HalfWorldW = (GridWidth * CellSizeWorldUnits) * 0.5f;
     const float HalfWorldH = (GridHeight * CellSizeWorldUnits) * 0.5f;
-    const int32 X = FMath::Clamp(FMath::FloorToInt((WorldLocation.X + HalfWorldW) / CellSizeWorldUnits), 0, GridWidth - 1);
-    const int32 Y = FMath::Clamp(FMath::FloorToInt((WorldLocation.Y + HalfWorldH) / CellSizeWorldUnits), 0, GridHeight - 1);
-    return FMath::Clamp((Y * GridWidth) + X, 0, (GridWidth * GridHeight) - 1);
+
+    const float LocalX = WorldLocation.X + HalfWorldW;
+    const float LocalY = WorldLocation.Y + HalfWorldH;
+
+    const int32 CellX = FMath::FloorToInt(LocalX / CellSizeWorldUnits);
+    const int32 CellY = FMath::FloorToInt(LocalY / CellSizeWorldUnits);
+
+    if (CellX < 0 || CellY < 0 || CellX >= GridWidth || CellY >= GridHeight)
+    {
+        return INDEX_NONE;
+    }
+
+    return (CellY * GridWidth) + CellX;
 }
 
 void ADynamicGameState::RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell)
@@ -974,7 +985,6 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
 void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& StagingData)
 {
     check(IsInGameThread());
-
     AttributeMasterRegistry.Append(MoveTemp(StagingData.AttributeMasterRegistry));
     DeliveryArchetypes.Append(MoveTemp(StagingData.DeliveryArchetypes));
     AbilityMasterRegistry.Append(MoveTemp(StagingData.AbilityMasterRegistry));
@@ -1001,6 +1011,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     FastPathDialogueRegistry.Append(MoveTemp(StagingData.FastPathDialogueRegistry));
     MovementStateRegistry.Append(MoveTemp(StagingData.MovementStateRegistry));
     AIBehaviorMasterRegistry.Append(MoveTemp(StagingData.AIBehaviorMasterRegistry));
+    NetworkMasterRegistry.Append(MoveTemp(StagingData.NetworkMasterRegistry));
+    VoxelMasterRegistry.Append(MoveTemp(StagingData.VoxelMasterRegistry));
 
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {
@@ -1010,7 +1022,6 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
             GetOrCreateCachedEffectObject(Pair.Key);
         }
     }
-
     if (StagingData.bHasCalendarConfig)
     {
         CalendarConfig = StagingData.CalendarConfig;
@@ -1030,6 +1041,10 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     if (StagingData.bHasEnvironmentConfig)
     {
         SetupDynamicEnvironment(StagingData.EnvironmentConfig);
+    }
+    if (StagingData.bHasVoxelGenerationConfig)
+    {
+        VoxelGenerationConfig = StagingData.VoxelGenerationConfig;
     }
 
     RebuildAllAbilityScores();

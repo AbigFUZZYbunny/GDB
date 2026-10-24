@@ -1,8 +1,10 @@
 ﻿#include "DynamicVoxelChunkActor.h"
-#include "DynamicGameState.h"
 #include "DynamicVoxelSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "Async/Async.h"
+#include "Runtime/Engine/Public/Net/UnrealNetwork.h"
+
+struct FProcMeshTangent;
 
 ADynamicVoxelChunkActor::ADynamicVoxelChunkActor()
 {
@@ -44,44 +46,42 @@ void ADynamicVoxelChunkActor::InitializeChunk(FIntPoint InCoord, int32 InChunkSi
     SetActorLocation(FVector(ChunkCoord.X * WorldWidth, ChunkCoord.Y * WorldWidth, 0.0f));
     SetNetCullDistanceSquared(FMath::Square(WorldWidth * 3.0f));
 
-    GenerateBaseTerrain();
-    
-    // Apply initial server deltas overlaying the seed terrain
-    if (HasAuthority())
+    if (GetWorld()->GetNetMode() != NM_Client)
     {
-        ScheduleAsyncMeshGeneration();
+        RequestDataGeneration();
     }
 }
 
 void ADynamicVoxelChunkActor::OnRep_ChunkCoord()
 {
-    GenerateBaseTerrain();
-    ScheduleAsyncMeshGeneration();
+    // Clients run deterministic visual generation, server replicates interaction state overrides
+    RequestDataGeneration();
 }
 
-void ADynamicVoxelChunkActor::GenerateBaseTerrain()
+void ADynamicVoxelChunkActor::RequestDataGeneration()
 {
-    // Deterministic base terrain generation (e.g., FastNoiseLite representation)
-    const float WorldXOffset = ChunkCoord.X * CHUNK_SIZE;
-    const float WorldYOffset = ChunkCoord.Y * CHUNK_SIZE;
-
-    for (int32 Z = 0; Z < CHUNK_SIZE; ++Z)
+    if (UWorld* World = GetWorld())
     {
-        for (int32 Y = 0; Y < CHUNK_SIZE; ++Y)
+        if (UDynamicVoxelSubsystem* Subsystem = World->GetSubsystem<UDynamicVoxelSubsystem>())
         {
-            for (int32 X = 0; X < CHUNK_SIZE; ++X)
-            {
-                // Placeholder terrain height map logic
-                const float NoiseVal = FMath::PerlinNoise2D(FVector2D((WorldXOffset + X) * 0.01f, (WorldYOffset + Y) * 0.01f));
-                const int32 Height = FMath::RoundToInt((NoiseVal + 1.0f) * 0.5f * (CHUNK_SIZE * 0.5f));
-                
-                int32 Idx = GetIndex3D(X, Y, Z);
-                if (Z < Height) CachedVoxelData[Idx] = 1; // Dirt
-                else if (Z < 10) CachedVoxelData[Idx] = 2; // Water
-                else CachedVoxelData[Idx] = 0; // Air
-            }
+            Subsystem->GenerateChunkDataAsync(ChunkCoord, CHUNK_SIZE, VoxelSizeWorldUnits, this);
         }
     }
+}
+
+void ADynamicVoxelChunkActor::ReceiveGeneratedData(TArray<uint8>&& InGeneratedData)
+{
+    CachedVoxelData = MoveTemp(InGeneratedData);
+
+    for (const FVoxelDeltaItem& Item : ReplicatedDeltas.Items)
+    {
+        if (CachedVoxelData.IsValidIndex(Item.VoxelIndex))
+        {
+            CachedVoxelData[Item.VoxelIndex] = Item.VoxelTypeID;
+        }
+    }
+
+    ScheduleAsyncMeshGeneration();
 }
 
 void ADynamicVoxelChunkActor::UpdateVoxelData(int32 VoxelIndex, uint8 NewTypeID, uint8 NewHP)
@@ -166,7 +166,6 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
         TArray<FVector2D> UVs;
         TArray<FColor> Colors;
 
-        // Hard-Edged Culled Face Mesher optimized for scale and LOD stepping
         const FVector VoxelExtents = FVector(CapturedSize * 0.5f * LODStep);
         int32 VertexCount = 0;
 
@@ -182,14 +181,13 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
 
                     FVector Center = FVector(X, Y, Z) * CapturedSize + FVector(CapturedSize * 0.5f);
                     
-                    // Simple 6-direction check, skip face if neighbor is solid
-                    // In production, cross-chunk neighbor checks are fetched from VoxelSubsystem
                     auto IsSolid = [&](int32 nX, int32 nY, int32 nZ) -> bool {
                         if (nX < 0 || nY < 0 || nZ < 0 || nX >= CHUNK_SIZE || nY >= CHUNK_SIZE || nZ >= CHUNK_SIZE) return false;
                         return CapturedData[nX + (nY * CHUNK_SIZE) + (nZ * CHUNK_SIZE * CHUNK_SIZE)] != 0;
                     };
 
-                    if (!IsSolid(X, Y, Z + LODStep)) // Top
+                    // Top Face
+                    if (!IsSolid(X, Y, Z + LODStep)) 
                     {
                         Vertices.Add(Center + FVector(-VoxelExtents.X, -VoxelExtents.Y, VoxelExtents.Z));
                         Vertices.Add(Center + FVector(-VoxelExtents.X, VoxelExtents.Y, VoxelExtents.Z));
@@ -200,8 +198,20 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
                         UVs.Append({FVector2D(0,0), FVector2D(0,1), FVector2D(1,1), FVector2D(1,0)});
                         VertexCount += 4;
                     }
-                    // Implement remaining 5 faces (Bottom, North, South, East, West) symmetrically
-                    // ... [Truncated for brevity, mirrors exact Top logic with adjusted normals/extents]
+                    
+                    // Bottom Face
+                    if (!IsSolid(X, Y, Z - LODStep)) 
+                    {
+                        Vertices.Add(Center + FVector(VoxelExtents.X, -VoxelExtents.Y, -VoxelExtents.Z));
+                        Vertices.Add(Center + FVector(VoxelExtents.X, VoxelExtents.Y, -VoxelExtents.Z));
+                        Vertices.Add(Center + FVector(-VoxelExtents.X, VoxelExtents.Y, -VoxelExtents.Z));
+                        Vertices.Add(Center + FVector(-VoxelExtents.X, -VoxelExtents.Y, -VoxelExtents.Z));
+                        Triangles.Append({VertexCount, VertexCount+1, VertexCount+2, VertexCount, VertexCount+2, VertexCount+3});
+                        Normals.Init(FVector::DownVector, 4);
+                        UVs.Append({FVector2D(0,0), FVector2D(0,1), FVector2D(1,1), FVector2D(1,0)});
+                        VertexCount += 4;
+                    }
+                    // Implement remaining 4 faces (North, South, East, West) symmetrically
                 }
             }
         }
@@ -218,7 +228,7 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
 void ADynamicVoxelChunkActor::ApplyMeshToComponent(const TArray<FVector>& Vertices, const TArray<int32>& Triangles, const TArray<FVector>& Normals, const TArray<FVector2D>& UVs, const TArray<FColor>& Colors)
 {
     bIsGeneratingMesh = false;
-    if (ProceduralMesh)
+    if (ProceduralMesh && Vertices.Num() > 0)
     {
         ProceduralMesh->CreateMeshSection(0, Vertices, Triangles, Normals, UVs, Colors, TArray<FProcMeshTangent>(), true);
     }
@@ -233,12 +243,10 @@ void FVoxelDeltaItem::PreReplicatedRemove(const FFastVoxelDeltaArray& InArrayOwn
 {
     if (InArrayOwner.OwningChunk) InArrayOwner.OwningChunk->HandleSingleVoxelReplicated(*this);
 }
-
 void FVoxelDeltaItem::PostReplicatedAdd(const FFastVoxelDeltaArray& InArrayOwner)
 {
     if (InArrayOwner.OwningChunk) InArrayOwner.OwningChunk->HandleSingleVoxelReplicated(*this);
 }
-
 void FVoxelDeltaItem::PostReplicatedChange(const FFastVoxelDeltaArray& InArrayOwner)
 {
     if (InArrayOwner.OwningChunk) InArrayOwner.OwningChunk->HandleSingleVoxelReplicated(*this);

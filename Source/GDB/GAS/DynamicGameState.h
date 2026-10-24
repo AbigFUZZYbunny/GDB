@@ -125,6 +125,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
     TArray<FEnvironmentGridCellItem>& GetMutableEnvironmentReadBuffer() { return EnvironmentReadBuffer; }
+    
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Voxels")
+    FDynamicVoxelGenerationConfig VoxelGenerationConfig;
 
 private:
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);

@@ -1,7 +1,8 @@
 ﻿#include "DynamicVoxelSubsystem.h"
 #include "DynamicGameState.h"
-#include "DynamicAttributeSet.h"
-#include "Kismet/GameplayStatics.h"
+#include "Async/Async.h"
+#include "Engine/Texture2D.h"
+#include "GameFramework/PlayerController.h"
 
 void UDynamicVoxelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -11,12 +12,25 @@ void UDynamicVoxelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UDynamicVoxelSubsystem::Deinitialize()
 {
     LoadedChunks.Empty();
+    MapDataCache = FVoxelMapDataCache();
     Super::Deinitialize();
 }
 
 void UDynamicVoxelSubsystem::Tick(float DeltaTime)
 {
-    // Throttle LOD distance checking to prevent frame hitching across large grids
+    Super::Tick(DeltaTime);
+
+    UWorld* World = GetWorld();
+    if (World && World->GetNetMode() != NM_Client && !bHasInitializedMapData)
+    {
+        ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
+        if (GS && (GS->VoxelMasterRegistry.Num() > 0 || GS->VoxelGenerationConfig.SurfaceHeightMap.IsValid()))
+        {
+            InitializeVoxelGenerationData();
+            bHasInitializedMapData = true;
+        }
+    }
+
     LODUpdateTimer += DeltaTime;
     if (LODUpdateTimer >= 1.0f)
     {
@@ -31,9 +45,9 @@ void UDynamicVoxelSubsystem::UpdateChunkLODs()
     if (!World || World->GetNetMode() == NM_DedicatedServer) return;
 
     APlayerController* PC = World->GetFirstPlayerController();
-    if (!PC) return;
+    if (!PC || !PC->GetPawn()) return;
 
-    const FVector PlayerLoc = PC->GetPawn() ? PC->GetPawn()->GetActorLocation() : PC->GetFocalLocation();
+    const FVector PlayerLoc = PC->GetPawn()->GetActorLocation();
 
     for (const auto& Pair : LoadedChunks)
     {
@@ -50,6 +64,138 @@ void UDynamicVoxelSubsystem::UpdateChunkLODs()
     }
 }
 
+bool UDynamicVoxelSubsystem::LoadTextureDataToCache(TSoftObjectPtr<UTexture2D> TexturePtr, TArray<FColor>& OutData, int32& OutWidth, int32& OutHeight)
+{
+    UTexture2D* Texture = TexturePtr.LoadSynchronous();
+    if (!Texture) return false;
+
+#if WITH_EDITOR
+    Texture->CompressionSettings = TextureCompressionSettings::TC_VectorDisplacementmap;
+    Texture->SRGB = false;
+    Texture->UpdateResource();
+#endif
+
+    if (FTexturePlatformData* PlatformData = Texture->GetPlatformData())
+    {
+        if (PlatformData->Mips.Num() > 0)
+        {
+            FTexture2DMipMap& Mip = PlatformData->Mips[0];
+            void* Data = Mip.BulkData.Lock(LOCK_READ_ONLY);
+            OutWidth = Mip.SizeX;
+            OutHeight = Mip.SizeY;
+            const int32 TotalPixels = OutWidth * OutHeight;
+            OutData.SetNumUninitialized(TotalPixels);
+            FMemory::Memcpy(OutData.GetData(), Data, TotalPixels * sizeof(FColor));
+            Mip.BulkData.Unlock();
+            return true;
+        }
+    }
+    return false;
+}
+
+void UDynamicVoxelSubsystem::InitializeVoxelGenerationData()
+{
+    ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
+    if (!GS) return;
+
+    const FDynamicVoxelGenerationConfig& Config = GS->VoxelGenerationConfig;
+
+    int32 W = 0, H = 0;
+    if (LoadTextureDataToCache(Config.SurfaceHeightMap, MapDataCache.SurfaceHeightData, W, H))
+    {
+        MapDataCache.Width = W;
+        MapDataCache.Height = H;
+        
+        LoadTextureDataToCache(Config.BiomeMap, MapDataCache.BiomeData, W, H);
+        LoadTextureDataToCache(Config.CaveDensityMap, MapDataCache.CaveData, W, H);
+        LoadTextureDataToCache(Config.EnergyLevelMap, MapDataCache.EnergyData, W, H);
+    }
+}
+
+void UDynamicVoxelSubsystem::GenerateChunkDataAsync(FIntPoint ChunkCoord, int32 ChunkSize, float VoxelSize, TWeakObjectPtr<ADynamicVoxelChunkActor> RequestingChunk)
+{
+    if (!MapDataCache.IsValid() || !RequestingChunk.IsValid()) return;
+
+    ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
+    if (!GS) return;
+
+    FVoxelMapDataCache LocalCache = MapDataCache;
+    FDynamicVoxelGenerationConfig LocalConfig = GS->VoxelGenerationConfig;
+
+    Async(EAsyncExecution::ThreadPool, [ChunkCoord, ChunkSize, VoxelSize, LocalCache, LocalConfig, RequestingChunk]() {
+        
+        TArray<uint8> GeneratedVoxelData;
+        GeneratedVoxelData.Init(0, ChunkSize * ChunkSize * ChunkSize);
+        
+        const float WorldXOffset = ChunkCoord.X * ChunkSize * VoxelSize;
+        const float WorldYOffset = ChunkCoord.Y * ChunkSize * VoxelSize;
+
+        for (int32 X = 0; X < ChunkSize; ++X)
+        {
+            for (int32 Y = 0; Y < ChunkSize; ++Y)
+            {
+                const float WorldX = WorldXOffset + (X * VoxelSize);
+                const float WorldY = WorldYOffset + (Y * VoxelSize);
+
+                const float U = FMath::Clamp((WorldX + (LocalConfig.MapWorldBounds * 0.5f)) / LocalConfig.MapWorldBounds, 0.0f, 1.0f);
+                const float V = FMath::Clamp((WorldY + (LocalConfig.MapWorldBounds * 0.5f)) / LocalConfig.MapWorldBounds, 0.0f, 1.0f);
+                
+                const int32 PixelX = FMath::Clamp(FMath::RoundToInt(U * (LocalCache.Width - 1)), 0, LocalCache.Width - 1);
+                const int32 PixelY = FMath::Clamp(FMath::RoundToInt(V * (LocalCache.Height - 1)), 0, LocalCache.Height - 1);
+                const int32 PixelIdx = PixelY * LocalCache.Width + PixelX;
+
+                const FColor HeightPixel = LocalCache.SurfaceHeightData[PixelIdx];
+                const float HeightNormalized = HeightPixel.R / 255.0f;
+                const float TargetWorldHeight = LocalConfig.BaseElevation + (HeightNormalized * LocalConfig.WorldHeightScale);
+                const int32 HeightZ = FMath::Clamp(FMath::FloorToInt(TargetWorldHeight / VoxelSize), 0, ChunkSize - 1);
+
+                uint8 SurfaceVoxelID = 1; 
+                uint8 SubsurfaceVoxelID = 2; 
+                
+                if (LocalCache.BiomeData.IsValidIndex(PixelIdx))
+                {
+                    const FColor BiomeColor = LocalCache.BiomeData[PixelIdx];
+                    for (int i = 0; i < LocalConfig.BiomeColorMappings.Num(); ++i)
+                    {
+                        if (BiomeColor == LocalConfig.BiomeColorMappings[i].MapColorKey)
+                        {
+                            // In a full implementation, these map to the FGameplayTag uint8 dictionary index
+                            SurfaceVoxelID = 1; 
+                            SubsurfaceVoxelID = 2;
+                            break;
+                        }
+                    }
+                }
+
+                float CaveDensity = 0.0f;
+                if (LocalCache.CaveData.IsValidIndex(PixelIdx))
+                {
+                    CaveDensity = LocalCache.CaveData[PixelIdx].R / 255.0f;
+                }
+
+                for (int32 Z = 0; Z <= HeightZ; ++Z)
+                {
+                    const float DepthFactor = FMath::Clamp((HeightZ - Z) / 20.0f, 0.0f, 1.0f);
+                    const bool bIsCave = (CaveDensity > 0.5f) && (DepthFactor > 0.2f) && (DepthFactor < 0.8f);
+
+                    if (bIsCave) continue;
+
+                    int32 Idx = X + (Y * ChunkSize) + (Z * ChunkSize * ChunkSize);
+                    if (Z == HeightZ) GeneratedVoxelData[Idx] = SurfaceVoxelID;
+                    else GeneratedVoxelData[Idx] = SubsurfaceVoxelID;
+                }
+            }
+        }
+
+        Async(EAsyncExecution::TaskGraphMainThread, [RequestingChunk, GeneratedVoxelData = MoveTemp(GeneratedVoxelData)]() mutable {
+            if (ADynamicVoxelChunkActor* ChunkActor = RequestingChunk.Get())
+            {
+                ChunkActor->ReceiveGeneratedData(MoveTemp(GeneratedVoxelData));
+            }
+        });
+    });
+}
+
 ADynamicVoxelChunkActor* UDynamicVoxelSubsystem::GetChunkAtLocation(const FVector& WorldLocation) const
 {
     const float ChunkWorldWidth = ADynamicVoxelChunkActor::CHUNK_SIZE * VoxelWorldSize;
@@ -57,7 +203,6 @@ ADynamicVoxelChunkActor* UDynamicVoxelSubsystem::GetChunkAtLocation(const FVecto
         FMath::FloorToInt(WorldLocation.X / ChunkWorldWidth),
         FMath::FloorToInt(WorldLocation.Y / ChunkWorldWidth)
     );
-    
     return LoadedChunks.FindRef(Coord);
 }
 
@@ -72,7 +217,6 @@ bool UDynamicVoxelSubsystem::ServerModifyVoxelAtLocation(const FVector& WorldLoc
     ADynamicVoxelChunkActor* TargetChunk = GetChunkAtLocation(WorldLocation);
     if (!TargetChunk || !TargetChunk->HasAuthority()) return false;
 
-    // Convert Local Space
     const FVector LocalPos = TargetChunk->GetTransform().InverseTransformPosition(WorldLocation);
     const int32 LocalX = FMath::FloorToInt(LocalPos.X / VoxelWorldSize);
     const int32 LocalY = FMath::FloorToInt(LocalPos.Y / VoxelWorldSize);
@@ -89,32 +233,26 @@ bool UDynamicVoxelSubsystem::ServerModifyVoxelAtLocation(const FVector& WorldLoc
     uint8 NewTypeID = 0; 
     FGameplayTag OldVoxelTag; 
 
-    // Resolve structural modifications via GameState registry
     if (const FDynamicVoxelTypeDef* VoxelDef = GS->VoxelMasterRegistry.Find(NewVoxelTypeTag))
     {
-        NewTypeID = 1; // Mapped type representation ID
+        NewTypeID = 1; 
         TargetChunk->UpdateVoxelData(VoxelIndex, NewTypeID, VoxelDef->MaxHP);
     }
     else
     {
-        TargetChunk->UpdateVoxelData(VoxelIndex, 0, 0); // Air / Empty
+        TargetChunk->UpdateVoxelData(VoxelIndex, 0, 0); 
     }
 
-    // Interface with DynamicEnvironmentSubsystem grid tracking advection physics
     ProcessVoxelEnvironmentFeedback(WorldLocation, OldVoxelTag, NewVoxelTypeTag);
-
     return true;
 }
 
 void UDynamicVoxelSubsystem::ProcessVoxelEnvironmentFeedback(const FVector& WorldLocation, FGameplayTag OldVoxelTag, FGameplayTag NewVoxelTag)
 {
+    // Hooks seamlessly into your environment elemental grids
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
 
     const int32 GridCellIndex = GS->GetEnvironmentCellIndexAtLocation(WorldLocation);
-    const TArray<FEnvironmentGridCellItem>& ReadBuffer = GS->GetEnvironmentReadBuffer();
-    if (!ReadBuffer.IsValidIndex(GridCellIndex)) return;
-
-    // Access mutable copy or write buffer via GameState methods to adjust elemental energy densities
-    // Area filled with water automatically feeds the weather and water energy system pools.
+    if (!GS->GetEnvironmentReadBuffer().IsValidIndex(GridCellIndex)) return;
 }

@@ -80,6 +80,13 @@ public:
     static bool ParseSnapshotFromJsonString(const FString& InJsonPayload, FPlayerPersistenceSnapshot& OutSnapshot);
     static bool ApplySnapshotToPlayerCharacter(ADynamicCharacter* TargetCharacter, const FPlayerPersistenceSnapshot& Snapshot);
 
+    // World state persistence (Voxel grids and Building structures)
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
+    static bool SerializeWorldStateToJson(const UObject* WorldContextObject, FString& OutJsonPayload);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
+    static bool DeserializeWorldStateFromJson(const UObject* WorldContextObject, const FString& InJsonPayload);
+
     template<typename TEnum>
     static FString EnumToString(TEnum Value)
     {
@@ -102,10 +109,8 @@ public:
 
     static int32 FlattenAndParseJsonNode(const TSharedPtr<FJsonObject>& JsonObj, FDynamicConditionTreeContainer& OutContainer);
     static TSharedPtr<FJsonObject> ReconstructJsonFromFlatNode(int32 NodeIndex, const FDynamicConditionTreeContainer& TreeContainer);
-
     static void DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper);
     static TSharedPtr<FJsonObject> SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper);
-
     static void DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile);
     static TSharedPtr<FJsonObject> SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile);
 };

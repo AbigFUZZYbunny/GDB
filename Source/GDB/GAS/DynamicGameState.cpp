@@ -1013,6 +1013,9 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     AIBehaviorMasterRegistry.Append(MoveTemp(StagingData.AIBehaviorMasterRegistry));
     NetworkMasterRegistry.Append(MoveTemp(StagingData.NetworkMasterRegistry));
     VoxelMasterRegistry.Append(MoveTemp(StagingData.VoxelMasterRegistry));
+    StructureMaterialRegistry.Append(MoveTemp(StagingData.StructureMaterialRegistry));
+    StructurePieceRegistry.Append(MoveTemp(StagingData.StructurePieceRegistry));
+    StructurePrefabRegistry.Append(MoveTemp(StagingData.StructurePrefabRegistry));
 
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {

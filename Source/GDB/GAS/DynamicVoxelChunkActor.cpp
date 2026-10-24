@@ -186,32 +186,64 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
                         return CapturedData[nX + (nY * CHUNK_SIZE) + (nZ * CHUNK_SIZE * CHUNK_SIZE)] != 0;
                     };
 
-                    // Top Face
-                    if (!IsSolid(X, Y, Z + LODStep)) 
-                    {
-                        Vertices.Add(Center + FVector(-VoxelExtents.X, -VoxelExtents.Y, VoxelExtents.Z));
-                        Vertices.Add(Center + FVector(-VoxelExtents.X, VoxelExtents.Y, VoxelExtents.Z));
-                        Vertices.Add(Center + FVector(VoxelExtents.X, VoxelExtents.Y, VoxelExtents.Z));
-                        Vertices.Add(Center + FVector(VoxelExtents.X, -VoxelExtents.Y, VoxelExtents.Z));
-                        Triangles.Append({VertexCount, VertexCount+1, VertexCount+2, VertexCount, VertexCount+2, VertexCount+3});
-                        Normals.Init(FVector::UpVector, 4);
-                        UVs.Append({FVector2D(0,0), FVector2D(0,1), FVector2D(1,1), FVector2D(1,0)});
-                        VertexCount += 4;
-                    }
+                    // Define Face Data
+                    struct FFaceData { FVector Offset[4]; FVector Normal; };
                     
-                    // Bottom Face
-                    if (!IsSolid(X, Y, Z - LODStep)) 
+                    FFaceData Faces[6] = {
+                        // Top (+Z)
+                        { { FVector(-1, -1, 1), FVector(-1, 1, 1), FVector(1, 1, 1), FVector(1, -1, 1) }, FVector::UpVector },
+                        // Bottom (-Z)
+                        { { FVector(1, -1, -1), FVector(1, 1, -1), FVector(-1, 1, -1), FVector(-1, -1, -1) }, FVector::DownVector },
+                        // North (+Y)
+                        { { FVector(1, 1, -1), FVector(1, 1, 1), FVector(-1, 1, 1), FVector(-1, 1, -1) }, FVector::RightVector },
+                        // South (-Y)
+                        { { FVector(-1, -1, -1), FVector(-1, -1, 1), FVector(1, -1, 1), FVector(1, -1, -1) }, FVector::LeftVector },
+                        // East (+X)
+                        { { FVector(1, -1, -1), FVector(1, -1, 1), FVector(1, 1, 1), FVector(1, 1, -1) }, FVector::ForwardVector },
+                        // West (-X)
+                        { { FVector(-1, 1, -1), FVector(-1, 1, 1), FVector(-1, -1, 1), FVector(-1, -1, -1) }, FVector::BackwardVector }
+                    };
+
+                    bool FaceVisible[6] = {
+                        !IsSolid(X, Y, Z + LODStep),
+                        !IsSolid(X, Y, Z - LODStep),
+                        !IsSolid(X, Y + LODStep, Z),
+                        !IsSolid(X, Y - LODStep, Z),
+                        !IsSolid(X + LODStep, Y, Z),
+                        !IsSolid(X - LODStep, Y, Z)
+                    };
+
+                    // Map Type to Vertex Color for Material Blending (e.g., R=Grass, G=Dirt, B=Stone)
+                    FColor VoxelColor = FColor(255, 0, 0, 255);
+                    if (Type == 2) VoxelColor = FColor(0, 255, 0, 255);
+                    else if (Type == 3) VoxelColor = FColor(0, 0, 255, 255);
+
+                    for (int32 FaceIdx = 0; FaceIdx < 6; ++FaceIdx)
                     {
-                        Vertices.Add(Center + FVector(VoxelExtents.X, -VoxelExtents.Y, -VoxelExtents.Z));
-                        Vertices.Add(Center + FVector(VoxelExtents.X, VoxelExtents.Y, -VoxelExtents.Z));
-                        Vertices.Add(Center + FVector(-VoxelExtents.X, VoxelExtents.Y, -VoxelExtents.Z));
-                        Vertices.Add(Center + FVector(-VoxelExtents.X, -VoxelExtents.Y, -VoxelExtents.Z));
-                        Triangles.Append({VertexCount, VertexCount+1, VertexCount+2, VertexCount, VertexCount+2, VertexCount+3});
-                        Normals.Init(FVector::DownVector, 4);
-                        UVs.Append({FVector2D(0,0), FVector2D(0,1), FVector2D(1,1), FVector2D(1,0)});
-                        VertexCount += 4;
+                        if (FaceVisible[FaceIdx])
+                        {
+                            for (int32 v = 0; v < 4; ++v)
+                            {
+                                Vertices.Add(Center + (Faces[FaceIdx].Offset[v] * VoxelExtents));
+                                Normals.Add(Faces[FaceIdx].Normal);
+                                Colors.Add(VoxelColor);
+                            }
+                            
+                            UVs.Append({
+                                FVector2D(0, 0),
+                                FVector2D(0, LODStep),
+                                FVector2D(LODStep, LODStep),
+                                FVector2D(LODStep, 0)
+                            });
+
+                            Triangles.Append({
+                                VertexCount, VertexCount + 1, VertexCount + 2,
+                                VertexCount, VertexCount + 2, VertexCount + 3
+                            });
+
+                            VertexCount += 4;
+                        }
                     }
-                    // Implement remaining 4 faces (North, South, East, West) symmetrically
                 }
             }
         }

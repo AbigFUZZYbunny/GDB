@@ -1,0 +1,18 @@
+﻿{
+  "StructureMaterialRegistry": {
+    "Material.Wood.Pine": {
+      "MaterialTag": "Material.Wood.Pine",
+      "StructuralDensity": 0.5,
+      "SupportStrength": 150.0,
+      "InsulationValue": 3.0,
+      "DurabilityMultiplier": 1.0
+    },
+    "Material.Stone.Granite": {
+      "MaterialTag": "Material.Stone.Granite",
+      "StructuralDensity": 2.5,
+      "SupportStrength": 1000.0,
+      "InsulationValue": 8.0,
+      "DurabilityMultiplier": 3.5
+    }
+  }
+}

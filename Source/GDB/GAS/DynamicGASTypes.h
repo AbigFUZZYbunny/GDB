@@ -1175,6 +1175,15 @@ struct FDynamicInteractionProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     TArray<FGameplayTag> EffectsToApplyToTarget;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Voxels")
+    bool bCanModifyVoxels = false;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Voxels")
+    FGameplayTag VoxelModificationTypeTag; // e.g., Element.Air for digging, Voxel.Type.Stone for building
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Voxels")
+    float VoxelModificationRadius = 150.0f;
 };
 
 // ============================================================================
@@ -1503,6 +1512,210 @@ struct FFastVoxelDeltaArray : public FFastArraySerializer
 
 template<>
 struct TStructOpsTypeTraits<FFastVoxelDeltaArray> : public TStructOpsTypeTraitsBase2<FFastVoxelDeltaArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// ============================================================================
+// CONTINENT-SCALE VOXEL STREAMING & TEMPORAL LOD
+// ============================================================================
+UENUM(BlueprintType)
+enum class EVoxelLODState : uint8
+{
+    ActiveHighRes   UMETA(DisplayName = "Active High-Res (Actor Spawned)"),
+    ActiveLowRes    UMETA(DisplayName = "Active Low-Res (Actor Spawned)"),
+    VirtualNearby   UMETA(DisplayName = "Virtual Nearby (1 Hr Updates)"),
+    VirtualDistant  UMETA(DisplayName = "Virtual Distant (6 Hr Updates)"),
+    VirtualHorizon  UMETA(DisplayName = "Virtual Horizon (24 Hr Updates)")
+};
+
+USTRUCT(BlueprintType)
+struct FVoxelChunkPersistentData
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FIntPoint ChunkCoord = FIntPoint::ZeroValue;
+
+    // Deltas applied by players or generative simulation
+    UPROPERTY()
+    TArray<FVoxelDeltaItem> SavedDeltas;
+
+    UPROPERTY()
+    double LastGenerativeUpdateWorldTime = 0.0;
+
+    UPROPERTY()
+    EVoxelLODState CurrentLODState = EVoxelLODState::VirtualHorizon;
+    
+    // Only true if the visual ADynamicVoxelChunkActor is currently spawned in the world
+    UPROPERTY()
+    bool bIsSpawnedAsActor = false;
+};
+
+// ============================================================================
+// BUILDING & STRUCTURAL INTEGRITY CONFIGURATION
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FStructureMaterialDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag MaterialTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float StructuralDensity = 1.0f; // Affects mass
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float SupportStrength = 100.0f; // Base weight it can hold before snapping
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float InsulationValue = 5.0f; // Weather/temperature resistance
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float DurabilityMultiplier = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FStructurePieceDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag PieceTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UStaticMesh> MeshAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseMass = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseMaxHP = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float OverlapConnectionRadius = 150.0f; // Radius to connect to adjacent pieces
+};
+
+USTRUCT(BlueprintType)
+struct FPrefabComponentDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag PieceTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FTransform RelativeTransform;
+};
+
+USTRUCT(BlueprintType)
+struct FStructurePrefabDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag PrefabTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FPrefabComponentDef> Components;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float RequiredSkillLevel = 0.0f;
+};
+
+// ============================================================================
+// BUILDING FAST ARRAY INSTANCING
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FStructureInstanceItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGuid InstanceID;
+
+    UPROPERTY()
+    FGameplayTag PieceTag;
+
+    UPROPERTY()
+    FGameplayTag MaterialTag;
+
+    UPROPERTY()
+    FTransform WorldTransform;
+
+    UPROPERTY()
+    float CurrentHP = 100.0f;
+
+    UPROPERTY()
+    float SupportValue = 0.0f;
+
+    UPROPERTY()
+    bool bIsGrounded = false;
+
+    void PreReplicatedRemove(const struct FFastStructureInstanceArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastStructureInstanceArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastStructureInstanceArray& InArrayOwner);
+};
+
+// ============================================================================
+// WORLD PERSISTENCE & VOXEL SAVING
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FChunkDeltaSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FIntPoint ChunkCoord = FIntPoint::ZeroValue;
+
+    UPROPERTY()
+    TArray<FVoxelDeltaItem> SavedDeltas;
+};
+
+USTRUCT(BlueprintType)
+struct FBuildingChunkSnapshot
+{
+    GENERATED_BODY()
+    UPROPERTY() FIntPoint ChunkCoord;
+    UPROPERTY() TArray<FStructureInstanceItem> SavedStructures;
+};
+
+USTRUCT(BlueprintType)
+struct FWorldPersistenceSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    double WorldTime = 0.0;
+
+    UPROPERTY()
+    TArray<FChunkDeltaSnapshot> ModifiedVoxelChunks;
+    
+    UPROPERTY() TArray<FBuildingChunkSnapshot> ModifiedBuildingChunks;
+};
+
+USTRUCT(BlueprintType)
+struct FFastStructureInstanceArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FStructureInstanceItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class ADynamicBuildingChunkActor* OwningChunk = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FStructureInstanceItem, FFastStructureInstanceArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastStructureInstanceArray> : public TStructOpsTypeTraitsBase2<FFastStructureInstanceArray>
 {
     enum { WithNetDeltaSerializer = true };
 };
@@ -4530,6 +4743,9 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
     TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
+    TMap<FGameplayTag, FStructureMaterialDef> StructureMaterialRegistry;
+    TMap<FGameplayTag, FStructurePieceDef> StructurePieceRegistry;
+    TMap<FGameplayTag, FStructurePrefabDef> StructurePrefabRegistry;
     
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

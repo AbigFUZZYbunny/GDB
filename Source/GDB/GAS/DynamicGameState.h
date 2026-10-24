@@ -56,7 +56,10 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
-    UPROPERTY() TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;    
+    UPROPERTY() TMap<FGameplayTag, FStructureMaterialDef> StructureMaterialRegistry;
+    UPROPERTY() TMap<FGameplayTag, FStructurePieceDef> StructurePieceRegistry;
+    UPROPERTY() TMap<FGameplayTag, FStructurePrefabDef> StructurePrefabRegistry;
 
     UPROPERTY() FDynamicCalendarDef CalendarConfig;
     UPROPERTY() FPhysicsCalculationSettings CalculationSettings;

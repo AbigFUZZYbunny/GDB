@@ -16,6 +16,7 @@
 #include "TimerManager.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicPhysicsActor.h"
+#include "DynamicVoxelSubsystem.h"
 #include "Engine/OverlapResult.h"
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
@@ -594,12 +595,77 @@ void UDynamicGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle
 
 void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
 {
-    UDynamicInteractableComponent* TargetInteractable = FindBestNearbyInteractable(CurrentActorInfo);
-    if (!TargetInteractable) return;
-
     ADynamicCharacter* AvatarChar = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo());
-    AActor* TargetOwnerActor = TargetInteractable->GetOwner();
+    if (!AvatarChar) return;
 
+    UDynamicInteractableComponent* TargetInteractable = FindBestNearbyInteractable(CurrentActorInfo);
+
+    // Fallback: Voxel Modification (Mining / Digging) if no standard interactable is hit
+    if (!TargetInteractable) 
+    {
+        // Check if ability config allows voxels (Requires you added bCanModifyVoxels to FDynamicInteractionProfile)
+        // If not added to struct yet, you can also check if ActionTag matches a "Mining" tag
+        if (AbilityConfig.InteractionConfig.InteractionActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Mine"))))
+        {
+            if (UWorld* World = AvatarChar->GetWorld())
+            {
+                const FVector Start = AvatarChar->GetActorLocation();
+                const FVector End = Start + (AvatarChar->GetActorForwardVector() * AbilityConfig.InteractionConfig.MaxInteractionDistance);
+                
+                FHitResult VoxelHit;
+                FCollisionQueryParams Params(SCENE_QUERY_STAT(VoxelMiningSweep), false, AvatarChar);
+                
+                if (World->SweepSingleByChannel(VoxelHit, Start, End, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(AbilityConfig.InteractionConfig.TargetSweepRadius), Params))
+                {
+                    if (ADynamicVoxelChunkActor* HitChunk = Cast<ADynamicVoxelChunkActor>(VoxelHit.GetActor()))
+                    {
+                        if (UDynamicVoxelSubsystem* VoxelSub = World->GetSubsystem<UDynamicVoxelSubsystem>())
+                        {
+                            // Calculate penetration point to ensure we dig inside the hit normal
+                            const FVector DigLocation = VoxelHit.ImpactPoint - (VoxelHit.ImpactNormal * 25.0f);
+                            
+                            FGameplayTag MinedVoxelTag;
+                            // Send EmptyTag to remove the block (Air)
+                            if (VoxelSub->ServerModifyVoxelAtLocation(DigLocation, FGameplayTag::EmptyTag, AvatarChar, MinedVoxelTag))
+                            {
+                                PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                                GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+
+                                // SPAWN LOOT FROM VOXEL MINING
+                                ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
+                                if (GS && MinedVoxelTag.IsValid())
+                                {
+                                    if (const FDynamicVoxelTypeDef* VoxelDef = GS->VoxelMasterRegistry.Find(MinedVoxelTag))
+                                    {
+                                        if (VoxelDef->DestroyedItemArchetype.IsValid())
+                                        {
+                                            // Automatically insert into character's inventory if space allows, otherwise spawn in world
+                                            UDynamicContainerComponent* Inventory = AvatarChar->FindComponentByClass<UDynamicContainerComponent>();
+                                            if (!Inventory || !Inventory->ServerAddActorByTag(VoxelDef->DestroyedItemArchetype, 1, TArray<FDynamicAttributeItem>()))
+                                            {
+                                                FTransform DropTransform(FRotator::ZeroRotator, VoxelHit.ImpactPoint + (VoxelHit.ImpactNormal * 40.0f));
+                                                ADynamicPhysicsActor* DroppedLoot = GS->AcquirePhysicsActor(VoxelDef->DestroyedItemArchetype, DropTransform, AvatarChar, AvatarChar);
+                                                if (DroppedLoot && DroppedLoot->GetActivePhysicsPrimitive())
+                                                {
+                                                    DroppedLoot->GetActivePhysicsPrimitive()->SetSimulatePhysics(true);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                return; // End execution successfully
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!TargetInteractable) return;
+    
+    // ... [Rest of existing ExecuteInteractionBehavior remains unchanged] ...
+    AActor* TargetOwnerActor = TargetInteractable->GetOwner();
     if (AvatarChar && AbilityConfig.InteractionConfig.KinematicTargetTag.IsValid())
     {
         FTransform HandleWorldTransform;
@@ -609,14 +675,13 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             AvatarChar->AlignLimbToInteractionTarget(AbilityConfig.InteractionConfig.CasterEffectorBone, HandleWorldTransform, HandleComp);
         }
     }
-
+    
     PlayStagePresentation(AbilityConfig.StageVisuals.ReleaseStage);
-
     if (!HasAuthority(&CurrentActivationInfo)) return;
-
+    
     const FGameplayTag ActionTag = AbilityConfig.InteractionConfig.InteractionActionTag;
-
-    // 1. STORE ACTION: Stores a world ADynamicPhysicsActor into a container (e.g. putting an item into a chest or backpack)
+    
+    // 1. STORE ACTION
     if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Store"))))
     {
         if (ADynamicPhysicsActor* TargetPhysicsActor = Cast<ADynamicPhysicsActor>(TargetOwnerActor))
@@ -631,12 +696,11 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             }
         }
     }
-    // 2. LOOT / EXTRACT ACTION: Extracts an item from a world container into the character's hands or inventory
+    // 2. LOOT / EXTRACT ACTION
     else if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Loot"))))
     {
         if (UDynamicContainerComponent* TargetContainer = TargetOwnerActor->FindComponentByClass<UDynamicContainerComponent>())
         {
-            // Example: Extract item located at grid coordinate [0,0] into the character's hand socket
             int32 ExtractX = 0;
             int32 ExtractY = 0;
             if (TargetContainer->ServerExtractActorToHands(ExtractX, ExtractY, AvatarChar, AbilityConfig.InteractionConfig.CasterEffectorBone))
@@ -646,12 +710,11 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             }
         }
     }
-    // 3. STANDARD WORLD INTERACTION (Open, Close, Unlock, Lock, Push, Pull, Throw)
+    // 3. STANDARD WORLD INTERACTION
     else if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
     {
         PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
         GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
-
         if (AbilityConfig.InteractionConfig.EffectsToApplyToTarget.Num() > 0 && TargetOwnerActor)
         {
             UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();

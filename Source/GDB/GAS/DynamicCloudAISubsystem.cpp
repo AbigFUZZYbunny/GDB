@@ -319,7 +319,6 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
         FDynamicAIBehaviorDef BestBehavior;
         float BestScore = -MAX_flt;
 
-        // Data-driven fallback evaluation directly from Master Registry
         if (GS->EvaluateBestDynamicBehavior(Character, BestBehavior, BestScore))
         {
             FCloudAICommand Cmd;
@@ -327,16 +326,11 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
             Cmd.TargetEntityOrPlaceRoleTag = BestBehavior.TargetPlaceRoleTag;
             Cmd.PriorityWeight = BestScore;
 
-            if (BestBehavior.Utterances.Num() > 0)
+            if (UDynamicSocialComponent* SocialComp = Character->FindComponentByClass<UDynamicSocialComponent>())
             {
-                if (UDynamicSocialComponent* SocialComp = Character->FindComponentByClass<UDynamicSocialComponent>())
-                {
-                    FDynamicDialogueUtteranceDef ChosenUtterance;
-                    if (SocialComp->SelectBestUtterance(BestBehavior.Utterances, ChosenUtterance))
-                    {
-                        Cmd.UtteranceText = ChosenUtterance.UtteranceText;
-                    }
-                }
+                TSoftObjectPtr<UAnimMontage> OutMontage;
+                FGameplayTag OutVoice;
+                SocialComp->TryResolveDialogueForBehavior(BestBehavior, nullptr, Cmd.UtteranceText, OutMontage, OutVoice);
             }
 
             OutFallbackResponse.Commands.Add(Cmd);
@@ -344,7 +338,6 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
         }
     }
 
-    // Baseline fallback if no specific behavior passed conditions
     FCloudAICommand DefaultCommand;
     DefaultCommand.CommandActionTag = FGameplayTag::RequestGameplayTag(TEXT("Schedule.Wander"), false);
     DefaultCommand.TargetEntityOrPlaceRoleTag = FGameplayTag::RequestGameplayTag(TEXT("Role.Place.Workplace"), false);

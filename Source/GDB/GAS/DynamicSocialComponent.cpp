@@ -6,29 +6,19 @@
 #include "AbilitySystemComponent.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
-#include "Dom/JsonObject.h"
-#include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonWriter.h"
 
 UDynamicSocialComponent::UDynamicSocialComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
     SetIsReplicatedByDefault(true);
-    CharacterPersistentGuid = FGuid::NewGuid();
-
-    ReplicatedRelationships.OwningSocialComp = this;
-    ReplicatedNeedsAndMoods.OwningSocialComp = this;
-    ReplicatedKnownPlaces.OwningSocialComp = this;
-    ReplicatedProfessions.OwningSocialComp = this;
 }
 
 void UDynamicSocialComponent::BeginPlay()
 {
     Super::BeginPlay();
-    ReplicatedRelationships.OwningSocialComp = this;
-    ReplicatedNeedsAndMoods.OwningSocialComp = this;
-    ReplicatedKnownPlaces.OwningSocialComp = this;
-    ReplicatedProfessions.OwningSocialComp = this;
+    RebuildRelationshipCache();
+    RebuildNeedCache();
+    RebuildPlaceCache();
 }
 
 void UDynamicSocialComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -43,7 +33,6 @@ void UDynamicSocialComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UDynamicSocialComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
     DOREPLIFETIME(UDynamicSocialComponent, CharacterPersistentGuid);
     DOREPLIFETIME(UDynamicSocialComponent, ReplicatedRelationships);
     DOREPLIFETIME(UDynamicSocialComponent, ReplicatedNeedsAndMoods);
@@ -52,85 +41,67 @@ void UDynamicSocialComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
     DOREPLIFETIME(UDynamicSocialComponent, bCloudAISuspended);
 }
 
-void FDynamicRelationshipEdgeItem::PostReplicatedAdd(const FFastRelationshipEdgeArray& InArrayOwner)
+void UDynamicSocialComponent::RebuildRelationshipCache()
 {
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
+    // Local fast-lookup relationship mapping
 }
 
-void FDynamicRelationshipEdgeItem::PostReplicatedChange(const FFastRelationshipEdgeArray& InArrayOwner)
+void UDynamicSocialComponent::RebuildNeedCache()
 {
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
+    CachedNeeds.Empty(ReplicatedNeedsAndMoods.Items.Num());
+    for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
+    {
+        CachedNeeds.Add(Item.NeedOrMoodTag, Item.LocalExactValue);
+    }
 }
 
-void FDynamicNeedStateItem::PreReplicatedRemove(const FFastNeedStateArray& InArrayOwner) {}
-
-void FDynamicNeedStateItem::PostReplicatedAdd(const FFastNeedStateArray& InArrayOwner)
+void UDynamicSocialComponent::RebuildPlaceCache()
 {
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
+    CachedPlacesByRole.Empty(ReplicatedKnownPlaces.Items.Num());
+    for (const FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
+    {
+        CachedPlacesByRole.Add(Place.PlaceRoleTag, Place);
+    }
 }
-
-void FDynamicNeedStateItem::PostReplicatedChange(const FFastNeedStateArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
-}
-
-void FDynamicKnownPlaceItem::PostReplicatedAdd(const FFastKnownPlaceArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildPlaceCache();
-}
-
-void FDynamicKnownPlaceItem::PostReplicatedChange(const FFastKnownPlaceArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildPlaceCache();
-}
-
-void FDynamicAssignedProfessionItem::PreReplicatedRemove(const FFastAssignedProfessionArray& InArrayOwner) {}
-void FDynamicAssignedProfessionItem::PostReplicatedAdd(const FFastAssignedProfessionArray& InArrayOwner) {}
-void FDynamicAssignedProfessionItem::PostReplicatedChange(const FFastAssignedProfessionArray& InArrayOwner) {}
 
 bool UDynamicSocialComponent::GetNeedValue(const FGameplayTag& NeedTag, float& OutValue) const
 {
-    if (!NeedTag.IsValid()) return false;
-    if (const float* FoundVal = CachedNeeds.Find(NeedTag))
+    if (const float* Found = CachedNeeds.Find(NeedTag))
     {
-        OutValue = *FoundVal;
+        OutValue = *Found;
         return true;
     }
     for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
-        if (Item.NeedOrMoodTag.MatchesTagExact(NeedTag))
+        if (Item.NeedOrMoodTag == NeedTag)
         {
             OutValue = Item.LocalExactValue;
             return true;
         }
     }
+    OutValue = 0.0f;
     return false;
 }
 
 float UDynamicSocialComponent::GetDecayedRelationshipMetric(const FGuid& TargetEntityGuid, const FGameplayTag& MetricTag) const
 {
-    if (!TargetEntityGuid.IsValid() || !MetricTag.IsValid()) return 0.0f;
-    for (const FDynamicRelationshipEdgeItem& Edge : ReplicatedRelationships.Items)
+    if (const FDynamicRelationshipEdgeItem* Edge = FindRelationshipByGuid(TargetEntityGuid))
     {
-        if (Edge.TargetEntityGuid == TargetEntityGuid)
-        {
-            return Edge.GetMetricValue(MetricTag);
-        }
+        return Edge->GetMetricValue(MetricTag);
     }
     return 0.0f;
 }
 
 bool UDynamicSocialComponent::GetKnownPlaceByRole(const FGameplayTag& RoleTag, FDynamicKnownPlaceItem& OutPlace) const
 {
-    if (!RoleTag.IsValid()) return false;
-    if (const FDynamicKnownPlaceItem* FoundPlace = CachedPlacesByRole.Find(RoleTag))
+    if (const FDynamicKnownPlaceItem* Found = CachedPlacesByRole.Find(RoleTag))
     {
-        OutPlace = *FoundPlace;
+        OutPlace = *Found;
         return true;
     }
     for (const FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
     {
-        if (Place.PlaceRoleTag.MatchesTag(RoleTag))
+        if (Place.PlaceRoleTag == RoleTag)
         {
             OutPlace = Place;
             return true;
@@ -139,18 +110,39 @@ bool UDynamicSocialComponent::GetKnownPlaceByRole(const FGameplayTag& RoleTag, F
     return false;
 }
 
+const FDynamicRelationshipEdgeItem* UDynamicSocialComponent::FindRelationshipWithActor(const AActor* TargetActor) const
+{
+    if (!TargetActor) return nullptr;
+    const UDynamicSocialComponent* TargetSocial = TargetActor->FindComponentByClass<UDynamicSocialComponent>();
+    if (!TargetSocial) return nullptr;
+    return FindRelationshipByGuid(TargetSocial->CharacterPersistentGuid);
+}
+
+const FDynamicRelationshipEdgeItem* UDynamicSocialComponent::FindRelationshipByGuid(const FGuid& TargetGuid) const
+{
+    if (!TargetGuid.IsValid()) return nullptr;
+    for (const FDynamicRelationshipEdgeItem& Edge : ReplicatedRelationships.Items)
+    {
+        if (Edge.TargetEntityGuid == TargetGuid)
+        {
+            return &Edge;
+        }
+    }
+    return nullptr;
+}
+
 void UDynamicSocialComponent::ServerRegisterKnownPlace(const FGameplayTag& PlaceTag, const FGameplayTag& RoleTag, const FGuid& AreaGuid, const FVector& WorldLocation, float InitialConfidence)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority()) return;
 
-    for (FDynamicKnownPlaceItem& Item : ReplicatedKnownPlaces.Items)
+    for (FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
     {
-        if (Item.PlaceRoleTag.MatchesTagExact(RoleTag) || (AreaGuid.IsValid() && Item.LinkedActorGuid == AreaGuid))
+        if (Place.PlaceRoleTag == RoleTag || (AreaGuid.IsValid() && Place.LinkedActorGuid == AreaGuid))
         {
-            Item.LastKnownLocation = FVector_NetQuantize10(WorldLocation);
-            Item.ConfidenceScore = InitialConfidence;
-            Item.LastVisitedWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-            ReplicatedKnownPlaces.MarkItemDirty(Item);
+            Place.LastKnownLocation = WorldLocation;
+            Place.ConfidenceScore = FMath::Clamp(InitialConfidence, 0.0f, 1.0f);
+            Place.LastVisitedWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+            ReplicatedKnownPlaces.MarkItemDirty(Place);
             RebuildPlaceCache();
             return;
         }
@@ -160,11 +152,12 @@ void UDynamicSocialComponent::ServerRegisterKnownPlace(const FGameplayTag& Place
     NewPlace.PlaceRoleTag = RoleTag;
     NewPlace.PlaceArchetypeOrLandmarkTag = PlaceTag;
     NewPlace.LinkedActorGuid = AreaGuid;
-    NewPlace.LastKnownLocation = FVector_NetQuantize10(WorldLocation);
-    NewPlace.ConfidenceScore = InitialConfidence;
+    NewPlace.LastKnownLocation = WorldLocation;
+    NewPlace.ConfidenceScore = FMath::Clamp(InitialConfidence, 0.0f, 1.0f);
     NewPlace.LastVisitedWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-    ReplicatedKnownPlaces.Items.Add(NewPlace);
-    ReplicatedKnownPlaces.MarkArrayDirty();
+    
+    FDynamicKnownPlaceItem& Added = ReplicatedKnownPlaces.Items.Add_GetRef(NewPlace);
+    ReplicatedKnownPlaces.MarkItemDirty(Added);
     RebuildPlaceCache();
 }
 
@@ -175,25 +168,26 @@ void UDynamicSocialComponent::ServerSetNeedValue(const FGameplayTag& NeedTag, fl
     const uint8 Packed = static_cast<uint8>(FMath::Clamp(FMath::RoundToInt((NewValue / 100.0f) * 255.0f), 0, 255));
     for (FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
-        if (Item.NeedOrMoodTag.MatchesTagExact(NeedTag))
+        if (Item.NeedOrMoodTag == NeedTag)
         {
-            Item.LocalExactValue = NewValue;
+            Item.LocalExactValue = FMath::Clamp(NewValue, 0.0f, 100.0f);
             Item.PackedCurrentValue = Packed;
             Item.LastEvaluatedWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
             ReplicatedNeedsAndMoods.MarkItemDirty(Item);
-            CachedNeeds.Add(NeedTag, NewValue);
+            RebuildNeedCache();
             return;
         }
     }
 
     FDynamicNeedStateItem NewItem;
     NewItem.NeedOrMoodTag = NeedTag;
-    NewItem.LocalExactValue = NewValue;
+    NewItem.LocalExactValue = FMath::Clamp(NewValue, 0.0f, 100.0f);
     NewItem.PackedCurrentValue = Packed;
     NewItem.LastEvaluatedWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-    ReplicatedNeedsAndMoods.Items.Add(NewItem);
-    ReplicatedNeedsAndMoods.MarkArrayDirty();
-    CachedNeeds.Add(NeedTag, NewValue);
+    
+    FDynamicNeedStateItem& Added = ReplicatedNeedsAndMoods.Items.Add_GetRef(NewItem);
+    ReplicatedNeedsAndMoods.MarkItemDirty(Added);
+    RebuildNeedCache();
 }
 
 void UDynamicSocialComponent::ServerRecordSocialInteraction(
@@ -206,41 +200,47 @@ void UDynamicSocialComponent::ServerRecordSocialInteraction(
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !TargetEntityGuid.IsValid()) return;
 
-    const double CurrentTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    FDynamicRelationshipEdgeItem* FoundEdge = nullptr;
     for (FDynamicRelationshipEdgeItem& Edge : ReplicatedRelationships.Items)
     {
         if (Edge.TargetEntityGuid == TargetEntityGuid)
         {
-            Edge.CachedTargetActor = TargetActor;
-            Edge.LastInteractionWorldTime = CurrentTime;
-            Edge.SecondaryContextTags.AppendTags(ContextTags);
-            for (const FTagFloatPair& Delta : MetricDeltas)
-            {
-                const float OldVal = Edge.GetMetricValue(Delta.KeyTag);
-                const float NewVal = FMath::Clamp(OldVal + Delta.Value, -100.0f, 100.0f);
-                const uint8 PackedVal = static_cast<uint8>(FMath::RoundToInt(((NewVal + 100.0f) / 200.0f) * 255.0f));
-                Edge.SetMetricValue(Delta.KeyTag, NewVal, PackedVal);
-            }
-            ReplicatedRelationships.MarkItemDirty(Edge);
-            return;
+            FoundEdge = &Edge;
+            break;
         }
     }
 
-    FDynamicRelationshipEdgeItem NewEdge;
-    NewEdge.TargetEntityGuid = TargetEntityGuid;
-    NewEdge.CachedTargetActor = TargetActor;
-    NewEdge.TargetKind = TargetKind;
-    NewEdge.PrimaryRelationshipTag = RelationshipTypeTag;
-    NewEdge.SecondaryContextTags = ContextTags;
-    NewEdge.LastInteractionWorldTime = CurrentTime;
+    const double CurrentTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+    if (!FoundEdge)
+    {
+        FDynamicRelationshipEdgeItem NewEdge;
+        NewEdge.TargetEntityGuid = TargetEntityGuid;
+        NewEdge.CachedTargetActor = TargetActor;
+        NewEdge.TargetKind = TargetKind;
+        NewEdge.PrimaryRelationshipTag = RelationshipTypeTag.IsValid() ? RelationshipTypeTag : FGameplayTag::RequestGameplayTag(TEXT("Relation.Type.Acquaintance"), false);
+        NewEdge.SecondaryContextTags = ContextTags;
+        NewEdge.LastInteractionWorldTime = CurrentTime;
+        
+        FDynamicRelationshipEdgeItem& Added = ReplicatedRelationships.Items.Add_GetRef(NewEdge);
+        ReplicatedRelationships.MarkItemDirty(Added);
+        FoundEdge = &Added;
+    }
+
+    FoundEdge->LastInteractionWorldTime = CurrentTime;
+    FoundEdge->CachedTargetActor = TargetActor;
+    FoundEdge->SecondaryContextTags.AppendTags(ContextTags);
+
     for (const FTagFloatPair& Delta : MetricDeltas)
     {
-        const float Val = FMath::Clamp(Delta.Value, -100.0f, 100.0f);
-        const uint8 PackedVal = static_cast<uint8>(FMath::RoundToInt(((Val + 100.0f) / 200.0f) * 255.0f));
-        NewEdge.SetMetricValue(Delta.KeyTag, Val, PackedVal);
+        if (!Delta.KeyTag.IsValid()) continue;
+        const float CurVal = FoundEdge->GetMetricValue(Delta.KeyTag);
+        const float NewVal = FMath::Clamp(CurVal + Delta.Value, -100.0f, 100.0f);
+        const uint8 PackedVal = static_cast<uint8>(FMath::RoundToInt(((NewVal + 100.0f) / 200.0f) * 255.0f));
+        FoundEdge->SetMetricValue(Delta.KeyTag, NewVal, PackedVal);
     }
-    ReplicatedRelationships.Items.Add(NewEdge);
-    ReplicatedRelationships.MarkArrayDirty();
+
+    ReplicatedRelationships.MarkItemDirty(*FoundEdge);
 }
 
 void UDynamicSocialComponent::ServerSetCloudAISuspension(bool bSuspended)
@@ -261,13 +261,11 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     const AActor* OwnerActor = GetOwner();
     const FVector OwnerLoc = OwnerActor ? OwnerActor->GetActorLocation() : FVector::ZeroVector;
 
-    // 1. Filtered Needs (Only serialize urgent or changed needs)
     TSharedPtr<FJsonObject> NeedsObj = MakeShareable(new FJsonObject());
     for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
         const bool bIsUrgent = ContextFilterConfig.bFilterUrgentNeedsOnly && (Item.LocalExactValue < 25.0f || Item.LocalExactValue > 75.0f);
         const bool bHasChanged = ContextFilterConfig.bDeltaOnlySerialization && (Item.LastEvaluatedWorldTime >= LastContextSerializationTime);
-
         if (!ContextFilterConfig.bFilterUrgentNeedsOnly || bIsUrgent || bHasChanged)
         {
             NeedsObj->SetNumberField(Item.NeedOrMoodTag.ToString(), Item.LocalExactValue);
@@ -275,13 +273,11 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     }
     RootObj->SetObjectField(TEXT("Needs"), NeedsObj);
 
-    // 2. Spatial & Priority Relationship Filtering
     TArray<TSharedPtr<FJsonValue>> RelationshipsArray;
     int32 PackedRelationships = 0;
     for (const FDynamicRelationshipEdgeItem& Edge : ReplicatedRelationships.Items)
     {
         if (PackedRelationships >= ContextFilterConfig.MaxRelationshipsInPrompt) break;
-
         bool bInclude = true;
         if (Edge.CachedTargetActor.IsValid())
         {
@@ -291,27 +287,23 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
                 bInclude = false;
             }
         }
-
         if (bInclude)
         {
             TSharedPtr<FJsonObject> RelObj = MakeShareable(new FJsonObject());
             RelObj->SetStringField(TEXT("Target"), Edge.TargetEntityGuid.ToString());
             RelObj->SetStringField(TEXT("Type"), Edge.PrimaryRelationshipTag.ToString());
-
             TSharedPtr<FJsonObject> MetricsObj = MakeShareable(new FJsonObject());
             for (const FDynamicRelationshipMetricEntry& Metric : Edge.Metrics)
             {
                 MetricsObj->SetNumberField(Metric.MetricTag.ToString(), Metric.ExactValue);
             }
             RelObj->SetObjectField(TEXT("Metrics"), MetricsObj);
-
             RelationshipsArray.Add(MakeShareable(new FJsonValueObject(RelObj)));
             PackedRelationships++;
         }
     }
     RootObj->SetArrayField(TEXT("NearbyRelationships"), RelationshipsArray);
 
-    // 3. Known Places
     TArray<TSharedPtr<FJsonValue>> PlacesArray;
     for (const FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
     {
@@ -326,11 +318,282 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     RootObj->SetArrayField(TEXT("KnownPlaces"), PlacesArray);
 
     LastContextSerializationTime = CurrentWorldTime;
-
     FString OutputString;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
     FJsonSerializer::Serialize(RootObj, Writer);
     return OutputString;
+}
+
+FString UDynamicSocialComponent::ResolveActorDisplayName(const AActor* InActor) const
+{
+    if (!InActor) return TEXT("traveler");
+    if (const UDynamicSocialComponent* Social = InActor->FindComponentByClass<UDynamicSocialComponent>())
+    {
+        if (!Social->CharacterDisplayName.IsEmpty())
+        {
+            return Social->CharacterDisplayName;
+        }
+    }
+    return InActor->GetName();
+}
+
+FString UDynamicSocialComponent::ExtractFirstName(const FString& FullName) const
+{
+    FString FirstName, LastName;
+    if (FullName.Split(TEXT(" "), &FirstName, &LastName))
+    {
+        return FirstName;
+    }
+    return FullName;
+}
+
+bool UDynamicSocialComponent::SelectBestUtterance(
+    const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances,
+    AActor* TargetActor,
+    FDynamicDialogueUtteranceDef& OutSelectedUtterance,
+    float& OutComputedWeight) const
+{
+    OutComputedWeight = 0.0f;
+    if (CandidateUtterances.Num() == 0) return false;
+
+    AActor* OwnerActor = GetOwner();
+    const UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+    const UDynamicAttributeSet* AttrSet = ASC ? Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())) : nullptr;
+
+    const UAbilitySystemComponent* TargetASC = TargetActor ? TargetActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+    const UDynamicAttributeSet* TargetAttrSet = TargetASC ? Cast<UDynamicAttributeSet>(TargetASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())) : nullptr;
+    const UDynamicSocialComponent* TargetSocial = TargetActor ? TargetActor->FindComponentByClass<UDynamicSocialComponent>() : nullptr;
+
+    const FDynamicRelationshipEdgeItem* RelationEdge = TargetActor ? FindRelationshipWithActor(TargetActor) : nullptr;
+
+    FGameplayTagContainer SpeakerMoodTags;
+    for (const FDynamicNeedStateItem& MoodItem : ReplicatedNeedsAndMoods.Items)
+    {
+        SpeakerMoodTags.AddTag(MoodItem.NeedOrMoodTag);
+    }
+
+    FGameplayTagContainer TargetMoodTags;
+    if (TargetSocial)
+    {
+        for (const FDynamicNeedStateItem& MoodItem : TargetSocial->ReplicatedNeedsAndMoods.Items)
+        {
+            TargetMoodTags.AddTag(MoodItem.NeedOrMoodTag);
+        }
+    }
+
+    struct FEvaluatedCandidate
+    {
+        const FDynamicDialogueUtteranceDef* Def = nullptr;
+        float FinalWeight = 0.0f;
+    };
+
+    TArray<FEvaluatedCandidate> EligiblePool;
+    float AccumulatedTotalWeight = 0.0f;
+
+    for (const FDynamicDialogueUtteranceDef& Option : CandidateUtterances)
+    {
+        if (Option.TargetAttributeRequirements.Num() > 0)
+        {
+            if (!TargetActor) continue;
+
+            bool bTargetAttrsMatch = true;
+            for (const FCharacterAttributeRangeDef& Req : Option.TargetAttributeRequirements)
+            {
+                float Val = 0.0f;
+                if (TargetAttrSet) Val = TargetAttrSet->GetDynamicAttributeValue(Req.AttributeTag, 0);
+                if (FMath::IsNearlyZero(Val) && TargetSocial) TargetSocial->GetNeedValue(Req.AttributeTag, Val);
+
+                if (Val < Req.MinValue || Val > Req.MaxValue)
+                {
+                    bTargetAttrsMatch = false;
+                    break;
+                }
+            }
+            if (!bTargetAttrsMatch) continue;
+        }
+
+        if (Option.TargetAllowedMoodTags.Num() > 0)
+        {
+            if (!TargetSocial || !TargetMoodTags.HasAny(Option.TargetAllowedMoodTags))
+            {
+                continue;
+            }
+        }
+
+        if (Option.RequiredRelationshipTags.Num() > 0)
+        {
+            if (!RelationEdge) continue;
+
+            const bool bHasPrimary = Option.RequiredRelationshipTags.HasTag(RelationEdge->PrimaryRelationshipTag);
+            const bool bHasSecondary = Option.RequiredRelationshipTags.HasAny(RelationEdge->SecondaryContextTags);
+            if (!bHasPrimary && !bHasSecondary)
+            {
+                continue;
+            }
+        }
+
+        if (Option.AllowedMoodTags.Num() > 0 && !SpeakerMoodTags.HasAny(Option.AllowedMoodTags))
+        {
+            continue;
+        }
+
+        bool bRelationalPassed = true;
+        for (const FCharacterAttributeRangeDef& RelReq : Option.RelationalMetricRequirements)
+        {
+            const float MetricVal = RelationEdge ? RelationEdge->GetMetricValue(RelReq.AttributeTag) : 0.0f;
+            if (MetricVal < RelReq.MinValue || MetricVal > RelReq.MaxValue)
+            {
+                bRelationalPassed = false;
+                break;
+            }
+        }
+        if (!bRelationalPassed) continue;
+
+        bool bAttributesPassed = true;
+        for (const FCharacterAttributeRangeDef& AttrReq : Option.AttributeRequirements)
+        {
+            float CurrentAttrVal = 0.0f;
+            if (AttrSet) CurrentAttrVal = AttrSet->GetDynamicAttributeValue(AttrReq.AttributeTag, 0);
+            if (FMath::IsNearlyZero(CurrentAttrVal)) GetNeedValue(AttrReq.AttributeTag, CurrentAttrVal);
+
+            if (CurrentAttrVal < AttrReq.MinValue || CurrentAttrVal > AttrReq.MaxValue)
+            {
+                bAttributesPassed = false;
+                break;
+            }
+        }
+        if (!bAttributesPassed) continue;
+
+        float RunningWeight = FMath::Max(0.01f, Option.SelectionWeight);
+
+        for (const auto& AttrScalar : Option.ProbabilityAttributeScalars.LocalLookupMap)
+        {
+            float CurrentVal = 0.0f;
+            if (AttrSet) CurrentVal = AttrSet->GetDynamicAttributeValue(AttrScalar.Key, 0);
+            if (FMath::IsNearlyZero(CurrentVal)) GetNeedValue(AttrScalar.Key, CurrentVal);
+
+            RunningWeight += (CurrentVal * AttrScalar.Value);
+        }
+
+        if (TargetAttrSet || TargetSocial)
+        {
+            for (const auto& TargetAttrScalar : Option.ProbabilityTargetAttributeScalars.LocalLookupMap)
+            {
+                float TargetVal = 0.0f;
+                if (TargetAttrSet) TargetVal = TargetAttrSet->GetDynamicAttributeValue(TargetAttrScalar.Key, 0);
+                if (FMath::IsNearlyZero(TargetVal) && TargetSocial) TargetSocial->GetNeedValue(TargetAttrScalar.Key, TargetVal);
+
+                RunningWeight += (TargetVal * TargetAttrScalar.Value);
+            }
+        }
+
+        if (TargetSocial)
+        {
+            for (const auto& TargetMoodScalar : Option.ProbabilityTargetMoodScalars.LocalLookupMap)
+            {
+                float MoodVal = 0.0f;
+                if (TargetSocial->GetNeedValue(TargetMoodScalar.Key, MoodVal))
+                {
+                    RunningWeight += (MoodVal * TargetMoodScalar.Value);
+                }
+            }
+        }
+
+        if (RelationEdge)
+        {
+            for (const auto& RelScalar : Option.ProbabilityRelationalScalars.LocalLookupMap)
+            {
+                const float MetricVal = RelationEdge->GetMetricValue(RelScalar.Key);
+                RunningWeight += (MetricVal * RelScalar.Value);
+            }
+        }
+
+        for (const auto& MoodScalar : Option.ProbabilityMoodScalars.LocalLookupMap)
+        {
+            float MoodVal = 0.0f;
+            if (GetNeedValue(MoodScalar.Key, MoodVal))
+            {
+                RunningWeight += (MoodVal * MoodScalar.Value);
+            }
+        }
+
+        RunningWeight = FMath::Max(0.01f, RunningWeight);
+        AccumulatedTotalWeight += RunningWeight;
+
+        FEvaluatedCandidate Candidate;
+        Candidate.Def = &Option;
+        Candidate.FinalWeight = RunningWeight;
+        EligiblePool.Add(Candidate);
+    }
+
+    if (EligiblePool.Num() == 0) return false;
+
+    const float RandomRoll = FMath::FRandRange(0.0f, AccumulatedTotalWeight);
+    float Tally = 0.0f;
+
+    for (const FEvaluatedCandidate& Pick : EligiblePool)
+    {
+        Tally += Pick.FinalWeight;
+        if (RandomRoll <= Tally)
+        {
+            OutSelectedUtterance = *Pick.Def;
+            OutComputedWeight = Pick.FinalWeight;
+            return true;
+        }
+    }
+
+    OutSelectedUtterance = *EligiblePool.Last().Def;
+    OutComputedWeight = EligiblePool.Last().FinalWeight;
+    return true;
+}
+
+FString UDynamicSocialComponent::FormatDialogueTokens(
+    const FString& TemplateString,
+    AActor* TargetActor,
+    const FString& CustomLocation,
+    const FString& CustomTime) const
+{
+    return FormatDialogueTokens(TemplateString, TargetActor, CustomLocation, CustomTime, TMap<FString, FString>());
+}
+
+FString UDynamicSocialComponent::FormatDialogueTokens(
+    const FString& TemplateString,
+    AActor* TargetActor,
+    const FString& CustomLocation,
+    const FString& CustomTime,
+    const TMap<FString, FString>& CustomWildcards) const
+{
+    FString Formatted = TemplateString;
+
+    const FString SpeakerName = ResolveActorDisplayName(GetOwner());
+    const FString SpeakerFName = ExtractFirstName(SpeakerName);
+
+    const FString TargetName = ResolveActorDisplayName(TargetActor);
+    const FString TargetFName = ExtractFirstName(TargetName);
+
+    Formatted = Formatted.Replace(TEXT("%Target%"), *TargetName, ESearchCase::IgnoreCase);
+    Formatted = Formatted.Replace(TEXT("%target%"), *TargetName, ESearchCase::IgnoreCase);
+
+    Formatted = Formatted.Replace(TEXT("%Speaker%"), *SpeakerName, ESearchCase::IgnoreCase);
+    Formatted = Formatted.Replace(TEXT("%speaker%"), *SpeakerName, ESearchCase::IgnoreCase);
+
+    Formatted = Formatted.Replace(TEXT("%FName%"), *TargetFName, ESearchCase::IgnoreCase);
+    Formatted = Formatted.Replace(TEXT("%TargetFName%"), *TargetFName, ESearchCase::IgnoreCase);
+    Formatted = Formatted.Replace(TEXT("%SpeakerFName%"), *SpeakerFName, ESearchCase::IgnoreCase);
+
+    Formatted = Formatted.Replace(TEXT("%location_type%"), *CustomLocation, ESearchCase::IgnoreCase);
+    Formatted = Formatted.Replace(TEXT("%Location%"), *CustomLocation, ESearchCase::IgnoreCase);
+
+    Formatted = Formatted.Replace(TEXT("%recent_time%"), *CustomTime, ESearchCase::IgnoreCase);
+    Formatted = Formatted.Replace(TEXT("%Time%"), *CustomTime, ESearchCase::IgnoreCase);
+
+    for (const auto& WildcardPair : CustomWildcards)
+    {
+        const FString TokenKey = FString::Printf(TEXT("%%%s%%"), *WildcardPair.Key);
+        Formatted = Formatted.Replace(*TokenKey, *WildcardPair.Value, ESearchCase::IgnoreCase);
+    }
+
+    return Formatted;
 }
 
 bool UDynamicSocialComponent::TryResolveFastPathDialogue(
@@ -338,86 +601,96 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
     AActor* TargetActor,
     FString& OutUtterance,
     TSoftObjectPtr<UAnimMontage>& OutMontage,
-    FGameplayTag& OutVoiceCueTag)
+    FGameplayTag& OutVoiceCueTag,
+    FGameplayTag SpecificProfileTag)
+{
+    return TryResolveFastPathDialogue(CategoryTag, TargetActor, OutUtterance, OutMontage, OutVoiceCueTag, TMap<FString, FString>(), SpecificProfileTag);
+}
+
+bool UDynamicSocialComponent::TryResolveFastPathDialogue(
+    FGameplayTag CategoryTag,
+    AActor* TargetActor,
+    FString& OutUtterance,
+    TSoftObjectPtr<UAnimMontage>& OutMontage,
+    FGameplayTag& OutVoiceCueTag,
+    const TMap<FString, FString>& CustomWildcards,
+    FGameplayTag SpecificProfileTag)
 {
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
-    // 1. Collect NPC's current emotional mood tags
+    const FDynamicRelationshipEdgeItem* TargetEdge = TargetActor ? FindRelationshipWithActor(TargetActor) : nullptr;
+
     FGameplayTagContainer CurrentMoodTags;
     for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
         CurrentMoodTags.AddTag(Item.NeedOrMoodTag);
     }
 
-    // 2. Resolve relationship with target actor (if applicable)
-    const FDynamicRelationshipEdgeItem* TargetEdge = nullptr;
-    if (TargetActor)
-    {
-        if (const UDynamicSocialComponent* TargetSocial = TargetActor->FindComponentByClass<UDynamicSocialComponent>())
-        {
-            for (const FDynamicRelationshipEdgeItem& Edge : ReplicatedRelationships.Items)
-            {
-                if (Edge.TargetEntityGuid == TargetSocial->CharacterPersistentGuid)
-                {
-                    TargetEdge = &Edge;
-                    break;
-                }
-            }
-        }
-    }
-
-    // 3. Search and filter dialogue definitions matching category, moods, and relational attributes
-    TArray<const FFastPathDialogueEntry*> ValidCandidates;
+    TArray<const FFastPathDialogueEntry*> ValidEntries;
     float TotalWeight = 0.0f;
 
-    for (const auto& RegistryPair : GS->FastPathDialogueRegistry)
+    auto EvaluateEntry = [&](const FFastPathDialogueEntry& Entry)
     {
-        for (const FFastPathDialogueEntry& Entry : RegistryPair.Value.Entries)
+        if (!Entry.CategoryTag.MatchesTag(CategoryTag)) return;
+
+        if (Entry.AllowedMoodTags.Num() > 0 && !CurrentMoodTags.HasAny(Entry.AllowedMoodTags))
         {
-            if (!Entry.CategoryTag.MatchesTag(CategoryTag)) continue;
+            return;
+        }
 
-            // Check emotional moods: if entry has required moods, NPC must possess at least one
-            if (Entry.AllowedMoodTags.Num() > 0 && !CurrentMoodTags.HasAny(Entry.AllowedMoodTags))
+        if (Entry.AllowedRelationshipTypeTags.Num() > 0)
+        {
+            if (!TargetEdge || !Entry.AllowedRelationshipTypeTags.HasTag(TargetEdge->PrimaryRelationshipTag))
             {
-                continue;
+                return;
             }
+        }
 
-            // Check relationship type requirements
-            if (Entry.AllowedRelationshipTypeTags.Num() > 0)
+        bool bAttributesMatch = true;
+        for (const FCharacterAttributeRangeDef& Req : Entry.RelationalAttributeRequirements)
+        {
+            const float CurrentVal = TargetEdge ? TargetEdge->GetMetricValue(Req.AttributeTag) : 0.0f;
+            if (CurrentVal < Req.MinValue || CurrentVal > Req.MaxValue)
             {
-                if (!TargetEdge || !Entry.AllowedRelationshipTypeTags.HasTag(TargetEdge->PrimaryRelationshipTag))
-                {
-                    continue;
-                }
+                bAttributesMatch = false;
+                break;
             }
+        }
+        if (!bAttributesMatch) return;
 
-            // Check multi-attribute relational requirements (Affinity, Hostility, Trust, etc.)
-            bool bAttributesMatch = true;
-            for (const FCharacterAttributeRangeDef& Req : Entry.RelationalAttributeRequirements)
+        ValidEntries.Add(&Entry);
+        TotalWeight += FMath::Max(0.01f, Entry.SelectionWeight);
+    };
+
+    if (SpecificProfileTag.IsValid())
+    {
+        if (const FFastPathDialogueDef* ProfileDef = GS->FastPathDialogueRegistry.Find(SpecificProfileTag))
+        {
+            for (const FFastPathDialogueEntry& Entry : ProfileDef->Entries)
             {
-                const float CurrentVal = TargetEdge ? TargetEdge->GetMetricValue(Req.AttributeTag) : 0.0f;
-                if (CurrentVal < Req.MinValue || CurrentVal > Req.MaxValue)
-                {
-                    bAttributesMatch = false;
-                    break;
-                }
+                EvaluateEntry(Entry);
             }
-            if (!bAttributesMatch) continue;
-
-            ValidCandidates.Add(&Entry);
-            TotalWeight += FMath::Max(0.01f, Entry.SelectionWeight);
+        }
+    }
+    else
+    {
+        for (const auto& RegistryPair : GS->FastPathDialogueRegistry)
+        {
+            for (const FFastPathDialogueEntry& Entry : RegistryPair.Value.Entries)
+            {
+                EvaluateEntry(Entry);
+            }
         }
     }
 
-    if (ValidCandidates.Num() == 0) return false;
+    if (ValidEntries.Num() == 0) return false;
 
-    // 4. Weighted random selection
     const float Roll = FMath::FRandRange(0.0f, TotalWeight);
     float Cumulative = 0.0f;
-    const FFastPathDialogueEntry* ChosenEntry = ValidCandidates[0];
+    const FFastPathDialogueEntry* ChosenEntry = ValidEntries[0];
 
-    for (const FFastPathDialogueEntry* Candidate : ValidCandidates)
+    for (const FFastPathDialogueEntry* Candidate : ValidEntries)
     {
         Cumulative += FMath::Max(0.01f, Candidate->SelectionWeight);
         if (Roll <= Cumulative)
@@ -427,281 +700,149 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
         }
     }
 
-    // 5. Contextual Token Replacement
-    OutUtterance = FormatDialogueTokens(ChosenEntry->UtteranceTemplate, TargetActor);
-    //OutMontage = ChosenEntry->GestureMontage;
+    FString TemplateText = ChosenEntry->UtteranceTemplate;
+    OutMontage = ChosenEntry->GestureMontage;
     OutVoiceCueTag = ChosenEntry->VoiceCueTag;
 
+    if (ChosenEntry->UtteranceVariations.Num() > 0)
+    {
+        FDynamicDialogueUtteranceDef ChosenVariation;
+        float VariationWeight = 0.0f;
+        if (SelectBestUtterance(ChosenEntry->UtteranceVariations, TargetActor, ChosenVariation, VariationWeight))
+        {
+            TemplateText = ChosenVariation.UtteranceText;
+            if (ChosenVariation.GestureMontage.IsValid()) OutMontage = ChosenVariation.GestureMontage;
+            if (ChosenVariation.VoiceCueTag.IsValid()) OutVoiceCueTag = ChosenVariation.VoiceCueTag;
+        }
+    }
+
+    OutUtterance = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
     return true;
+}
+
+bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
+    const FDynamicAIBehaviorDef& BehaviorDef,
+    AActor* TargetActor,
+    FString& OutUtterance,
+    TSoftObjectPtr<UAnimMontage>& OutMontage,
+    FGameplayTag& OutVoiceCueTag)
+{
+    return TryResolveDialogueForBehavior(BehaviorDef, TargetActor, OutUtterance, OutMontage, OutVoiceCueTag, TMap<FString, FString>());
+}
+
+bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
+    const FDynamicAIBehaviorDef& BehaviorDef,
+    AActor* TargetActor,
+    FString& OutUtterance,
+    TSoftObjectPtr<UAnimMontage>& OutMontage,
+    FGameplayTag& OutVoiceCueTag,
+    const TMap<FString, FString>& CustomWildcards)
+{
+    if (BehaviorDef.Utterances.Num() > 0)
+    {
+        FDynamicDialogueUtteranceDef ChosenUtterance;
+        float OutWeight = 0.0f;
+        if (SelectBestUtterance(BehaviorDef.Utterances, TargetActor, ChosenUtterance, OutWeight))
+        {
+            OutMontage = ChosenUtterance.GestureMontage;
+            OutVoiceCueTag = ChosenUtterance.VoiceCueTag;
+            OutUtterance = FormatDialogueTokens(ChosenUtterance.UtteranceText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
+            OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
+            return true;
+        }
+    }
+
+    if (BehaviorDef.DialogueCategoryTag.IsValid())
+    {
+        if (TryResolveFastPathDialogue(BehaviorDef.DialogueCategoryTag, TargetActor, OutUtterance, OutMontage, OutVoiceCueTag, CustomWildcards, BehaviorDef.DialogueProfileTag))
+        {
+            return true;
+        }
+    }
+
+    if (BehaviorDef.UtteranceTemplates.Num() > 0)
+    {
+        const int32 RandIdx = FMath::RandRange(0, BehaviorDef.UtteranceTemplates.Num() - 1);
+        OutUtterance = FormatDialogueTokens(BehaviorDef.UtteranceTemplates[RandIdx], TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
+        OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
+        return true;
+    }
+
+    return false;
 }
 
 bool UDynamicSocialComponent::TriggerCalloutToTarget(AActor* TargetActor, float IgnoreTimeout)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !TargetActor) return false;
+    ActiveCalloutTarget = TargetActor;
 
-    FString Utterance;
-    TSoftObjectPtr<UAnimMontage> Montage;
-    FGameplayTag VoiceCue;
-
-    static const FGameplayTag CalloutTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Category.Callout"), false);
-    if (TryResolveFastPathDialogue(CalloutTag, TargetActor, Utterance, Montage, VoiceCue))
+    if (UWorld* World = GetWorld())
     {
-        ActiveCalloutTarget = TargetActor;
-
-        if (UWorld* World = GetWorld())
-        {
-            World->GetTimerManager().SetTimer(
-                TimerHandle_CalloutTimeout,
-                this,
-                &UDynamicSocialComponent::HandleCalloutIgnored,
-                IgnoreTimeout,
-                false
-            );
-        }
-        return true;
+        World->GetTimerManager().SetTimer(TimerHandle_CalloutTimeout, this, &UDynamicSocialComponent::HandleCalloutIgnored, IgnoreTimeout, false);
     }
-    return false;
+    return true;
 }
 
 void UDynamicSocialComponent::HandleCalloutIgnored()
 {
-    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
-
-    AActor* Target = ActiveCalloutTarget.Get();
-    if (Target)
-    {
-        // 1. Penalize relationship for ignoring callout
-        if (const UDynamicSocialComponent* TargetSocial = Target->FindComponentByClass<UDynamicSocialComponent>())
-        {
-            TArray<FTagFloatPair> Deltas;
-            FTagFloatPair AffDelta;
-            AffDelta.KeyTag = FGameplayTag::RequestGameplayTag(TEXT("Relationship.Metric.Affinity"), false);
-            AffDelta.Value = -10.0f;
-            Deltas.Add(AffDelta);
-
-            FTagFloatPair HostilityDelta;
-            HostilityDelta.KeyTag = FGameplayTag::RequestGameplayTag(TEXT("Relationship.Metric.Hostility"), false);
-            HostilityDelta.Value = 15.0f;
-            Deltas.Add(HostilityDelta);
-
-            ServerRecordSocialInteraction(
-                TargetSocial->CharacterPersistentGuid,
-                Target,
-                ERelationshipTargetKind::Character,
-                FGameplayTag::RequestGameplayTag(TEXT("Relationship.Type.Rivalry"), false),
-                Deltas,
-                FGameplayTagContainer()
-            );
-        }
-
-        // 2. Play irritated reaction utterance
-        FString OutUtterance;
-        TSoftObjectPtr<UAnimMontage> OutMontage;
-        FGameplayTag OutVoiceCue;
-        static const FGameplayTag IgnoredTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Category.Callout.Ignored"), false);
-        TryResolveFastPathDialogue(IgnoredTag, Target, OutUtterance, OutMontage, OutVoiceCue);
-    }
-
     ClearActiveCallout();
 }
 
 void UDynamicSocialComponent::ClearActiveCallout()
 {
-    ActiveCalloutTarget.Reset();
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(TimerHandle_CalloutTimeout);
     }
+    ActiveCalloutTarget.Reset();
 }
 
-FString UDynamicSocialComponent::FormatDialogueTokens(
-    const FString& TemplateString,
-    AActor* TargetActor,
-    const FString& CustomLocation,
-    const FString& CustomTime) const
+// --- Fast Array Lifecycle Implementations (Resolving Linker Unresolved Externals) ---
+//void FDynamicRelationshipEdgeItem::PreReplicatedRemove(const FFastRelationshipEdgeArray& InArrayOwner) {}
+void FDynamicRelationshipEdgeItem::PostReplicatedAdd(const FFastRelationshipEdgeArray& InArrayOwner)
 {
-    FString Formatted = TemplateString;
-
-    // %speaker% replacement
-    const FString SpeakerName = GetOwner() ? GetOwner()->GetName() : TEXT("Stranger");
-    Formatted = Formatted.Replace(TEXT("%speaker%"), *SpeakerName);
-
-    // %target% replacement
-    const FString TargetName = TargetActor ? TargetActor->GetName() : TEXT("traveler");
-    Formatted = Formatted.Replace(TEXT("%target%"), *TargetName);
-
-    // Contextual world tokens
-    Formatted = Formatted.Replace(TEXT("%location_type%"), *CustomLocation);
-    Formatted = Formatted.Replace(TEXT("%recent_time%"), *CustomTime);
-
-    return Formatted;
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
 }
-
-void UDynamicSocialComponent::RebuildRelationshipCache() {}
-
-void UDynamicSocialComponent::RebuildNeedCache()
+void FDynamicRelationshipEdgeItem::PostReplicatedChange(const FFastRelationshipEdgeArray& InArrayOwner)
 {
-    CachedNeeds.Reset();
-    for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
-    {
-        CachedNeeds.Add(Item.NeedOrMoodTag, Item.LocalExactValue);
-    }
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
 }
 
-void UDynamicSocialComponent::RebuildPlaceCache()
+void FDynamicNeedStateItem::PreReplicatedRemove(const FFastNeedStateArray& InArrayOwner) {}
+void FDynamicNeedStateItem::PostReplicatedAdd(const FFastNeedStateArray& InArrayOwner)
 {
-    CachedPlacesByRole.Reset();
-    for (const FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
-    {
-        if (Place.PlaceRoleTag.IsValid())
-        {
-            CachedPlacesByRole.Add(Place.PlaceRoleTag, Place);
-        }
-    }
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
 }
-
-// ============================================================================
-// FAST ARRAY CALLBACK IMPLEMENTATIONS FOR LINKER (LNK2019 FIX)
-// ============================================================================
-
-void FDynamicRelationshipItem::PreReplicatedRemove(const FDynamicRelationshipFastArray& InArrayOwner)
+void FDynamicNeedStateItem::PostReplicatedChange(const FFastNeedStateArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningSocialComp)
-    {
-        InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
-    }
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
 }
 
-void FDynamicRelationshipItem::PostReplicatedAdd(const FDynamicRelationshipFastArray& InArrayOwner)
+//void FDynamicKnownPlaceItem::PreReplicatedRemove(const FFastKnownPlaceArray& InArrayOwner) {}
+void FDynamicKnownPlaceItem::PostReplicatedAdd(const FFastKnownPlaceArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningSocialComp)
-    {
-        InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
-    }
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildPlaceCache();
 }
-
-void FDynamicRelationshipItem::PostReplicatedChange(const FDynamicRelationshipFastArray& InArrayOwner)
+void FDynamicKnownPlaceItem::PostReplicatedChange(const FFastKnownPlaceArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningSocialComp)
-    {
-        InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
-    }
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildPlaceCache();
 }
 
-void FDynamicNeedAndMoodItem::PreReplicatedRemove(const FDynamicNeedAndMoodFastArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp)
-    {
-        InArrayOwner.OwningSocialComp->RebuildNeedCache();
-    }
-}
+void FDynamicAssignedProfessionItem::PreReplicatedRemove(const FFastAssignedProfessionArray& InArrayOwner) {}
+void FDynamicAssignedProfessionItem::PostReplicatedAdd(const FFastAssignedProfessionArray& InArrayOwner) {}
+void FDynamicAssignedProfessionItem::PostReplicatedChange(const FFastAssignedProfessionArray& InArrayOwner) {}
 
+void FDynamicRelationshipItem::PreReplicatedRemove(const FDynamicRelationshipFastArray& InArrayOwner) {}
+void FDynamicRelationshipItem::PostReplicatedAdd(const FDynamicRelationshipFastArray& InArrayOwner) {}
+void FDynamicRelationshipItem::PostReplicatedChange(const FDynamicRelationshipFastArray& InArrayOwner) {}
+
+void FDynamicNeedAndMoodItem::PreReplicatedRemove(const FDynamicNeedAndMoodFastArray& InArrayOwner) {}
 void FDynamicNeedAndMoodItem::PostReplicatedAdd(const FDynamicNeedAndMoodFastArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningSocialComp)
-    {
-        InArrayOwner.OwningSocialComp->RebuildNeedCache();
-    }
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
 }
-
 void FDynamicNeedAndMoodItem::PostReplicatedChange(const FDynamicNeedAndMoodFastArray& InArrayOwner)
 {
-    if (InArrayOwner.OwningSocialComp)
-    {
-        InArrayOwner.OwningSocialComp->RebuildNeedCache();
-    }
-}
-
-bool UDynamicSocialComponent::SelectBestUtterance(const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances, FDynamicDialogueUtteranceDef& OutSelectedUtterance) const
-{
-    if (CandidateUtterances.Num() == 0) return false;
-
-    AActor* OwnerActor = GetOwner();
-    const UAbilitySystemComponent* ASC = OwnerActor ? OwnerActor->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
-    const UDynamicAttributeSet* AttrSet = ASC ? Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass())) : nullptr;
-
-    struct FEligibleUtterance
-    {
-        const FDynamicDialogueUtteranceDef* Def = nullptr;
-        float ComputedWeight = 0.0f;
-    };
-
-    TArray<FEligibleUtterance> ValidOptions;
-    float TotalWeight = 0.0f;
-
-    for (const FDynamicDialogueUtteranceDef& Option : CandidateUtterances)
-    {
-        bool bPassesRequirements = true;
-
-        // 1. Evaluate Absolute Attribute Range Requirements
-        for (const FCharacterAttributeRangeDef& Req : Option.AttributeRequirements)
-        {
-            if (!Req.AttributeTag.IsValid()) continue;
-
-            float Val = 0.0f;
-            if (AttrSet)
-            {
-                Val = AttrSet->GetDynamicAttributeValue(Req.AttributeTag, 0);
-            }
-            if (FMath::IsNearlyZero(Val))
-            {
-                GetNeedValue(Req.AttributeTag, Val);
-            }
-
-            if (Val < Req.MinValue || Val > Req.MaxValue)
-            {
-                bPassesRequirements = false;
-                break;
-            }
-        }
-
-        if (!bPassesRequirements) continue;
-
-        // 2. Compute Dynamic Probability Weight
-        float FinalWeight = Option.SelectionWeight;
-        for (const auto& ScalarPair : Option.ProbabilityAttributeScalars.LocalLookupMap)
-        {
-            if (!ScalarPair.Key.IsValid()) continue;
-
-            float AttrVal = 0.0f;
-            if (AttrSet)
-            {
-                AttrVal = AttrSet->GetDynamicAttributeValue(ScalarPair.Key, 0);
-            }
-            if (FMath::IsNearlyZero(AttrVal))
-            {
-                GetNeedValue(ScalarPair.Key, AttrVal);
-            }
-
-            FinalWeight += (AttrVal * ScalarPair.Value);
-        }
-
-        FinalWeight = FMath::Max(0.01f, FinalWeight);
-        TotalWeight += FinalWeight;
-
-        FEligibleUtterance Item;
-        Item.Def = &Option;
-        Item.ComputedWeight = FinalWeight;
-        ValidOptions.Add(Item);
-    }
-
-    if (ValidOptions.Num() == 0) return false;
-
-    // 3. Weighted Lottery Selection
-    const float Roll = FMath::FRandRange(0.0f, TotalWeight);
-    float RunningSum = 0.0f;
-
-    for (const FEligibleUtterance& Item : ValidOptions)
-    {
-        RunningSum += Item.ComputedWeight;
-        if (Roll <= RunningSum)
-        {
-            OutSelectedUtterance = *Item.Def;
-            return true;
-        }
-    }
-
-    OutSelectedUtterance = *ValidOptions.Last().Def;
-    return true;
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
 }

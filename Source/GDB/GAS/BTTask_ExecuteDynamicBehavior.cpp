@@ -69,7 +69,10 @@ EBTNodeResult::Type UBTTask_ExecuteDynamicBehavior::ExecuteTask(UBehaviorTreeCom
         }
     }
 
-    // 2. Set Blackboard Information
+    FVector TargetLocation = FVector::ZeroVector;
+    AActor* TargetActor = nullptr;
+    ResolveSpatialTarget(DynChar, ActiveBehaviorDef, OwnerComp, TargetLocation, TargetActor);
+
     if (BB)
     {
         if (BehaviorTagKey.SelectedKeyName != NAME_None)
@@ -79,33 +82,29 @@ EBTNodeResult::Type UBTTask_ExecuteDynamicBehavior::ExecuteTask(UBehaviorTreeCom
 
         if (UtteranceTextKey.SelectedKeyName != NAME_None)
         {
-            FString ChosenText = TEXT("");
+            FString ResolvedText = TEXT("");
+            TSoftObjectPtr<UAnimMontage> DialogueMontage;
+            FGameplayTag VoiceCueTag;
+
             if (UDynamicSocialComponent* SocialComp = DynChar->FindComponentByClass<UDynamicSocialComponent>())
             {
-                FDynamicDialogueUtteranceDef ChosenDef;
-                if (SocialComp->SelectBestUtterance(ActiveBehaviorDef.Utterances, ChosenDef))
+                TMap<FString, FString> WildcardMap;
+                static const FGameplayTag DurationTag = FGameplayTag::RequestGameplayTag(TEXT("Metric.Duration"), false);
+                if (const float* DurVal = ActiveBehaviorDef.ExecutionMetrics.LocalLookupMap.Find(DurationTag))
                 {
-                    ChosenText = ChosenDef.UtteranceText;
+                    WildcardMap.Add(TEXT("Amt"), FString::FromInt(FMath::RoundToInt(*DurVal)));
                 }
+
+                // Resolves dialogue across behavior utterances, linked FastPath categories, and target condition observation
+                SocialComp->TryResolveDialogueForBehavior(ActiveBehaviorDef, TargetActor, ResolvedText, DialogueMontage, VoiceCueTag, WildcardMap);
             }
 
-            // Fallback random selection if social component lookup fails
-            if (ChosenText.IsEmpty() && ActiveBehaviorDef.Utterances.Num() > 0)
+            if (!ResolvedText.IsEmpty())
             {
-                const int32 RandIdx = FMath::RandRange(0, ActiveBehaviorDef.Utterances.Num() - 1); // Fixed: Requires 2 arguments
-                ChosenText = ActiveBehaviorDef.Utterances[RandIdx].UtteranceText;
-            }
-
-            if (!ChosenText.IsEmpty())
-            {
-                BB->SetValueAsString(UtteranceTextKey.SelectedKeyName, ChosenText);
+                BB->SetValueAsString(UtteranceTextKey.SelectedKeyName, ResolvedText);
             }
         }
     }
-
-    FVector TargetLocation = FVector::ZeroVector;
-    AActor* TargetActor = nullptr;
-    ResolveSpatialTarget(DynChar, ActiveBehaviorDef, OwnerComp, TargetLocation, TargetActor);
 
     GS->RecordBehaviorExecutionCooldown(DynChar, ActiveBehaviorDef.BehaviorTag, ActiveBehaviorDef.CooldownDuration);
 

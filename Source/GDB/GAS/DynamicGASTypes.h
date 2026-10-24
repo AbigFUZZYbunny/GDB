@@ -4136,37 +4136,76 @@ struct FCloudAIPayloadPackage
 };
 
 // ============================================================================
-// FAST-PATH DIALOGUE & CONTEXTUAL CHATTER STRUCTS
+// DYNAMIC DIALOGUE & UTTERANCE STRUCTS
 // ============================================================================
 
-// Rich, data-driven utterance definition with dynamic attribute weighting and selection probability
+/**
+ * Rich, data-driven utterance definition supporting self and target attribute checks,
+ * relational metrics, mood gating, and dynamic lottery probability scaling.
+ */
 USTRUCT(BlueprintType)
 struct GDB_API FDynamicDialogueUtteranceDef
 {
     GENERATED_BODY()
 
-    // The text template / dialogue line
+    // The text template with wildcard tokens (%Target%, %FName%, %Speaker%, %Amt%, etc.)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FString UtteranceText;
 
-    // Base probability weight relative to other valid utterances (Default: 1.0)
+    // Base lottery weight relative to other valid candidate utterances (Default: 1.0)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     float SelectionWeight = 1.0f;
 
-    // Absolute attribute requirements for this line to even be considered (e.g., Health between 0 and 30, Hunger > 70)
+    // Absolute attribute requirements for the speaker (Health, Stamina, Wealth, etc.)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     TArray<FCharacterAttributeRangeDef> AttributeRequirements;
 
-    // Dynamic probability bias: adds (AttributeValue * WeightScalar) to SelectionWeight at runtime
-    // (e.g. Need.Hunger * 0.1 increases begging probability as hunger rises)
+    // Absolute attribute requirements for the target/listener (e.g. Target Health < 35 to notice wounds)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    TArray<FCharacterAttributeRangeDef> TargetAttributeRequirements;
+
+    // Required relationship tags between speaker and target (e.g. Relation.Social.Spouse)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTagContainer RequiredRelationshipTags;
+
+    // Relational metric requirements between speaker and target (e.g. Affinity >= 60)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    TArray<FCharacterAttributeRangeDef> RelationalMetricRequirements;
+
+    // Allowed active moods for the speaker (e.g. Need.Mood.Joyful, Need.Mood.Angry)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTagContainer AllowedMoodTags;
+
+    // Required active moods for the target/listener (e.g. Target is Upset, Distressed, or Angry)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTagContainer TargetAllowedMoodTags;
+
+    // Dynamic probability bias based on speaker attributes/needs (e.g. Need.Hunger * 1.5)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FDynamicTagFloatMapWrapper ProbabilityAttributeScalars;
 
-    // Optional audio/voice cue tag
+    // Dynamic probability bias based on target attributes (e.g. Target Health * -0.4 raises concern when hurt)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FDynamicTagFloatMapWrapper ProbabilityTargetAttributeScalars;
+
+    // Dynamic probability bias based on target moods (e.g. Target Need.Mood.Distressed * 2.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FDynamicTagFloatMapWrapper ProbabilityTargetMoodScalars;
+
+    // Dynamic probability bias based on relationship metrics (e.g. Affinity * 2.5)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FDynamicTagFloatMapWrapper ProbabilityRelationalScalars;
+
+    // Dynamic probability bias based on speaker mood values
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FDynamicTagFloatMapWrapper ProbabilityMoodScalars;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    TSoftObjectPtr<UAnimMontage> GestureMontage;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FGameplayTag VoiceCueTag;
 
-    // Optional facial expression / emotion tag
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FGameplayTag EmotionTag;
 };
@@ -4177,35 +4216,36 @@ struct GDB_API FFastPathDialogueEntry
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     FGameplayTag CategoryTag;
 
-    // Deprecated single string, kept for backwards fallback
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     FString UtteranceTemplate;
 
-    // Collection of conditional, weighted utterances
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     TArray<FDynamicDialogueUtteranceDef> UtteranceVariations;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     FGameplayTagContainer AllowedMoodTags;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
-    FGameplayTagContainer AllowedRelationshipTypeTags;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     TArray<FCharacterAttributeRangeDef> RelationalAttributeRequirements;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    FGameplayTagContainer AllowedRelationshipTypeTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
+    TSoftObjectPtr<UAnimMontage> GestureMontage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     FGameplayTag VoiceCueTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Dialogue")
     float SelectionWeight = 1.0f;
 };
 
 USTRUCT(BlueprintType)
-struct FFastPathDialogueDef
+struct GDB_API FFastPathDialogueDef
 {
     GENERATED_BODY()
 
@@ -4321,16 +4361,27 @@ struct GDB_API FDynamicAIBehaviorDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
     FName PrerequisiteConditionTreeName = NAME_None;
 
-    // Attribute Scalars: Multipliers applied to character attributes & needs (e.g., Need.Hunger * 1.5, Attribute.Resource.Health * -1.0)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
     FDynamicTagFloatMapWrapper PriorityAttributeScalars;
 
-    // Execution parameters: AcceptanceRadius, DurationSeconds, SpeedScalar, etc.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
     FDynamicTagFloatMapWrapper ExecutionMetrics;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
+    // Direct link to the shared Fast-Path Dialogue pool
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Dialogue")
+    FGameplayTag DialogueCategoryTag;
+
+    // Optional specific dialogue profile override (falls back to global registry if unset)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Dialogue")
+    FGameplayTag DialogueProfileTag;
+
+    // Inline custom utterances specific to this behavior (takes precedence over FastPath category)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Dialogue")
     TArray<FDynamicDialogueUtteranceDef> Utterances;
+
+    // Legacy fallback array
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Dialogue")
+    TArray<FString> UtteranceTemplates;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
     float CooldownDuration = 5.0f;

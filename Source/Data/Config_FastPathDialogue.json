@@ -1,93 +1,177 @@
 ﻿{
-  "_comment": "Master Fast-Path Dialogue Registry: Drives quick responses, emotional variants (angry/hateful vs. happy/loving), street callouts, and local gossip without LLM latency.",
+  "_comment": "Data-driven relational dialogue registry featuring mood gating, relationship bounds, wildcards, and attribute probability weighting.",
   "FastPathDialogueRegistry": {
     "Dialogue.Profile.GeneralTownfolk": {
       "Entries": [
         {
           "CategoryTag": "Dialogue.Category.Greeting",
-          "UtteranceTemplate": "May the light brighten your path, %target%! It is wonderful to see you.",
-          "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content" ],
-          "RelationalAttributeRequirements": [
-            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 30.0, "MaxValue": 100.0 }
+          "UtteranceTemplate": "Hello %FName%, how can I help you?",
+          "UtteranceVariations": [
+            {
+              "UtteranceText": "Welcome home, my love! I missed you so much today, %FName%.",
+              "SelectionWeight": 5.0,
+              "RequiredRelationshipTags": [ "Relation.Social.Spouse", "Relationship.Type.Romantic" ],
+              "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content", "Need.Mood.Happy" ],
+              "RelationalMetricRequirements": [
+                { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 60.0, "MaxValue": 100.0 }
+              ],
+              "ProbabilityRelationalScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Relationship.Metric.Affinity", "Value": 2.5 }
+                ]
+              },
+              "ProbabilityMoodScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Need.Mood.Joyful", "Value": 1.5 }
+                ]
+              },
+              "EmotionTag": "Emotion.Loving"
+            },
+            {
+              "UtteranceText": "You're finally back, %FName%? Don't make a mess, I've had a miserable day.",
+              "SelectionWeight": 8.0,
+              "RequiredRelationshipTags": [ "Relation.Social.Spouse" ],
+              "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Irritated", "Need.Mood.Exhausted" ],
+              "RelationalMetricRequirements": [],
+              "ProbabilityMoodScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Need.Mood.Angry", "Value": 2.0 }
+                ]
+              },
+              "EmotionTag": "Emotion.Annoyed"
+            },
+            {
+              "UtteranceText": "Please, %FName%... could you spare %Amt% coins for food? I haven't eaten in two days.",
+              "SelectionWeight": 4.0,
+              "RequiredRelationshipTags": [],
+              "AttributeRequirements": [
+                { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 10.0 }
+              ],
+              "ProbabilityAttributeScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Need.Hunger", "Value": 1.8 }
+                ]
+              },
+              "EmotionTag": "Emotion.Despair"
+            },
+            {
+              "UtteranceText": "Ugh... it hurts to breathe... %FName%, please find a healer...",
+              "SelectionWeight": 10.0,
+              "RequiredRelationshipTags": [],
+              "AttributeRequirements": [
+                { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 30.0 }
+              ],
+              "ProbabilityAttributeScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Attribute.Resource.Health", "Value": -0.4 }
+                ]
+              },
+              "EmotionTag": "Emotion.Agony"
+            },
+            {
+              "UtteranceText": "Good day to you, %FName%. Pleasant weather we're having.",
+              "SelectionWeight": 1.0,
+              "RequiredRelationshipTags": [],
+              "AllowedMoodTags": [],
+              "AttributeRequirements": [],
+              "EmotionTag": "Emotion.Neutral"
+            }
           ],
-          "AllowedRelationshipTypeTags": [ "Relationship.Type.Friendship" ],
-          "SelectionWeight": 2.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Greeting",
-          "UtteranceTemplate": "What do you want, %target%? Spit it out or get out of my sight.",
-          "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Irritated" ],
-          "RelationalAttributeRequirements": [
-            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": -100.0, "MaxValue": -10.0 }
-          ],
-          "AllowedRelationshipTypeTags": [ "Relationship.Type.Rivalry" ],
-          "SelectionWeight": 3.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Greeting",
-          "UtteranceTemplate": "Good day to you, traveler.",
-          "AllowedMoodTags": [ "Need.Mood.Neutral" ],
-          "RelationalAttributeRequirements": [
-            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": -10.0, "MaxValue": 30.0 }
-          ],
-          "AllowedRelationshipTypeTags": [],
-          "SelectionWeight": 1.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Response",
-          "UtteranceTemplate": "Doing quite well, thank you for asking, %target%!",
-          "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content" ],
-          "RelationalAttributeRequirements": [
-            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 10.0, "MaxValue": 100.0 }
-          ],
-          "AllowedRelationshipTypeTags": [],
-          "SelectionWeight": 1.5
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Response",
-          "UtteranceTemplate": "None of your concern. Walk away.",
-          "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Hateful" ],
-          "RelationalAttributeRequirements": [
-            { "AttributeTag": "Relationship.Metric.Hostility", "MinValue": 25.0, "MaxValue": 100.0 }
-          ],
-          "AllowedRelationshipTypeTags": [],
-          "SelectionWeight": 2.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Callout",
-          "UtteranceTemplate": "Hey %target%, hold up a moment! I need a word with you.",
-          "AllowedMoodTags": [ "Need.Mood.Content", "Need.Mood.Neutral" ],
-          "RelationalAttributeRequirements": [
-            { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": -5.0, "MaxValue": 100.0 }
-          ],
-          "AllowedRelationshipTypeTags": [],
-          "SelectionWeight": 1.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Callout.Ignored",
-          "UtteranceTemplate": "Fine! Walk away then, see if I bother warning you next time!",
-          "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Irritated", "Need.Mood.Neutral" ],
+          "AllowedMoodTags": [],
           "RelationalAttributeRequirements": [],
           "AllowedRelationshipTypeTags": [],
           "SelectionWeight": 1.0
         },
         {
-          "CategoryTag": "Dialogue.Category.Rumor",
-          "UtteranceTemplate": "Did you hear? %target% was seen entering %location_type% %recent_time% and hasn't returned since.",
-          "AllowedMoodTags": [ "Need.Mood.Suspicious", "Need.Mood.Neutral" ],
-          "RelationalAttributeRequirements": [],
-          "AllowedRelationshipTypeTags": [],
-          "SelectionWeight": 1.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Rumor",
-          "UtteranceTemplate": "Someone told me that %target% left %location_type% %recent_time% in a terrible hurry.",
-          "AllowedMoodTags": [ "Need.Mood.Content", "Need.Mood.Neutral" ],
+          "CategoryTag": "Dialogue.Category.Conversation",
+          "UtteranceTemplate": "Greetings, %TargetFName%.",
+          "UtteranceVariations": [
+            {
+              "UtteranceText": "By the gods, %TargetFName%! You're bleeding badly! What happened to you?",
+              "SelectionWeight": 20.0,
+              "TargetAttributeRequirements": [
+                { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 35.0 }
+              ],
+              "ProbabilityTargetAttributeScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Attribute.Resource.Health", "Value": -0.6 }
+                ]
+              },
+              "EmotionTag": "Emotion.Shock"
+            },
+            {
+              "UtteranceText": "%TargetFName%, you look like you're carrying the weight of the world on your shoulders. What's wrong?",
+              "SelectionWeight": 15.0,
+              "TargetAllowedMoodTags": [ "Need.Mood.Distressed", "Need.Mood.Crying", "Need.Mood.Depressed" ],
+              "ProbabilityTargetMoodScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Need.Mood.Distressed", "Value": 1.5 }
+                ]
+              },
+              "EmotionTag": "Emotion.Sympathy"
+            },
+            {
+              "UtteranceText": "Welcome back to the hearth, my love! I missed you today, %TargetFName%.",
+              "SelectionWeight": 10.0,
+              "RequiredRelationshipTags": [ "Relation.Social.Spouse", "Relationship.Type.Romantic" ],
+              "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content", "Need.Mood.Happy" ],
+              "RelationalMetricRequirements": [
+                { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 70.0, "MaxValue": 100.0 }
+              ],
+              "ProbabilityRelationalScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Relationship.Metric.Affinity", "Value": 3.0 }
+                ]
+              },
+              "EmotionTag": "Emotion.Loving"
+            },
+            {
+              "UtteranceText": "Please, %TargetFName%... could you spare %Amt% coins? I have nothing left and my family is starving.",
+              "SelectionWeight": 5.0,
+              "AttributeRequirements": [
+                { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 10.0 }
+              ],
+              "ProbabilityAttributeScalars": {
+                "ReplicatedEntries": [
+                  { "KeyTag": "Need.Hunger", "Value": 2.0 }
+                ]
+              },
+              "EmotionTag": "Emotion.Despair"
+            },
+            {
+              "UtteranceText": "Fine weather today, isn't it %TargetFName%?",
+              "SelectionWeight": 1.0,
+              "EmotionTag": "Emotion.Neutral"
+            }
+          ],
+          "AllowedMoodTags": [],
           "RelationalAttributeRequirements": [],
           "AllowedRelationshipTypeTags": [],
           "SelectionWeight": 1.0
         }
       ]
+    },
+    "AIBehaviorMasterRegistry": {
+      "Behavior.Core.Socialize": {
+        "ActionTag": "Action.Interact.Chat",
+        "TargetPlaceRoleTag": "Role.Place.TownSquare",
+        "ExecutionType": "Wait",
+        "BasePriority": 6.0,
+        "CooldownDuration": 12.0,
+        "bInterruptible": true,
+        "DialogueCategoryTag": "Dialogue.Category.Conversation",
+        "PriorityAttributeScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Need.Social", "Value": 1.2 }
+          ]
+        },
+        "ExecutionMetrics": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Metric.Duration", "Value": 3.0 }
+          ]
+        },
+        "Utterances": []
+      }
     }
   }
 }

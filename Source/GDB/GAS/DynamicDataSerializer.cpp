@@ -189,6 +189,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             Def.UtteranceText = EntryObj->GetStringField(TEXT("UtteranceText"));
             Def.SelectionWeight = EntryObj->HasField(TEXT("SelectionWeight")) ? static_cast<float>(EntryObj->GetNumberField(TEXT("SelectionWeight"))) : 1.0f;
 
+            if (EntryObj->HasField(TEXT("GestureMontage")))
+            {
+                Def.GestureMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(EntryObj->GetStringField(TEXT("GestureMontage"))));
+            }
             if (EntryObj->HasField(TEXT("VoiceCueTag")))
             {
                 Def.VoiceCueTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("VoiceCueTag"))), false);
@@ -198,6 +202,51 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 Def.EmotionTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("EmotionTag"))), false);
             }
 
+            if (EntryObj->HasField(TEXT("RequiredRelationshipTags")))
+            {
+                for (const auto& RelVal : EntryObj->GetArrayField(TEXT("RequiredRelationshipTags")))
+                {
+                    FGameplayTag RelTag = FGameplayTag::RequestGameplayTag(FName(*RelVal->AsString()), false);
+                    if (RelTag.IsValid()) Def.RequiredRelationshipTags.AddTag(RelTag);
+                }
+            }
+
+            if (EntryObj->HasField(TEXT("AllowedMoodTags")))
+            {
+                for (const auto& MoodVal : EntryObj->GetArrayField(TEXT("AllowedMoodTags")))
+                {
+                    FGameplayTag MoodTag = FGameplayTag::RequestGameplayTag(FName(*MoodVal->AsString()), false);
+                    if (MoodTag.IsValid()) Def.AllowedMoodTags.AddTag(MoodTag);
+                }
+            }
+
+            // Target condition observation moods (e.g. Target is Upset, Crying)
+            if (EntryObj->HasField(TEXT("TargetAllowedMoodTags")))
+            {
+                for (const auto& TMoodVal : EntryObj->GetArrayField(TEXT("TargetAllowedMoodTags")))
+                {
+                    FGameplayTag TMoodTag = FGameplayTag::RequestGameplayTag(FName(*TMoodVal->AsString()), false);
+                    if (TMoodTag.IsValid()) Def.TargetAllowedMoodTags.AddTag(TMoodTag);
+                }
+            }
+
+            // Relational metric requirements
+            if (EntryObj->HasField(TEXT("RelationalMetricRequirements")))
+            {
+                for (const auto& ReqVal : EntryObj->GetArrayField(TEXT("RelationalMetricRequirements")))
+                {
+                    TSharedPtr<FJsonObject> ReqObj = ReqVal->AsObject();
+                    if (!ReqObj.IsValid()) continue;
+
+                    FCharacterAttributeRangeDef Range;
+                    Range.AttributeTag = FGameplayTag::RequestGameplayTag(FName(*ReqObj->GetStringField(TEXT("AttributeTag"))), false);
+                    Range.MinValue = static_cast<float>(ReqObj->GetNumberField(TEXT("MinValue")));
+                    Range.MaxValue = static_cast<float>(ReqObj->GetNumberField(TEXT("MaxValue")));
+                    Def.RelationalMetricRequirements.Add(Range);
+                }
+            }
+
+            // Speaker attribute requirements
             if (EntryObj->HasField(TEXT("AttributeRequirements")))
             {
                 for (const auto& ReqVal : EntryObj->GetArrayField(TEXT("AttributeRequirements")))
@@ -213,7 +262,28 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 }
             }
 
+            // Target attribute requirements (e.g. Target Health < 30)
+            if (EntryObj->HasField(TEXT("TargetAttributeRequirements")))
+            {
+                for (const auto& ReqVal : EntryObj->GetArrayField(TEXT("TargetAttributeRequirements")))
+                {
+                    TSharedPtr<FJsonObject> ReqObj = ReqVal->AsObject();
+                    if (!ReqObj.IsValid()) continue;
+
+                    FCharacterAttributeRangeDef Range;
+                    Range.AttributeTag = FGameplayTag::RequestGameplayTag(FName(*ReqObj->GetStringField(TEXT("AttributeTag"))), false);
+                    Range.MinValue = static_cast<float>(ReqObj->GetNumberField(TEXT("MinValue")));
+                    Range.MaxValue = static_cast<float>(ReqObj->GetNumberField(TEXT("MaxValue")));
+                    Def.TargetAttributeRequirements.Add(Range);
+                }
+            }
+
             DeserializeMapWrapper(EntryObj, TEXT("ProbabilityAttributeScalars"), Def.ProbabilityAttributeScalars);
+            DeserializeMapWrapper(EntryObj, TEXT("ProbabilityTargetAttributeScalars"), Def.ProbabilityTargetAttributeScalars);
+            DeserializeMapWrapper(EntryObj, TEXT("ProbabilityTargetMoodScalars"), Def.ProbabilityTargetMoodScalars);
+            DeserializeMapWrapper(EntryObj, TEXT("ProbabilityRelationalScalars"), Def.ProbabilityRelationalScalars);
+            DeserializeMapWrapper(EntryObj, TEXT("ProbabilityMoodScalars"), Def.ProbabilityMoodScalars);
+
             OutUtterances.Add(Def);
         }
     };
@@ -958,8 +1028,25 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             DeserializeMapWrapper(DefObj, TEXT("PriorityAttributeScalars"), BehaviorDef.PriorityAttributeScalars);
             DeserializeMapWrapper(DefObj, TEXT("ExecutionMetrics"), BehaviorDef.ExecutionMetrics);
 
-            // Parse rich condition-driven utterances
+            // Fast-Path Dialogue Category and Profile links
+            if (DefObj->HasField(TEXT("DialogueCategoryTag")))
+            {
+                BehaviorDef.DialogueCategoryTag = FGameplayTag::RequestGameplayTag(FName(*DefObj->GetStringField(TEXT("DialogueCategoryTag"))), false);
+            }
+            if (DefObj->HasField(TEXT("DialogueProfileTag")))
+            {
+                BehaviorDef.DialogueProfileTag = FGameplayTag::RequestGameplayTag(FName(*DefObj->GetStringField(TEXT("DialogueProfileTag"))), false);
+            }
+
             ParseDialogueUtteranceArray(DefObj, TEXT("Utterances"), BehaviorDef.Utterances);
+
+            if (DefObj->HasField(TEXT("UtteranceTemplates")))
+            {
+                for (const auto& Val : DefObj->GetArrayField(TEXT("UtteranceTemplates")))
+                {
+                    BehaviorDef.UtteranceTemplates.Add(Val->AsString());
+                }
+            }
 
             OutStaging.AIBehaviorMasterRegistry.Add(KeyTag, BehaviorDef);
         }

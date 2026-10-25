@@ -1,18 +1,65 @@
 ﻿{
   "StructureMaterialRegistry": {
-    "Material.Wood.Pine": {
-      "MaterialTag": "Material.Wood.Pine",
-      "StructuralDensity": 0.5,
-      "SupportStrength": 150.0,
-      "InsulationValue": 3.0,
-      "DurabilityMultiplier": 1.0
+    "Material.Stone.Rough": {
+      "MaterialTag": "Material.Stone.Rough",
+      "StructuralDensity": 3.0,
+      "SupportStrength": 800.0,
+      "InsulationValue": 4.0,
+      "DurabilityMultiplier": 2.0,
+      "DestroyedYieldArchetype": "Item.Resource.RoughStone"
     },
-    "Material.Stone.Granite": {
-      "MaterialTag": "Material.Stone.Granite",
-      "StructuralDensity": 2.5,
-      "SupportStrength": 1000.0,
+    "Material.Stone.Cut": {
+      "MaterialTag": "Material.Stone.Cut",
+      "StructuralDensity": 3.5,
+      "SupportStrength": 1500.0,
       "InsulationValue": 8.0,
-      "DurabilityMultiplier": 3.5
+      "DurabilityMultiplier": 4.5,
+      "DestroyedYieldArchetype": "Item.Resource.CutStoneBlock"
+    }
+  },
+  "StructurePieceRegistry": {
+    "Build.Piece.Wall.WoodPlank": {
+      "PieceTag": "Build.Piece.Wall.WoodPlank",
+      "MeshAsset": "StaticMesh'/Game/Meshes/Building/SM_WoodWall.SM_WoodWall'",
+      "bIsVolumetricBlock": false,
+      "BaseMass": 40.0,
+      "BaseMaxHP": 250.0,
+      "BaseLaborCost": 5.0,
+      "RequiredToolTag": "Item.Tool.Hammer",
+      "OverlapConnectionRadius": 150.0,
+      "RequiredMaterials": [
+        { "MaterialArchetypeTag": "Item.Resource.WoodLog", "RequiredQuantity": 2 },
+        { "MaterialArchetypeTag": "Item.Resource.WoodPlank", "RequiredQuantity": 4 },
+        { "MaterialArchetypeTag": "Item.Resource.IronNails", "RequiredQuantity": 8 }
+      ]
+    },
+    "Build.Piece.Block.Stone.Rough": {
+      "PieceTag": "Build.Piece.Block.Stone.Rough",
+      "MeshAsset": "StaticMesh'/Game/Meshes/Building/SM_StoneBlock.SM_StoneBlock'",
+      "bIsVolumetricBlock": true,
+      "VolumetricGridSnapSize": 50.0,
+      "BaseMass": 150.0,
+      "BaseMaxHP": 600.0,
+      "BaseLaborCost": 50.0,
+      "RequiredToolTag": "Item.Tool.MasonryTrowel",
+      "RequiredMaterials": [
+        { "MaterialArchetypeTag": "Item.Resource.RoughStone", "RequiredQuantity": 1 },
+        { "MaterialArchetypeTag": "Item.Resource.Mortar", "RequiredQuantity": 1 }
+      ]
+    },
+    "Build.Piece.Block.Stone.Cut": {
+      "PieceTag": "Build.Piece.Block.Stone.Cut",
+      "MeshAsset": "StaticMesh'/Game/Meshes/Building/SM_StoneBlockCut.SM_StoneBlockCut'",
+      "bIsVolumetricBlock": true,
+      "VolumetricGridSnapSize": 50.0,
+      "BaseMass": 150.0,
+      "BaseMaxHP": 1200.0,
+      "BaseLaborCost": 15.0,
+      "RequiredToolTag": "Item.Tool.MasonryTrowel",
+      "RequiredMaterials": [
+        { "MaterialArchetypeTag": "Item.Resource.CutStoneBlock", "RequiredQuantity": 1 },
+        { "MaterialArchetypeTag": "Item.Resource.Mortar", "RequiredQuantity": 1 }
+      ]
     }
   }
 }

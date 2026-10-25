@@ -1021,39 +1021,41 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         }
     }
 
-    // ============================================================================
-    // Valheim-Style Building System
-    // ============================================================================
     if (RootObject->HasField(TEXT("StructureMaterialRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("StructureMaterialRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-            FStructureMaterialDef MatDef;
-            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &MatDef, 0, 0);
+            TSharedPtr<FJsonObject> MatObj = Pair.Value->AsObject();
+            FDynamicStructureMaterialDef MatDef;
+            FJsonObjectConverter::JsonObjectToUStruct(MatObj.ToSharedRef(), &MatDef, 0, 0);
             OutStaging.StructureMaterialRegistry.Add(KeyTag, MatDef);
         }
     }
+
     if (RootObject->HasField(TEXT("StructurePieceRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("StructurePieceRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-            FStructurePieceDef PieceDef;
-            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &PieceDef, 0, 0);
+            TSharedPtr<FJsonObject> PieceObj = Pair.Value->AsObject();
+            FDynamicStructurePieceDef PieceDef;
+            FJsonObjectConverter::JsonObjectToUStruct(PieceObj.ToSharedRef(), &PieceDef, 0, 0);
             OutStaging.StructurePieceRegistry.Add(KeyTag, PieceDef);
         }
     }
+
     if (RootObject->HasField(TEXT("StructurePrefabRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("StructurePrefabRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
-            FStructurePrefabDef PrefabDef;
-            FJsonObjectConverter::JsonObjectToUStruct(Pair.Value->AsObject().ToSharedRef(), &PrefabDef, 0, 0);
+            TSharedPtr<FJsonObject> PrefabObj = Pair.Value->AsObject();
+            FDynamicStructurePrefabDef PrefabDef;
+            FJsonObjectConverter::JsonObjectToUStruct(PrefabObj.ToSharedRef(), &PrefabDef, 0, 0);
             OutStaging.StructurePrefabRegistry.Add(KeyTag, PrefabDef);
         }
     }

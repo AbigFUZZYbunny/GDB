@@ -1553,6 +1553,26 @@ struct FVoxelChunkPersistentData
 };
 
 // ============================================================================
+// BUILDING SOCKETS & ADVANCED MATERIAL DEFS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FBuildingSocketDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName SocketName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FTransform RelativeTransform = FTransform::Identity;
+
+    // Optional: Only allow specific piece tags to snap here (e.g., "Build.Piece.Roof")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTagContainer AllowedConnections;
+};
+
+// ============================================================================
 // BUILDING & STRUCTURAL INTEGRITY CONFIGURATION
 // ============================================================================
 
@@ -1575,6 +1595,9 @@ struct FStructureMaterialDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float DurabilityMultiplier = 1.0f;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag DestroyedYieldArchetype; // e.g., "Item.Resource.Wood"
 };
 
 USTRUCT(BlueprintType)
@@ -1596,6 +1619,97 @@ struct FStructurePieceDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float OverlapConnectionRadius = 150.0f; // Radius to connect to adjacent pieces
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FBuildingSocketDef> ConnectionSockets;
+};
+
+// ============================================================================
+// BUILDING & STRUCTURAL INTEGRITY CONFIGURATION (UPDATED)
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicStructureMaterialDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag MaterialTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float StructuralDensity = 1.0f; // Affects mass and load-bearing stress
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float SupportStrength = 100.0f; // Base weight it can hold before snapping
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float InsulationValue = 5.0f; // Weather/temperature resistance
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float DurabilityMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag DestroyedYieldArchetype; // E.g., Item.Resource.Wood
+};
+
+USTRUCT(BlueprintType)
+struct FStructureMaterialRequirement
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag MaterialArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 RequiredQuantity = 1;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicStructurePieceDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag PieceTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<UStaticMesh> MeshAsset;
+
+    // Defines Enshrouded-style micro-voxel blocks (Stone) vs Valheim-style socketed structural pieces (Wood/Logs)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsVolumetricBlock = false;
+
+    // If a block, what is its micro-grid dimension (e.g., 25.0f for 25cm blocks)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float VolumetricGridSnapSize = 25.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseMass = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseMaxHP = 100.0f;
+
+    // Labor intensity represented in total needed hammer "swings" or ability charge
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseLaborCost = 10.0f;
+
+    // Must be equipped in hand to construct the ghost
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag RequiredToolTag; 
+
+    // Used for gating access to building this piece via dynamic logic
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName PrerequisiteConditionTree = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float OverlapConnectionRadius = 150.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FBuildingSocketDef> ConnectionSockets;
+
+    // Sequential materials required to build the ghost
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FStructureMaterialRequirement> RequiredMaterials;
 };
 
 USTRUCT(BlueprintType)
@@ -1611,7 +1725,7 @@ struct FPrefabComponentDef
 };
 
 USTRUCT(BlueprintType)
-struct FStructurePrefabDef
+struct FDynamicStructurePrefabDef
 {
     GENERATED_BODY()
 
@@ -1622,11 +1736,11 @@ struct FStructurePrefabDef
     TArray<FPrefabComponentDef> Components;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float RequiredSkillLevel = 0.0f;
+    FName PrerequisiteConditionTree = NAME_None;
 };
 
 // ============================================================================
-// BUILDING FAST ARRAY INSTANCING
+// FAST ARRAY INSTANCING (UPDATED)
 // ============================================================================
 
 USTRUCT(BlueprintType)
@@ -1654,6 +1768,17 @@ struct FStructureInstanceItem : public FFastArraySerializerItem
 
     UPROPERTY()
     bool bIsGrounded = false;
+
+    // Ghost System tracking
+    UPROPERTY()
+    bool bIsGhost = true;
+
+    UPROPERTY()
+    float ConstructionProgress = 0.0f;
+
+    // Bitmask tracking which required materials have been provided (supports up to 32 discrete components per piece)
+    UPROPERTY()
+    uint32 ProvidedMaterialsMask = 0;
 
     void PreReplicatedRemove(const struct FFastStructureInstanceArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastStructureInstanceArray& InArrayOwner);
@@ -4743,9 +4868,9 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
     TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
-    TMap<FGameplayTag, FStructureMaterialDef> StructureMaterialRegistry;
-    TMap<FGameplayTag, FStructurePieceDef> StructurePieceRegistry;
-    TMap<FGameplayTag, FStructurePrefabDef> StructurePrefabRegistry;
+    TMap<FGameplayTag, FDynamicStructureMaterialDef> StructureMaterialRegistry;
+    TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
+    TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
     
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

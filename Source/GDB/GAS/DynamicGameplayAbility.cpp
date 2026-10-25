@@ -17,6 +17,8 @@
 #include "DynamicContainerComponent.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicVoxelSubsystem.h"
+#include "DynamicBuildingChunkActor.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/OverlapResult.h"
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
@@ -599,6 +601,47 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
     if (!AvatarChar) return;
 
     UDynamicInteractableComponent* TargetInteractable = FindBestNearbyInteractable(CurrentActorInfo);
+    
+    // Fallback: Physical Construction / Nailing (Requires Hammer)
+    if (!TargetInteractable) 
+    {
+        if (AbilityConfig.InteractionConfig.InteractionActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Construct"))))
+        {
+            if (UWorld* World = AvatarChar->GetWorld())
+            {
+                const FVector Start = AvatarChar->GetActorLocation();
+                const FVector End = Start + (AvatarChar->GetActorForwardVector() * AbilityConfig.InteractionConfig.MaxInteractionDistance);
+                
+                FHitResult BuildHit;
+                FCollisionQueryParams Params(SCENE_QUERY_STAT(BuildingConstructionSweep), false, AvatarChar);
+                
+                if (World->SweepSingleByChannel(BuildHit, Start, End, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(AbilityConfig.InteractionConfig.TargetSweepRadius), Params))
+                {
+                    if (UHierarchicalInstancedStaticMeshComponent* HitHISM = Cast<UHierarchicalInstancedStaticMeshComponent>(BuildHit.GetComponent()))
+                    {
+                        if (ADynamicBuildingChunkActor* Chunk = Cast<ADynamicBuildingChunkActor>(BuildHit.GetActor()))
+                        {
+                            if (const TMap<int32, FGuid>* InstMap = Chunk->InstanceHitMap.Find(HitHISM))
+                            {
+                                if (const FGuid* TargetGuid = InstMap->Find(BuildHit.Item))
+                                {
+                                    // 1. Attempt to provide material from hands
+                                    Chunk->ServerProvideMaterialToGhost(*TargetGuid, AvatarChar);
+                                    
+                                    // 2. Apply labor (Base swing worth 1.0 charge unit * Alpha)
+                                    Chunk->ServerApplyConstructionLabor(*TargetGuid, AvatarChar, 1.0f * ChargeAlpha);
+                                    
+                                    PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                                    GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Fallback: Voxel Modification (Mining / Digging) if no standard interactable is hit
     if (!TargetInteractable) 

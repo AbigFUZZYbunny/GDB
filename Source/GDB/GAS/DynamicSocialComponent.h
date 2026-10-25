@@ -156,6 +156,14 @@ public:
     void RebuildRelationshipCache();
     void RebuildNeedCache();
     void RebuildPlaceCache();
+    
+    // Retrieves the world-space center of this agent's house/property
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|AI")
+    bool GetOwnedPropertyLocation(FVector& OutLocation) const;
+
+    // Retrieves the center of a specific room they own (e.g., Bedroom, Kitchen)
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|AI")
+    bool GetOwnedRoomLocation(FGameplayTag RoomTypeTag, FVector& OutLocation) const;
 
 protected:
     UPROPERTY()

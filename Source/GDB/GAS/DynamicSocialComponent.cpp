@@ -4,6 +4,7 @@
 #include "DynamicCharacter.h"
 #include "DynamicAttributeSet.h"
 #include "AbilitySystemComponent.h"
+#include "DynamicBuildingSubsystem.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 
@@ -845,4 +846,40 @@ void FDynamicNeedAndMoodItem::PostReplicatedAdd(const FDynamicNeedAndMoodFastArr
 void FDynamicNeedAndMoodItem::PostReplicatedChange(const FDynamicNeedAndMoodFastArray& InArrayOwner)
 {
     if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
+}
+
+bool UDynamicSocialComponent::GetOwnedPropertyLocation(FVector& OutLocation) const
+{
+    OutLocation = FVector::ZeroVector;
+    if (UWorld* World = GetWorld())
+    {
+        if (UDynamicBuildingSubsystem* BuildSub = World->GetSubsystem<UDynamicBuildingSubsystem>())
+        {
+            FDynamicPropertyInstance Prop;
+            if (BuildSub->GetPropertyOwnedByCharacter(CharacterPersistentGuid, Prop))
+            {
+                OutLocation = Prop.PropertyBounds.GetCenter();
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool UDynamicSocialComponent::GetOwnedRoomLocation(FGameplayTag RoomTypeTag, FVector& OutLocation) const
+{
+    OutLocation = FVector::ZeroVector;
+    if (UWorld* World = GetWorld())
+    {
+        if (UDynamicBuildingSubsystem* BuildSub = World->GetSubsystem<UDynamicBuildingSubsystem>())
+        {
+            FDynamicRoomInstance Room;
+            if (BuildSub->GetRoomOwnedByCharacter(CharacterPersistentGuid, RoomTypeTag, Room))
+            {
+                OutLocation = Room.WorldBounds.GetCenter();
+                return true;
+            }
+        }
+    }
+    return false;
 }

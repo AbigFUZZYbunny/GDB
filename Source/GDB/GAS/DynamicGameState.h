@@ -23,7 +23,6 @@ class GDB_API ADynamicGameState : public AGameStateBase
 
 public:
     ADynamicGameState();
-
     virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -56,10 +55,11 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
-    UPROPERTY() TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;    
+    UPROPERTY() TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStructureMaterialDef> StructureMaterialRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
 
     UPROPERTY() FDynamicCalendarDef CalendarConfig;
     UPROPERTY() FPhysicsCalculationSettings CalculationSettings;
@@ -116,10 +116,10 @@ public:
     const FPhysicsJointNodeConfig* GetBoneJointData(const FName& BoneName) const;
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
     bool GetCharacterTemplate(FGameplayTag TemplateTag, FCharacterTemplateDef& OutTemplate) const;
-    
+
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Ability Scoring")
     bool GetComputedAbilityScore(FGameplayTag AbilityTag, FComputedAbilityScoreInfo& OutScoreInfo) const;
-    
+
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
     int32 GetEnvironmentCellIndexAtLocation(const FVector& WorldLocation) const;
 
@@ -128,21 +128,33 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
     TArray<FEnvironmentGridCellItem>& GetMutableEnvironmentReadBuffer() { return EnvironmentReadBuffer; }
-    
+
+    // Grid Dimensions and Metric Getters (Resolves C2248)
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    int32 GetGridWidth() const { return GridWidth; }
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    int32 GetGridHeight() const { return GridHeight; }
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    float GetCellSizeWorldUnits() const { return CellSizeWorldUnits; }
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
+    int32 GetChunkDimension() const { return ChunkDimension; }
+
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Voxels")
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;
-    
-    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Rooms")
-    TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
 
 private:
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);
     void SpawnServerEnvironmentChunks();
     int32 ResolveElementArrayIndex(const FGameplayTag& Tag) const { return TrackedElementsMap.FindRef(Tag); }
+
     float ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath) const;
     float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;
     FComputedAbilityScoreInfo EvaluateAbilityScore(FGameplayTag AbilityTag, const FDynamicAbilityDef& AbilityDef) const;
     void RebuildAllAbilityScores();
+
     void SetPhysicsConfig(const FPhysicsDamageConfigData& ConfigData);
     void SetAbilityScoreConfig(const FAbilityScoreConfigData& InScoreConfig);
     void SetActiveDifficultyTag(FGameplayTag NewDifficultyTag);
@@ -155,7 +167,7 @@ private:
     TMap<FName, FPhysicsJointNodeConfig> BoneToJointMap;
     TMap<FGameplayTag, FComputedAbilityScoreInfo> ComputedAbilityScoresCache;
 
-    // Environmental Grid State
+    // Environmental Grid Constants
     static constexpr int32 GridWidth = 64;
     static constexpr int32 GridHeight = 64;
     static constexpr int32 ChunkDimension = 8;
@@ -164,6 +176,7 @@ private:
     TArray<FEnvironmentGridCellItem> EnvironmentReadBuffer;
     TArray<FEnvironmentGridCellItem> EnvironmentWriteBuffer;
     TArray<float> AdvectionDeltaScratchpad;
+
     TMap<FIntPoint, TObjectPtr<ADynamicEnvironmentChunkActor>> ActiveChunkMap;
     TMap<FGameplayTag, int32> TrackedElementsMap;
     TQueue<FEnvironmentManaModificationRecord, EQueueMode::Mpsc> PendingManaModifications;
@@ -195,6 +208,5 @@ private:
     };
     TMap<int32, FResourceGraphState> ComputedResourceGraphs;
 
-    // Non-ticking, memory-efficient AI behavior cooldowns
     mutable TMap<TWeakObjectPtr<ADynamicCharacter>, TMap<FGameplayTag, double>> CharacterBehaviorCooldowns;
 };

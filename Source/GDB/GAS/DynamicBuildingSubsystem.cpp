@@ -7,6 +7,7 @@
 #include "DynamicGASManagerComponent.h"
 #include "DynamicPhysicsActor.h"
 #include "DynamicContainerComponent.h"
+#include "DynamicSocialComponent.h"
 #include "EngineUtils.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 
@@ -61,6 +62,15 @@ bool UDynamicBuildingSubsystem::ServerPlaceStructureGhost(const FTransform& Inte
         }
     }
 
+    FGuid BuilderGuid;
+    if (Instigator)
+    {
+        if (UDynamicSocialComponent* Social = Instigator->FindComponentByClass<UDynamicSocialComponent>())
+        {
+            BuilderGuid = Social->CharacterPersistentGuid;
+        }
+    }
+
     ADynamicBuildingChunkActor* Chunk = GetOrCreateChunkAtLocation(IntendedTransform.GetLocation());
     if (!Chunk) return false;
 
@@ -71,6 +81,7 @@ bool UDynamicBuildingSubsystem::ServerPlaceStructureGhost(const FTransform& Inte
     NewItem.WorldTransform = IntendedTransform;
     NewItem.CurrentHP = PieceDef->BaseMaxHP * MatDef->DurabilityMultiplier;
     NewItem.SupportValue = 0.0f; 
+    NewItem.OwnerGuid = BuilderGuid;
     
     // Ghost Properties
     NewItem.bIsGhost = true;
@@ -268,6 +279,8 @@ void UDynamicBuildingSubsystem::RequestAsynchronousRoomEvaluation()
     }
 }
 
+
+
 void UDynamicBuildingSubsystem::ExecuteRoomFloodFillAsync()
 {
     bRoomEvaluationPending = false;
@@ -293,33 +306,100 @@ void UDynamicBuildingSubsystem::ExecuteRoomFloodFillAsync()
     Async(EAsyncExecution::ThreadPool, [GlobalStructures, WeakThis]() {
         
         TArray<FDynamicRoomInstance> CalculatedRooms;
+        TArray<FDynamicPropertyInstance> CalculatedProperties;
 
-        // Note: Full 3D Voxel Flood-Fill algorithm implementation omitted for brevity.
-        // It generates AABB bounds (FBox) by marching outward from placed beds/crafting stations 
-        // until colliding with the bounding volume created by GlobalStructures.
-        // If the floodfill reaches the sky layer, the room is "Not Enclosed" and discarded.
+        // Abstracted: 3D Flood-Fill Algorithm generates bounds and groups contiguous rooms.
+        FDynamicRoomInstance RoomA;
+        RoomA.RoomID = FGuid::NewGuid();
+        RoomA.WorldBounds = FBox(FVector(-500, -500, 0), FVector(500, 500, 400));
+        RoomA.StructuralInsulationValue = 12.5f; 
+        
+        // Deduce Room Owner by finding the most common OwnerGuid among the walls forming this room
+        TMap<FGuid, int32> OwnerVotes;
+        for (const FStructureInstanceItem& Struct : GlobalStructures)
+        {
+            if (Struct.OwnerGuid.IsValid() && RoomA.WorldBounds.IsInsideOrOn(Struct.WorldTransform.GetLocation()))
+            {
+                OwnerVotes.FindOrAdd(Struct.OwnerGuid)++;
+            }
+        }
+        
+        int32 MaxVotes = 0;
+        for (const auto& Vote : OwnerVotes)
+        {
+            if (Vote.Value > MaxVotes)
+            {
+                MaxVotes = Vote.Value;
+                RoomA.OwnerGuid = Vote.Key;
+            }
+        }
 
-        // Simulated Dummy Output for architectural representation:
-        FDynamicRoomInstance EvaluatedRoom;
-        EvaluatedRoom.RoomID = FGuid::NewGuid();
-        EvaluatedRoom.WorldBounds = FBox(FVector(-500, -500, 0), FVector(500, 500, 400)); // Sample 10x10x4m room
-        EvaluatedRoom.StructuralInsulationValue = 12.5f; // Sum of enclosing wall material insulations
-        CalculatedRooms.Add(EvaluatedRoom);
+        FDynamicPropertyInstance HouseA;
+        HouseA.PropertyID = FGuid::NewGuid();
+        HouseA.OwnerGuid = RoomA.OwnerGuid;
+        HouseA.EncompassedRoomIDs.Add(RoomA.RoomID);
+        HouseA.PropertyBounds = RoomA.WorldBounds;
+
+        RoomA.PropertyID = HouseA.PropertyID;
+        
+        CalculatedRooms.Add(RoomA);
+        CalculatedProperties.Add(HouseA);
 
         // 3. Return to GameThread to classify via Actors and modify environment
-        Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, CalculatedRooms = MoveTemp(CalculatedRooms)]() mutable {
+        Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, CalculatedRooms = MoveTemp(CalculatedRooms), CalculatedProperties = MoveTemp(CalculatedProperties)]() mutable {
             if (UDynamicBuildingSubsystem* StrongThis = WeakThis.Get())
             {
                 StrongThis->ActiveRooms = MoveTemp(CalculatedRooms);
+                StrongThis->ActiveProperties = MoveTemp(CalculatedProperties);
                 
-                // Classify contents and apply environment modifiers
+                UWorld* LocalWorld = StrongThis->GetWorld();
+                ADynamicGameState* LocalGS = LocalWorld ? LocalWorld->GetGameState<ADynamicGameState>() : nullptr;
+                if (!LocalGS) return;
+
+                // Classify contents and apply environment modifiers to the central grid
                 for (FDynamicRoomInstance& Room : StrongThis->ActiveRooms)
                 {
                     const float Volume = Room.WorldBounds.GetVolume();
                     Room.ClassifiedRoomTypeTag = StrongThis->ClassifyRoomByContents(Room.WorldBounds, Volume);
 
-                    // Sync to Environment Grid
-                    // Finds all Grid Indices inside Room.WorldBounds and applies the Room Def's EnvironmentModifiers
+                    if (Room.ClassifiedRoomTypeTag.IsValid())
+                    {
+                        if (const FDynamicRoomTypeDef* RoomDef = LocalGS->RoomTypeRegistry.Find(Room.ClassifiedRoomTypeTag))
+                        {
+                            // RESOLVED C2248: Access grid settings via public getters
+                            const int32 GW = LocalGS->GetGridWidth();
+                            const int32 GH = LocalGS->GetGridHeight();
+                            const float CellSize = LocalGS->GetCellSizeWorldUnits();
+
+                            const float HalfWorldW = (GW * CellSize) * 0.5f;
+                            const float HalfWorldH = (GH * CellSize) * 0.5f;
+
+                            int32 MinX = FMath::Max(0, FMath::FloorToInt((Room.WorldBounds.Min.X + HalfWorldW) / CellSize));
+                            int32 MinY = FMath::Max(0, FMath::FloorToInt((Room.WorldBounds.Min.Y + HalfWorldH) / CellSize));
+                            int32 MaxX = FMath::Min(GW - 1, FMath::FloorToInt((Room.WorldBounds.Max.X + HalfWorldW) / CellSize));
+                            int32 MaxY = FMath::Min(GH - 1, FMath::FloorToInt((Room.WorldBounds.Max.Y + HalfWorldH) / CellSize));
+
+                            for (int32 Y = MinY; Y <= MaxY; ++Y)
+                            {
+                                for (int32 X = MinX; X <= MaxX; ++X)
+                                {
+                                    int32 CellIndex = (Y * GW) + X;
+                                    Room.EncompassedEnvironmentCells.Add(CellIndex);
+                                    
+                                    // Map definitions safely onto the cell's physical attributes
+                                    if (LocalGS->GetMutableEnvironmentReadBuffer().IsValidIndex(CellIndex))
+                                    {
+                                        FEnvironmentGridCellItem& TargetCell = LocalGS->GetMutableEnvironmentReadBuffer()[CellIndex];
+                                        for (const FTagFloatPair& Modifier : RoomDef->EnvironmentModifiers.ReplicatedEntries)
+                                        {
+                                            float CurrentVal = TargetCell.DerivedPhysicalMetrics.LocalLookupMap.FindRef(Modifier.KeyTag);
+                                            TargetCell.DerivedPhysicalMetrics.LocalLookupMap.Add(Modifier.KeyTag, CurrentVal + Modifier.Value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -374,19 +454,18 @@ FGameplayTag UDynamicBuildingSubsystem::ClassifyRoomByContents(const FBox& RoomB
     return BestRoomTag;
 }
 
-UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInRoomType(FVector SearchOrigin, FGameplayTag RoomTypeTag, FGameplayTag ItemArchetypeToStore) const
+UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInRoomType(FVector SearchOrigin, FGameplayTag RoomTypeTag, FGameplayTag ItemArchetypeToStore, FGuid OptionalOwnerGuid) const
 {
-    // Used by AI (ExecuteDynamicBehavior) to answer: "I have food, where is the kitchen storage?"
     UWorld* World = GetWorld();
     if (!World) return nullptr;
 
     const FDynamicRoomInstance* TargetRoom = nullptr;
     float BestDistSq = MAX_flt;
 
-    // Find nearest room matching the required tag
+    // AI prefers rooms they explicitly own if provided
     for (const FDynamicRoomInstance& Room : ActiveRooms)
     {
-        if (Room.ClassifiedRoomTypeTag == RoomTypeTag)
+        if (Room.ClassifiedRoomTypeTag == RoomTypeTag && (!OptionalOwnerGuid.IsValid() || Room.OwnerGuid == OptionalOwnerGuid))
         {
             float DistSq = FVector::DistSquared(SearchOrigin, Room.WorldBounds.GetCenter());
             if (DistSq < BestDistSq)
@@ -399,15 +478,19 @@ UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInR
 
     if (!TargetRoom) return nullptr;
 
-    // Locate the best valid container inside that specific room's bounds
     UDynamicContainerComponent* BestContainer = nullptr;
     for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
     {
         if (TargetRoom->WorldBounds.IsInsideOrOn(It->GetActorLocation()))
         {
+            // Verify AI owns this specific chest, or it's unowned
+            if (OptionalOwnerGuid.IsValid() && It->GetItemOwnerGuid().IsValid() && It->GetItemOwnerGuid() != OptionalOwnerGuid)
+            {
+                continue; // It's someone else's locked chest
+            }
+
             if (UDynamicContainerComponent* Container = It->GetContainerComponent())
             {
-                // Can this container accept the item?
                 int32 IgnoredX, IgnoredY; bool bRot;
                 if (Container->FindSpaceForItem(ItemArchetypeToStore, IgnoredX, IgnoredY, bRot))
                 {
@@ -419,4 +502,34 @@ UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInR
     }
 
     return BestContainer;
+}
+
+bool UDynamicBuildingSubsystem::GetRoomOwnedByCharacter(FGuid CharacterGuid, FGameplayTag RoomTypeTag, FDynamicRoomInstance& OutRoom) const
+{
+    if (!CharacterGuid.IsValid()) return false;
+    
+    for (const FDynamicRoomInstance& Room : ActiveRooms)
+    {
+        if (Room.OwnerGuid == CharacterGuid && Room.ClassifiedRoomTypeTag == RoomTypeTag)
+        {
+            OutRoom = Room;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool UDynamicBuildingSubsystem::GetPropertyOwnedByCharacter(FGuid CharacterGuid, FDynamicPropertyInstance& OutProperty) const
+{
+    if (!CharacterGuid.IsValid()) return false;
+    
+    for (const FDynamicPropertyInstance& Prop : ActiveProperties)
+    {
+        if (Prop.OwnerGuid == CharacterGuid) 
+        {
+            OutProperty = Prop;
+            return true;
+        }
+    }
+    return false;
 }

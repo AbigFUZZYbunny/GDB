@@ -802,26 +802,16 @@ struct FDynamicContainerSlotItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
 
-    UPROPERTY()
-    int32 GridX = 0;
+    UPROPERTY() int32 GridX = 0;
+    UPROPERTY() int32 GridY = 0;
+    UPROPERTY() bool bIsRotated = false;
+    UPROPERTY() FGameplayTag StoredActorArchetypeTag;
+    UPROPERTY() int32 StackCount = 0;
+    UPROPERTY() TArray<FDynamicAttributeItem> SavedAttributeState;
+    UPROPERTY() FGameplayTagContainer SavedInteractableStates;
 
-    UPROPERTY()
-    int32 GridY = 0;
-
-    UPROPERTY()
-    bool bIsRotated = false;
-
-    UPROPERTY()
-    FGameplayTag StoredActorArchetypeTag;
-
-    UPROPERTY()
-    int32 StackCount = 0;
-
-    UPROPERTY()
-    TArray<FDynamicAttributeItem> SavedAttributeState;
-
-    UPROPERTY()
-    FGameplayTagContainer SavedInteractableStates;
+    // NEW: Tracks who actually owns this item while it sits inside a shared container
+    UPROPERTY() FGuid OwnerGuid; 
 
     void PreReplicatedRemove(const struct FFastContainerSlotArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastContainerSlotArray& InArrayOwner);
@@ -1748,41 +1738,95 @@ struct FStructureInstanceItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
 
-    UPROPERTY()
-    FGuid InstanceID;
+    UPROPERTY() FGuid InstanceID;
+    UPROPERTY() FGameplayTag PieceTag;
+    UPROPERTY() FGameplayTag MaterialTag;
+    UPROPERTY() FTransform WorldTransform;
+    UPROPERTY() float CurrentHP = 100.0f;
+    UPROPERTY() float SupportValue = 0.0f;
+    UPROPERTY() bool bIsGrounded = false;
+    UPROPERTY() bool bIsGhost = true;
+    UPROPERTY() float ConstructionProgress = 0.0f;
+    UPROPERTY() uint32 ProvidedMaterialsMask = 0;
 
-    UPROPERTY()
-    FGameplayTag PieceTag;
-
-    UPROPERTY()
-    FGameplayTag MaterialTag;
-
-    UPROPERTY()
-    FTransform WorldTransform;
-
-    UPROPERTY()
-    float CurrentHP = 100.0f;
-
-    UPROPERTY()
-    float SupportValue = 0.0f;
-
-    UPROPERTY()
-    bool bIsGrounded = false;
-
-    // Ghost System tracking
-    UPROPERTY()
-    bool bIsGhost = true;
-
-    UPROPERTY()
-    float ConstructionProgress = 0.0f;
-
-    // Bitmask tracking which required materials have been provided (supports up to 32 discrete components per piece)
-    UPROPERTY()
-    uint32 ProvidedMaterialsMask = 0;
+    // NEW: Tracks who built/owns this structural piece (wall, door, foundation)
+    UPROPERTY() FGuid OwnerGuid;
 
     void PreReplicatedRemove(const struct FFastStructureInstanceArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastStructureInstanceArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastStructureInstanceArray& InArrayOwner);
+};
+
+
+
+// ============================================================================
+// DYNAMIC ROOM CLASSIFICATION & ENVIRONMENT INTEGRATION
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicRoomRequirement
+{
+    GENERATED_BODY()
+
+    // The archetype or gameplay tag of the furniture/item required (e.g., "Item.Furniture.Bed")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag RequiredContentTag;
+
+    // Minimum number of this item required for classification
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 MinimumCount = 1;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicRoomTypeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag RoomTypeTag; // e.g., "Room.Type.Kitchen"
+
+    // Priority for classification if a room meets multiple definitions (Highest wins)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ClassificationPriority = 0.0f;
+
+    // Minimum enclosed volume (in cubic Unreal Units) to qualify
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MinimumVolume = 100000.0f; 
+
+    // What furniture/items must be inside the enclosed space
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FDynamicRoomRequirement> ContentRequirements;
+
+    // Environmental offsets applied to all environment grid cells within this room
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDynamicTagFloatMapWrapper EnvironmentModifiers;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicRoomInstance
+{
+    GENERATED_BODY()
+
+    UPROPERTY() FGuid RoomID;
+    UPROPERTY() FGameplayTag ClassifiedRoomTypeTag;
+    UPROPERTY() float StructuralInsulationValue = 0.0f;
+    UPROPERTY() FBox WorldBounds = FBox(ForceInit);
+    UPROPERTY() TArray<int32> EncompassedEnvironmentCells;
+
+    // NEW: Spatial grouping and ownership
+    UPROPERTY() FGuid PropertyID;
+    UPROPERTY() FGuid OwnerGuid; // Deduced by majority ownership of the enclosing walls
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicPropertyInstance
+{
+    GENERATED_BODY()
+
+    UPROPERTY() FGuid PropertyID;
+    UPROPERTY() FGuid OwnerGuid; // Deduced by majority ownership of the rooms
+    UPROPERTY() TArray<FGuid> EncompassedRoomIDs;
+    UPROPERTY() FBox PropertyBounds = FBox(ForceInit);
 };
 
 // ============================================================================
@@ -1820,6 +1864,8 @@ struct FWorldPersistenceSnapshot
     TArray<FChunkDeltaSnapshot> ModifiedVoxelChunks;
     
     UPROPERTY() TArray<FBuildingChunkSnapshot> ModifiedBuildingChunks;
+    
+    UPROPERTY() TArray<FDynamicPropertyInstance> ActiveProperties;
 };
 
 USTRUCT(BlueprintType)
@@ -4829,73 +4875,6 @@ struct GDB_API FDynamicAIBehaviorDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
     bool bInterruptible = true;
-};
-
-// ============================================================================
-// DYNAMIC ROOM CLASSIFICATION & ENVIRONMENT INTEGRATION
-// ============================================================================
-
-USTRUCT(BlueprintType)
-struct FDynamicRoomRequirement
-{
-    GENERATED_BODY()
-
-    // The archetype or gameplay tag of the furniture/item required (e.g., "Item.Furniture.Bed")
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag RequiredContentTag;
-
-    // Minimum number of this item required for classification
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 MinimumCount = 1;
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicRoomTypeDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag RoomTypeTag; // e.g., "Room.Type.Kitchen"
-
-    // Priority for classification if a room meets multiple definitions (Highest wins)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float ClassificationPriority = 0.0f;
-
-    // Minimum enclosed volume (in cubic Unreal Units) to qualify
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float MinimumVolume = 100000.0f; 
-
-    // What furniture/items must be inside the enclosed space
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FDynamicRoomRequirement> ContentRequirements;
-
-    // Environmental offsets applied to all environment grid cells within this room
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FDynamicTagFloatMapWrapper EnvironmentModifiers;
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicRoomInstance
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    FGuid RoomID;
-
-    UPROPERTY()
-    FGameplayTag ClassifiedRoomTypeTag;
-
-    // The calculated insulation/shelter value of the bounding walls/roofs
-    UPROPERTY()
-    float StructuralInsulationValue = 0.0f;
-
-    // The exact world-space bounding box of the enclosed room
-    UPROPERTY()
-    FBox WorldBounds = FBox(ForceInit);
-
-    // List of Environment Grid Cell Indices encompassed by this room
-    UPROPERTY()
-    TArray<int32> EncompassedEnvironmentCells;
 };
 
 // ============================================================================

@@ -231,11 +231,11 @@ bool UDynamicContainerComponent::FindSpaceForItem(FGameplayTag ArchetypeTag, int
 bool UDynamicContainerComponent::ServerStorePhysicalActor(ADynamicPhysicsActor* ActorToStore, AActor* InstigatorActor)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !IsValid(ActorToStore) || ActorToStore == GetOwner()) return false;
-
+    
     const FGameplayTag ArchetypeTag = ActorToStore->GetActorArchetypeTag();
     if (ContainerConfig.AllowedItemTags.Num() > 0 && !ContainerConfig.AllowedItemTags.HasTag(ArchetypeTag)) return false;
     if (ContainerConfig.ForbiddenItemTags.Num() > 0 && ContainerConfig.ForbiddenItemTags.HasTag(ArchetypeTag)) return false;
-
+    
     int32 FoundX = 0, FoundY = 0;
     bool bRotated = false;
     if (!FindSpaceForItem(ArchetypeTag, FoundX, FoundY, bRotated)) return false;
@@ -246,6 +246,9 @@ bool UDynamicContainerComponent::ServerStorePhysicalActor(ADynamicPhysicsActor* 
     NewSlot.bIsRotated = bRotated;
     NewSlot.StoredActorArchetypeTag = ArchetypeTag;
     NewSlot.StackCount = 1;
+    
+    // CAPTURE ITEM OWNERSHIP
+    NewSlot.OwnerGuid = ActorToStore->GetItemOwnerGuid();
 
     if (const UDynamicAttributeSet* AttrSet = ActorToStore->GetDynamicAttributeSet())
     {
@@ -276,10 +279,10 @@ bool UDynamicContainerComponent::ServerStorePhysicalActor(ADynamicPhysicsActor* 
     return true;
 }
 
-bool UDynamicContainerComponent::ServerAddActorByTag(FGameplayTag ArchetypeTag, int32 Quantity, const TArray<FDynamicAttributeItem>& CustomAttributes)
+bool UDynamicContainerComponent::ServerAddActorByTag(FGameplayTag ArchetypeTag, int32 Quantity, const TArray<FDynamicAttributeItem>& CustomAttributes, FGuid OptionalOwnerGuid)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !ArchetypeTag.IsValid() || Quantity <= 0) return false;
-
+    
     int32 FoundX = 0, FoundY = 0;
     bool bRotated = false;
     if (!FindSpaceForItem(ArchetypeTag, FoundX, FoundY, bRotated)) return false;
@@ -291,6 +294,7 @@ bool UDynamicContainerComponent::ServerAddActorByTag(FGameplayTag ArchetypeTag, 
     NewSlot.StoredActorArchetypeTag = ArchetypeTag;
     NewSlot.StackCount = Quantity;
     NewSlot.SavedAttributeState = CustomAttributes;
+    NewSlot.OwnerGuid = OptionalOwnerGuid; // ASSIGN OWNERSHIP ON CREATION
 
     int32 TombstoneIdx = ReplicatedSlots.Items.IndexOfByPredicate([](const FDynamicContainerSlotItem& Slot) {
         return Slot.StackCount <= 0 || !Slot.StoredActorArchetypeTag.IsValid();
@@ -306,7 +310,6 @@ bool UDynamicContainerComponent::ServerAddActorByTag(FGameplayTag ArchetypeTag, 
         FDynamicContainerSlotItem& Added = ReplicatedSlots.Items.Add_GetRef(NewSlot);
         ReplicatedSlots.MarkItemDirty(Added);
     }
-
     RebuildLocalSlotCache();
     return true;
 }

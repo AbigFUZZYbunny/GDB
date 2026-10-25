@@ -1,5 +1,6 @@
 ﻿// DynamicContainerComponent.h
 #pragma once
+
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
@@ -19,7 +20,6 @@ class GDB_API UDynamicContainerComponent : public UActorComponent
 
 public:
     UDynamicContainerComponent();
-
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -42,7 +42,6 @@ public:
     void HandleSingleSlotReplicated(const FDynamicContainerSlotItem& Item, bool bWasRemoved = false);
     void InitializeContainerFromDef(const FDynamicContainerDef& InDef);
 
-    // FIXED: Replaced INDEX_NONE with -1 to pass UHT parsing
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Container")
     bool IsGridSpaceFree(int32 GridX, int32 GridY, int32 SizeX, int32 SizeY, int32 IgnoreReplicationID = -1) const;
 
@@ -52,8 +51,9 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     bool ServerStorePhysicalActor(ADynamicPhysicsActor* ActorToStore, AActor* InstigatorActor = nullptr);
 
+    // FIXED: OptionalOwnerGuid defaults to FGuid() so 3-argument callers compile cleanly
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
-    bool ServerAddActorByTag(FGameplayTag ArchetypeTag, int32 Quantity, const TArray<FDynamicAttributeItem>& CustomAttributes);
+    bool ServerAddActorByTag(FGameplayTag ArchetypeTag, int32 Quantity, const TArray<FDynamicAttributeItem>& CustomAttributes, FGuid OptionalOwnerGuid = FGuid());
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     bool ServerRemoveStoredActorByTag(FGameplayTag ArchetypeTag, int32 Quantity = 1);
@@ -80,6 +80,7 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Container")
     void ServerCompressContainerSlots();
+
     void ScheduleTombstoneCompression(float DelaySeconds = 15.0f);
 
 private:

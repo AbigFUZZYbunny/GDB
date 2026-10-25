@@ -66,6 +66,7 @@ void ADynamicPhysicsActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
     DOREPLIFETIME(ADynamicPhysicsActor, ActorArchetypeTag);
     DOREPLIFETIME(ADynamicPhysicsActor, bIsActiveInWorld);
+    DOREPLIFETIME(ADynamicPhysicsActor, ItemOwnerGuid);
 }
 
 void ADynamicPhysicsActor::BeginPlay()
@@ -292,6 +293,8 @@ void ADynamicPhysicsActor::RestoreFromContainerSnapshot(const FDynamicContainerS
             InteractableComponent->AddStateTag(SavedTag);
         }
     }
+    
+    SetItemOwnerGuid(Snapshot.OwnerGuid);
 }
 
 void ADynamicPhysicsActor::ResetToDefaultPoolState()

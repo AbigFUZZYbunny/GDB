@@ -33,12 +33,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Building|Environment")
     float EvaluateShelterInsulationAtLocation(const FVector& WorldLocation) const;
 
-    // Triggered globally when structural integrity completes a cascade update
     void RequestAsynchronousRoomEvaluation();
     
-    // API for AI Item Placement: Find best target container in a specific room type
+    // AI Ownership Queries (FIXED: Out parameters instead of raw struct pointers)
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Building|Rooms")
+    bool GetRoomOwnedByCharacter(FGuid CharacterGuid, FGameplayTag RoomTypeTag, FDynamicRoomInstance& OutRoom) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Building|Rooms")
+    bool GetPropertyOwnedByCharacter(FGuid CharacterGuid, FDynamicPropertyInstance& OutProperty) const;
+
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Building|Rooms")
-    class UDynamicContainerComponent* FindOptimalAIContainerInRoomType(FVector SearchOrigin, FGameplayTag RoomTypeTag, FGameplayTag ItemArchetypeToStore) const;
+    class UDynamicContainerComponent* FindOptimalAIContainerInRoomType(FVector SearchOrigin, FGameplayTag RoomTypeTag, FGameplayTag ItemArchetypeToStore, FGuid OptionalOwnerGuid) const;
 
 private:
     UPROPERTY()
@@ -47,6 +52,9 @@ private:
     UPROPERTY()
     TArray<FDynamicRoomInstance> ActiveRooms;
 
+    UPROPERTY()
+    TArray<FDynamicPropertyInstance> ActiveProperties;
+
     float StreamingTimer = 0.0f;
     float StreamingRadius = 40000.0f;
     bool bRoomEvaluationPending = false;
@@ -54,9 +62,6 @@ private:
     ADynamicBuildingChunkActor* GetOrCreateChunkAtLocation(const FVector& WorldLocation);
     void ProcessBuildingStreaming();
 
-    // The lock-free ThreadPool algorithm that evaluates 3D enclosure bounds
     void ExecuteRoomFloodFillAsync();
-    
-    // Maps the evaluated structural enclosure against placed furniture to define its true JSON room type
     FGameplayTag ClassifyRoomByContents(const FBox& RoomBounds, float RoomVolume) const;
 };

@@ -25,6 +25,12 @@ class GDB_API ADynamicPhysicsActor : public AActor, public IAbilitySystemInterfa
 
 public:
     ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer);
+    
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Physics Actor")
+    FGuid GetItemOwnerGuid() const { return ItemOwnerGuid; }
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Physics Actor")
+    void SetItemOwnerGuid(const FGuid& NewOwner) { ItemOwnerGuid = NewOwner; }
 
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -113,4 +119,5 @@ private:
     TMap<FName, uint8> LocalBoneToLimbMap;
     TMap<uint8, double> ServerLastLimbHitTimestamp;
     bool bAttributesInitializedOnServer = false;
+    FGuid ItemOwnerGuid;
 };

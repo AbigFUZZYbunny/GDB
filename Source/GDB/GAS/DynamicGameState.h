@@ -131,6 +131,9 @@ public:
     
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Voxels")
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;
+    
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Rooms")
+    TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
 
 private:
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);

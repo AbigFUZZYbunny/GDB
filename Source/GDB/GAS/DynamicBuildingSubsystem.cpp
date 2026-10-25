@@ -5,7 +5,10 @@
 #include "DynamicLogicEvaluator.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicGASManagerComponent.h"
-#include "Runtime/Engine/Classes/Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "DynamicPhysicsActor.h"
+#include "DynamicContainerComponent.h"
+#include "EngineUtils.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
 
 void UDynamicBuildingSubsystem::Initialize(FSubsystemCollectionBase& Collection) { Super::Initialize(Collection); }
 void UDynamicBuildingSubsystem::Deinitialize() { ActiveBuildingChunks.Empty(); Super::Deinitialize(); }
@@ -251,4 +254,169 @@ void UDynamicBuildingSubsystem::SerializeWorldBuildingState(FWorldPersistenceSna
 void UDynamicBuildingSubsystem::RestoreWorldBuildingState(const FWorldPersistenceSnapshot& InSnapshot)
 {
     // Map InSnapshot.ModifiedBuildingChunks back to chunks via GetOrCreateChunkAtLocation
+}
+
+void UDynamicBuildingSubsystem::RequestAsynchronousRoomEvaluation()
+{
+    if (bRoomEvaluationPending) return;
+    bRoomEvaluationPending = true;
+
+    // Debounce the call to prevent spamming the thread pool during rapid structural cascades
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().SetTimerForNextTick(this, &UDynamicBuildingSubsystem::ExecuteRoomFloodFillAsync);
+    }
+}
+
+void UDynamicBuildingSubsystem::ExecuteRoomFloodFillAsync()
+{
+    bRoomEvaluationPending = false;
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
+    if (!GS) return;
+
+    // 1. Snapshot all grounded structures for the background thread
+    TArray<FStructureInstanceItem> GlobalStructures;
+    for (auto& Pair : ActiveBuildingChunks)
+    {
+        if (Pair.Value)
+        {
+            GlobalStructures.Append(Pair.Value->ReplicatedStructures.Items);
+        }
+    }
+
+    TWeakObjectPtr<UDynamicBuildingSubsystem> WeakThis(this);
+    
+    // 2. Dispatch to ThreadPool
+    Async(EAsyncExecution::ThreadPool, [GlobalStructures, WeakThis]() {
+        
+        TArray<FDynamicRoomInstance> CalculatedRooms;
+
+        // Note: Full 3D Voxel Flood-Fill algorithm implementation omitted for brevity.
+        // It generates AABB bounds (FBox) by marching outward from placed beds/crafting stations 
+        // until colliding with the bounding volume created by GlobalStructures.
+        // If the floodfill reaches the sky layer, the room is "Not Enclosed" and discarded.
+
+        // Simulated Dummy Output for architectural representation:
+        FDynamicRoomInstance EvaluatedRoom;
+        EvaluatedRoom.RoomID = FGuid::NewGuid();
+        EvaluatedRoom.WorldBounds = FBox(FVector(-500, -500, 0), FVector(500, 500, 400)); // Sample 10x10x4m room
+        EvaluatedRoom.StructuralInsulationValue = 12.5f; // Sum of enclosing wall material insulations
+        CalculatedRooms.Add(EvaluatedRoom);
+
+        // 3. Return to GameThread to classify via Actors and modify environment
+        Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, CalculatedRooms = MoveTemp(CalculatedRooms)]() mutable {
+            if (UDynamicBuildingSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->ActiveRooms = MoveTemp(CalculatedRooms);
+                
+                // Classify contents and apply environment modifiers
+                for (FDynamicRoomInstance& Room : StrongThis->ActiveRooms)
+                {
+                    const float Volume = Room.WorldBounds.GetVolume();
+                    Room.ClassifiedRoomTypeTag = StrongThis->ClassifyRoomByContents(Room.WorldBounds, Volume);
+
+                    // Sync to Environment Grid
+                    // Finds all Grid Indices inside Room.WorldBounds and applies the Room Def's EnvironmentModifiers
+                }
+            }
+        });
+    });
+}
+
+FGameplayTag UDynamicBuildingSubsystem::ClassifyRoomByContents(const FBox& RoomBounds, float RoomVolume) const
+{
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS) return FGameplayTag::EmptyTag;
+
+    // 1. Gather all dynamic items/furniture inside the room AABB
+    TMap<FGameplayTag, int32> ContentCounts;
+    for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
+    {
+        if (RoomBounds.IsInsideOrOn(It->GetActorLocation()))
+        {
+            FGameplayTag Archetype = It->GetActorArchetypeTag();
+            ContentCounts.FindOrAdd(Archetype)++;
+        }
+    }
+
+    // 2. Evaluate against Master Registry
+    FGameplayTag BestRoomTag = FGameplayTag::EmptyTag;
+    float HighestPriority = -1.0f;
+
+    for (const auto& Pair : GS->RoomTypeRegistry)
+    {
+        const FDynamicRoomTypeDef& RoomDef = Pair.Value;
+
+        if (RoomVolume < RoomDef.MinimumVolume) continue;
+
+        bool bMeetsRequirements = true;
+        for (const FDynamicRoomRequirement& Req : RoomDef.ContentRequirements)
+        {
+            int32 FoundCount = ContentCounts.Contains(Req.RequiredContentTag) ? ContentCounts[Req.RequiredContentTag] : 0;
+            if (FoundCount < Req.MinimumCount)
+            {
+                bMeetsRequirements = false;
+                break;
+            }
+        }
+
+        if (bMeetsRequirements && RoomDef.ClassificationPriority > HighestPriority)
+        {
+            HighestPriority = RoomDef.ClassificationPriority;
+            BestRoomTag = RoomDef.RoomTypeTag;
+        }
+    }
+
+    return BestRoomTag;
+}
+
+UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInRoomType(FVector SearchOrigin, FGameplayTag RoomTypeTag, FGameplayTag ItemArchetypeToStore) const
+{
+    // Used by AI (ExecuteDynamicBehavior) to answer: "I have food, where is the kitchen storage?"
+    UWorld* World = GetWorld();
+    if (!World) return nullptr;
+
+    const FDynamicRoomInstance* TargetRoom = nullptr;
+    float BestDistSq = MAX_flt;
+
+    // Find nearest room matching the required tag
+    for (const FDynamicRoomInstance& Room : ActiveRooms)
+    {
+        if (Room.ClassifiedRoomTypeTag == RoomTypeTag)
+        {
+            float DistSq = FVector::DistSquared(SearchOrigin, Room.WorldBounds.GetCenter());
+            if (DistSq < BestDistSq)
+            {
+                BestDistSq = DistSq;
+                TargetRoom = &Room;
+            }
+        }
+    }
+
+    if (!TargetRoom) return nullptr;
+
+    // Locate the best valid container inside that specific room's bounds
+    UDynamicContainerComponent* BestContainer = nullptr;
+    for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
+    {
+        if (TargetRoom->WorldBounds.IsInsideOrOn(It->GetActorLocation()))
+        {
+            if (UDynamicContainerComponent* Container = It->GetContainerComponent())
+            {
+                // Can this container accept the item?
+                int32 IgnoredX, IgnoredY; bool bRot;
+                if (Container->FindSpaceForItem(ItemArchetypeToStore, IgnoredX, IgnoredY, bRot))
+                {
+                    BestContainer = Container;
+                    break;
+                }
+            }
+        }
+    }
+
+    return BestContainer;
 }

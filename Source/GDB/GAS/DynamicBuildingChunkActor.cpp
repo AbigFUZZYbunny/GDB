@@ -12,6 +12,7 @@
 #include "DynamicCharacter.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicBuildingSubsystem.h"
 
 ADynamicBuildingChunkActor::ADynamicBuildingChunkActor()
 {
@@ -432,6 +433,15 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
                     StrongThis->ReplicatedStructures.Items.RemoveAll([](const FStructureInstanceItem& I) { return I.CurrentHP <= 0.0f; });
                     StrongThis->ReplicatedStructures.MarkArrayDirty();
                     StrongThis->UpdateInstancedMeshes();
+
+                    // FIX: Retrieve UWorld safely from StrongThis inside the lambda scope
+                    if (UWorld* LocalWorld = StrongThis->GetWorld())
+                    {
+                        if (UDynamicBuildingSubsystem* BuildSub = LocalWorld->GetSubsystem<UDynamicBuildingSubsystem>())
+                        {
+                            BuildSub->RequestAsynchronousRoomEvaluation();
+                        }
+                    }
                 }
 
                 StrongThis->bIsCalculatingIntegrity = false;

@@ -4832,6 +4832,73 @@ struct GDB_API FDynamicAIBehaviorDef
 };
 
 // ============================================================================
+// DYNAMIC ROOM CLASSIFICATION & ENVIRONMENT INTEGRATION
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicRoomRequirement
+{
+    GENERATED_BODY()
+
+    // The archetype or gameplay tag of the furniture/item required (e.g., "Item.Furniture.Bed")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag RequiredContentTag;
+
+    // Minimum number of this item required for classification
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 MinimumCount = 1;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicRoomTypeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag RoomTypeTag; // e.g., "Room.Type.Kitchen"
+
+    // Priority for classification if a room meets multiple definitions (Highest wins)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ClassificationPriority = 0.0f;
+
+    // Minimum enclosed volume (in cubic Unreal Units) to qualify
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MinimumVolume = 100000.0f; 
+
+    // What furniture/items must be inside the enclosed space
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FDynamicRoomRequirement> ContentRequirements;
+
+    // Environmental offsets applied to all environment grid cells within this room
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDynamicTagFloatMapWrapper EnvironmentModifiers;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicRoomInstance
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGuid RoomID;
+
+    UPROPERTY()
+    FGameplayTag ClassifiedRoomTypeTag;
+
+    // The calculated insulation/shelter value of the bounding walls/roofs
+    UPROPERTY()
+    float StructuralInsulationValue = 0.0f;
+
+    // The exact world-space bounding box of the enclosed room
+    UPROPERTY()
+    FBox WorldBounds = FBox(ForceInit);
+
+    // List of Environment Grid Cell Indices encompassed by this room
+    UPROPERTY()
+    TArray<int32> EncompassedEnvironmentCells;
+};
+
+// ============================================================================
 // ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
 // ============================================================================
 USTRUCT(BlueprintType)
@@ -4871,6 +4938,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicStructureMaterialDef> StructureMaterialRegistry;
     TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
     TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
+    TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
     
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

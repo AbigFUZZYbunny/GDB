@@ -1059,6 +1059,35 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.StructurePrefabRegistry.Add(KeyTag, PrefabDef);
         }
     }
+    
+    if (RootObject->HasField(TEXT("RoomTypeRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("RoomTypeRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> RoomObj = Pair.Value->AsObject();
+            
+            FDynamicRoomTypeDef RoomDef;
+            RoomDef.RoomTypeTag = KeyTag;
+            RoomDef.ClassificationPriority = RoomObj->HasField(TEXT("ClassificationPriority")) ? static_cast<float>(RoomObj->GetNumberField(TEXT("ClassificationPriority"))) : 0.0f;
+            RoomDef.MinimumVolume = RoomObj->HasField(TEXT("MinimumVolume")) ? static_cast<float>(RoomObj->GetNumberField(TEXT("MinimumVolume"))) : 100000.0f;
+            
+            if (RoomObj->HasField(TEXT("ContentRequirements")))
+            {
+                for (const auto& ReqVal : RoomObj->GetArrayField(TEXT("ContentRequirements")))
+                {
+                    TSharedPtr<FJsonObject> ReqObj = ReqVal->AsObject();
+                    FDynamicRoomRequirement Req;
+                    Req.RequiredContentTag = FGameplayTag::RequestGameplayTag(FName(*ReqObj->GetStringField(TEXT("RequiredContentTag"))), false);
+                    Req.MinimumCount = static_cast<int32>(ReqObj->GetNumberField(TEXT("MinimumCount")));
+                    RoomDef.ContentRequirements.Add(Req);
+                }
+            }
+            DeserializeMapWrapper(RoomObj, TEXT("EnvironmentModifiers"), RoomDef.EnvironmentModifiers);
+            OutStaging.RoomTypeRegistry.Add(KeyTag, RoomDef);
+        }
+    }
 
     return true;
 }

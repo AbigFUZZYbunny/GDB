@@ -1,0 +1,33 @@
+﻿{
+  "RoomTypeRegistry": {
+    "Room.Type.Kitchen": {
+      "RoomTypeTag": "Room.Type.Kitchen",
+      "ClassificationPriority": 10.0,
+      "MinimumVolume": 250000.0,
+      "ContentRequirements": [
+        { "RequiredContentTag": "Item.Furniture.Oven", "MinimumCount": 1 },
+        { "RequiredContentTag": "Item.Container.FoodStorage", "MinimumCount": 1 }
+      ],
+      "EnvironmentModifiers": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Environment.Metric.Temperature", "Value": 5.0 },
+          { "KeyTag": "Environment.Metric.Comfort", "Value": 10.0 }
+        ]
+      }
+    },
+    "Room.Type.Bedroom": {
+      "RoomTypeTag": "Room.Type.Bedroom",
+      "ClassificationPriority": 15.0,
+      "MinimumVolume": 200000.0,
+      "ContentRequirements": [
+        { "RequiredContentTag": "Item.Furniture.Bed", "MinimumCount": 1 }
+      ],
+      "EnvironmentModifiers": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Environment.Metric.Restfulness", "Value": 25.0 },
+          { "KeyTag": "Environment.Metric.Comfort", "Value": 15.0 }
+        ]
+      }
+    }
+  }
+}

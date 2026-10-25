@@ -1016,6 +1016,7 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     StructureMaterialRegistry.Append(MoveTemp(StagingData.StructureMaterialRegistry));
     StructurePieceRegistry.Append(MoveTemp(StagingData.StructurePieceRegistry));
     StructurePrefabRegistry.Append(MoveTemp(StagingData.StructurePrefabRegistry));
+    RoomTypeRegistry.Append(MoveTemp(StagingData.RoomTypeRegistry));
 
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {

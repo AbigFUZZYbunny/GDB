@@ -985,6 +985,7 @@ FComputedAbilityScoreInfo ADynamicGameState::EvaluateAbilityScore(FGameplayTag A
 void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& StagingData)
 {
     check(IsInGameThread());
+
     AttributeMasterRegistry.Append(MoveTemp(StagingData.AttributeMasterRegistry));
     DeliveryArchetypes.Append(MoveTemp(StagingData.DeliveryArchetypes));
     AbilityMasterRegistry.Append(MoveTemp(StagingData.AbilityMasterRegistry));
@@ -997,6 +998,7 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     RelationshipTypeRegistry.Append(MoveTemp(StagingData.RelationshipTypeRegistry));
     ProfessionMasterRegistry.Append(MoveTemp(StagingData.ProfessionMasterRegistry));
     MasterAIAgentRegistry.Append(MoveTemp(StagingData.MasterAIAgentRegistry));
+    MasterStimulusRegistry.Append(MoveTemp(StagingData.MasterStimulusRegistry));
     ConversionRegistry.Append(MoveTemp(StagingData.ConversionRegistry));
     EvolutionMasterRegistry.Append(MoveTemp(StagingData.EvolutionMasterRegistry));
     GeneticsMasterRegistry.Append(MoveTemp(StagingData.GeneticsMasterRegistry));
@@ -1017,6 +1019,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     StructurePieceRegistry.Append(MoveTemp(StagingData.StructurePieceRegistry));
     StructurePrefabRegistry.Append(MoveTemp(StagingData.StructurePrefabRegistry));
     RoomTypeRegistry.Append(MoveTemp(StagingData.RoomTypeRegistry));
+    CrimeMasterRegistry.Append(MoveTemp(StagingData.CrimeMasterRegistry));
+    JurisdictionMasterRegistry.Append(MoveTemp(StagingData.JurisdictionMasterRegistry));
 
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {
@@ -1026,6 +1030,7 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
             GetOrCreateCachedEffectObject(Pair.Key);
         }
     }
+
     if (StagingData.bHasCalendarConfig)
     {
         CalendarConfig = StagingData.CalendarConfig;
@@ -1049,6 +1054,14 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     if (StagingData.bHasVoxelGenerationConfig)
     {
         VoxelGenerationConfig = StagingData.VoxelGenerationConfig;
+    }
+    if (StagingData.bHasLawAndOrderConfig)
+    {
+        LawAndOrderConfig = StagingData.LawAndOrderConfig;
+    }
+    if (StagingData.bHasCloudAIConfig)
+    {
+        CloudAIConfig = StagingData.CloudAIConfig;
     }
 
     RebuildAllAbilityScores();
@@ -1130,14 +1143,25 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
 void ADynamicGameState::ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn)
 {
     if (!HasAuthority() || !IsValid(ActorToReturn)) return;
+
+    if (UDynamicSocialComponent* Social = ActorToReturn->FindComponentByClass<UDynamicSocialComponent>())
+    {
+        if (Social->CharacterPersistentGuid.IsValid())
+        {
+            UnregisterCharacterByGuid(Social->CharacterPersistentGuid, ActorToReturn);
+        }
+    }
+
     if (AController* CharController = ActorToReturn->GetController())
     {
         CharController->Destroy();
     }
+
     ActorToReturn->SetActorHiddenInGame(true);
     ActorToReturn->SetActorTickEnabled(false);
     ActorToReturn->SetActorEnableCollision(false);
     ActorToReturn->SetActorLocation(FVector(0, 0, -10000.0f));
+
     InactiveCharacterPool.AddUnique(ActorToReturn);
 }
 
@@ -1535,4 +1559,88 @@ bool ADynamicGameState::IsBehaviorOnCooldown(ADynamicCharacter* Character, FGame
         }
     }
     return false;
+}
+
+void ADynamicGameState::ServerRegisterCrimeWithJurisdiction(FGameplayTag JurisdictionTag, const FCrimeMemoryItem& Memory)
+{
+    if (!HasAuthority() || !JurisdictionTag.IsValid() || !Memory.PerpetratorGuid.IsValid()) return;
+
+    const FDynamicJurisdictionDef* JurisdictionDef = JurisdictionMasterRegistry.Find(JurisdictionTag);
+    if (!JurisdictionDef) return;
+
+    const FCrimeSeverityOverride* LocalLaw = JurisdictionDef->LocalLaws.Find(Memory.CrimeTag);
+    if (!LocalLaw || !LocalLaw->bIsIllegal) return; // Not a crime here
+
+    const FDynamicCrimeDef* BaseCrime = CrimeMasterRegistry.Find(Memory.CrimeTag);
+    if (!BaseCrime) return;
+
+    TMap<FGuid, FDynamicBountyRecord>& LocalLedger = JurisdictionBounties.FindOrAdd(JurisdictionTag);
+    FDynamicBountyRecord& Record = LocalLedger.FindOrAdd(Memory.PerpetratorGuid);
+    Record.PerpetratorGuid = Memory.PerpetratorGuid;
+
+    // If proof is required (Theft) and hasn't been provided yet, flag as a suspect
+    if (BaseCrime->bRequiresProofOfOwnership)
+    {
+        Record.SuspectedCrimes.AddUnique(Memory.CrimeTag);
+    }
+    else
+    {
+        Record.ConfirmedCrimes.AddUnique(Memory.CrimeTag);
+        Record.TotalBountyAmount += LocalLaw->SeverityOverride;
+        
+        // Example logic: Escalate to lethal force if bounty is extremely high
+        if (Record.TotalBountyAmount >= LawAndOrderConfig.LethalForceBountyThreshold)
+        {
+            Record.bLethalForceAuthorized = true;
+        }
+    }
+}
+
+bool ADynamicGameState::IsCharacterWantedInJurisdiction(FGameplayTag JurisdictionTag, FGuid CharacterGuid, FDynamicBountyRecord& OutRecord) const
+{
+    if (const TMap<FGuid, FDynamicBountyRecord>* LocalLedger = JurisdictionBounties.Find(JurisdictionTag))
+    {
+        if (const FDynamicBountyRecord* FoundRecord = LocalLedger->Find(CharacterGuid))
+        {
+            // They are "Wanted" if they have either confirmed crimes OR pending suspected crimes
+            if (FoundRecord->TotalBountyAmount > 0.0f || FoundRecord->SuspectedCrimes.Num() > 0)
+            {
+                OutRecord = *FoundRecord;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void ADynamicGameState::RegisterCharacterByGuid(const FGuid& CharacterGuid, ADynamicCharacter* Character)
+{
+    if (!CharacterGuid.IsValid() || !IsValid(Character)) return;
+    ActiveCharacterByGuidMap.Add(CharacterGuid, Character);
+}
+
+void ADynamicGameState::UnregisterCharacterByGuid(const FGuid& CharacterGuid, ADynamicCharacter* Character)
+{
+    if (!CharacterGuid.IsValid()) return;
+
+    if (const TWeakObjectPtr<ADynamicCharacter>* Existing = ActiveCharacterByGuidMap.Find(CharacterGuid))
+    {
+        if (!Character || !Existing->IsValid() || Existing->Get() == Character)
+        {
+            ActiveCharacterByGuidMap.Remove(CharacterGuid);
+        }
+    }
+}
+
+ADynamicCharacter* ADynamicGameState::FindCharacterByGuid(const FGuid& CharacterGuid) const
+{
+    if (!CharacterGuid.IsValid()) return nullptr;
+    if (const TWeakObjectPtr<ADynamicCharacter>* Found = ActiveCharacterByGuidMap.Find(CharacterGuid))
+    {
+        if (Found->IsValid() && !Found->Get()->IsPendingKillPending())
+        {
+            return Found->Get();
+        }
+    }
+    return nullptr;
 }

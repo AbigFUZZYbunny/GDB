@@ -23,6 +23,7 @@ class GDB_API ADynamicGameState : public AGameStateBase
 
 public:
     ADynamicGameState();
+
     virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -39,6 +40,7 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicStimulusDef> MasterStimulusRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
@@ -60,17 +62,29 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
 
     UPROPERTY() FDynamicCalendarDef CalendarConfig;
     UPROPERTY() FPhysicsCalculationSettings CalculationSettings;
     UPROPERTY() TArray<FPhysicsLimbConfig> GlobalLimbs;
     UPROPERTY() FAbilityScoreConfigData AbilityScoreConfig;
     UPROPERTY() FDynamicEnvironmentSystemConfig EnvironmentConfig;
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Cloud AI") FCloudAISystemConfig CloudAIConfig;
 
     // Generic Pre-warmed Gameplay Effects (Zero runtime GC allocations)
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericInstantEffect;
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericDurationEffect;
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericInfiniteEffect;
+
+    // O(1) Active Character Lookup by Persistent GUID
+    void RegisterCharacterByGuid(const FGuid& CharacterGuid, ADynamicCharacter* Character);
+    void UnregisterCharacterByGuid(const FGuid& CharacterGuid, ADynamicCharacter* Character = nullptr);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Characters")
+    ADynamicCharacter* FindCharacterByGuid(const FGuid& CharacterGuid) const;
+
+    const TMap<FGuid, TWeakObjectPtr<ADynamicCharacter>>& GetActiveCharacterByGuidMap() const { return ActiveCharacterByGuidMap; }
 
     // Dynamic AI Behavior Evaluation & Cooldowns
     bool EvaluateBestDynamicBehavior(ADynamicCharacter* Character, FDynamicAIBehaviorDef& OutBestBehavior, float& OutBestScore) const;
@@ -115,6 +129,7 @@ public:
     const FPhysicsLimbConfig* GetLimbData(uint8 LimbId) const;
     const FPhysicsJointNodeConfig* GetBoneJointData(const FName& BoneName) const;
     const TMap<uint8, FPhysicsLimbConfig>& GetLimbLookupMap() const { return LimbLookupMap; }
+
     bool GetCharacterTemplate(FGameplayTag TemplateTag, FCharacterTemplateDef& OutTemplate) const;
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Ability Scoring")
@@ -129,7 +144,6 @@ public:
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
     TArray<FEnvironmentGridCellItem>& GetMutableEnvironmentReadBuffer() { return EnvironmentReadBuffer; }
 
-    // Grid Dimensions and Metric Getters (Resolves C2248)
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Environment")
     int32 GetGridWidth() const { return GridWidth; }
 
@@ -145,11 +159,22 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Voxels")
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;
 
+    // Hierarchy: JurisdictionTag -> (PerpetratorGuid -> BountyRecord)
+    TMap<FGameplayTag, TMap<FGuid, FDynamicBountyRecord>> JurisdictionBounties;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
+    void ServerRegisterCrimeWithJurisdiction(FGameplayTag JurisdictionTag, const FCrimeMemoryItem& Memory);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Law")
+    bool IsCharacterWantedInJurisdiction(FGameplayTag JurisdictionTag, FGuid CharacterGuid, FDynamicBountyRecord& OutRecord) const;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Law")
+    FLawAndOrderSystemConfig LawAndOrderConfig;
+
 private:
     void SetupDynamicEnvironment(const FDynamicEnvironmentSystemConfig& InConfig);
     void SpawnServerEnvironmentChunks();
     int32 ResolveElementArrayIndex(const FGameplayTag& Tag) const { return TrackedElementsMap.FindRef(Tag); }
-
     float ExtractReflectedNumericProperty(const void* StructMemory, const UScriptStruct* StructType, FName PropertyPath) const;
     float ExtractAbilityPropertyForScoring(const FDynamicAbilityDef& AbilityDef, const FAbilityPropertyScoreRule& Rule) const;
     FComputedAbilityScoreInfo EvaluateAbilityScore(FGameplayTag AbilityTag, const FDynamicAbilityDef& AbilityDef) const;
@@ -159,8 +184,12 @@ private:
     void SetAbilityScoreConfig(const FAbilityScoreConfigData& InScoreConfig);
     void SetActiveDifficultyTag(FGameplayTag NewDifficultyTag);
     void RebuildLimbMapsFromTransport();
+
     void RebuildNetworkGraphs();
     void EvaluateNetworkGraphs(float DeltaSeconds);
+
+    // O(1) Persistent GUID -> Active Character Map
+    TMap<FGuid, TWeakObjectPtr<ADynamicCharacter>> ActiveCharacterByGuidMap;
 
     TMap<uint8, FPhysicsLimbConfig> LimbLookupMap;
     TMap<FName, uint8> BoneToLimbMap;

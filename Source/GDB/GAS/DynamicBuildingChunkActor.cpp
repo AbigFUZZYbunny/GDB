@@ -4,6 +4,7 @@
 #include "DynamicVoxelSubsystem.h"
 #include "DynamicPhysicsActor.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/AssetManager.h"
 #include "Async/Async.h"
 #include "Runtime/Engine/Classes/Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Runtime/Engine/Public/Net/UnrealNetwork.h"
@@ -13,6 +14,8 @@
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicBuildingSubsystem.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 
 ADynamicBuildingChunkActor::ADynamicBuildingChunkActor()
 {
@@ -53,8 +56,8 @@ void ADynamicBuildingChunkActor::HandleSingleStructureReplicated(const FStructur
 
 UHierarchicalInstancedStaticMeshComponent* ADynamicBuildingChunkActor::GetOrCreateHISM(FGameplayTag PieceTag, FGameplayTag MaterialTag)
 {
-    const uint64 CompKey = (static_cast<uint64>(PieceTag.GetTagName().GetComparisonIndex().ToUnstableInt()) << 32) | 
-                           static_cast<uint64>(MaterialTag.GetTagName().GetComparisonIndex().ToUnstableInt());
+    const uint64 CompKey = (static_cast<uint64>(PieceTag.GetTagName().GetComparisonIndex().ToUnstableInt()) << 32) |
+                            static_cast<uint64>(MaterialTag.GetTagName().GetComparisonIndex().ToUnstableInt());
 
     if (UHierarchicalInstancedStaticMeshComponent** Found = InstancedMeshPool.Find(CompKey)) return *Found;
 
@@ -67,14 +70,22 @@ UHierarchicalInstancedStaticMeshComponent* ADynamicBuildingChunkActor::GetOrCrea
     UHierarchicalInstancedStaticMeshComponent* NewHISM = NewObject<UHierarchicalInstancedStaticMeshComponent>(this);
     NewHISM->RegisterComponent();
     NewHISM->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
-    
-    // CustomData[0] = Stress/Integrity Color, CustomData[1] = Construction State (0.0 = Ghost Blueprint)
     NewHISM->NumCustomDataFloats = 2;
-    
-    if (UStaticMesh* Mesh = PieceDef->MeshAsset.LoadSynchronous())
+
+    if (!PieceDef->MeshAsset.IsNull())
     {
-        NewHISM->SetStaticMesh(Mesh);
+        FSoftObjectPath AssetPath = PieceDef->MeshAsset.ToSoftObjectPath();
+        UAssetManager::GetStreamableManager().RequestAsyncLoad(AssetPath, FStreamableDelegate::CreateLambda([NewHISM, AssetPath]() {
+            if (IsValid(NewHISM))
+            {
+                if (UStaticMesh* LoadedMesh = Cast<UStaticMesh>(AssetPath.ResolveObject()))
+                {
+                    NewHISM->SetStaticMesh(LoadedMesh);
+                }
+            }
+        }));
     }
+
     InstancedMeshPool.Add(CompKey, NewHISM);
     return NewHISM;
 }

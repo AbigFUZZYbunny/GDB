@@ -416,6 +416,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             if (RootObject->HasField(TEXT("CalculationSettings")))
             {
                 TSharedPtr<FJsonObject> CalcObj = RootObject->GetObjectField(TEXT("CalculationSettings"));
+                PhysicsConfig.CalculationSettings.BaselineCharacterMassKg = CalcObj->HasField(TEXT("BaselineCharacterMassKg")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaselineCharacterMassKg"))) : 80.0f;
+                PhysicsConfig.CalculationSettings.CarriedMassProximityRadius = CalcObj->HasField(TEXT("CarriedMassProximityRadius")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("CarriedMassProximityRadius"))) : 300.0f;
+                PhysicsConfig.CalculationSettings.ObjectWeightAttributeTag = CalcObj->HasField(TEXT("ObjectWeightAttributeTag")) ? FGameplayTag::RequestGameplayTag(FName(*CalcObj->GetStringField(TEXT("ObjectWeightAttributeTag"))), false) : FGameplayTag();
                 PhysicsConfig.CalculationSettings.BaseHoldSweepRadius = CalcObj->HasField(TEXT("BaseHoldSweepRadius")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepRadius"))) : 50.0f;
                 PhysicsConfig.CalculationSettings.BaseHoldSweepDistance = CalcObj->HasField(TEXT("BaseHoldSweepDistance")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepDistance"))) : 60.0f;
                 PhysicsConfig.CalculationSettings.VelocityLookaheadScalar = CalcObj->HasField(TEXT("VelocityLookaheadScalar")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("VelocityLookaheadScalar"))) : 0.15f;
@@ -446,6 +449,9 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         FPhysicsCalculationSettings CalcSettings;
         if (FJsonObjectConverter::JsonObjectToUStruct(CalcObj.ToSharedRef(), &CalcSettings, 0, 0))
         {
+            CalcSettings.BaselineCharacterMassKg = CalcObj->HasField(TEXT("BaselineCharacterMassKg")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaselineCharacterMassKg"))) : 80.0f;
+            CalcSettings.CarriedMassProximityRadius = CalcObj->HasField(TEXT("CarriedMassProximityRadius")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("CarriedMassProximityRadius"))) : 300.0f;
+            CalcSettings.ObjectWeightAttributeTag = CalcObj->HasField(TEXT("ObjectWeightAttributeTag")) ? FGameplayTag::RequestGameplayTag(FName(*CalcObj->GetStringField(TEXT("ObjectWeightAttributeTag"))), false) : FGameplayTag();
             CalcSettings.BaseHoldSweepRadius = CalcObj->HasField(TEXT("BaseHoldSweepRadius")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepRadius"))) : 50.0f;
             CalcSettings.BaseHoldSweepDistance = CalcObj->HasField(TEXT("BaseHoldSweepDistance")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("BaseHoldSweepDistance"))) : 60.0f;
             CalcSettings.VelocityLookaheadScalar = CalcObj->HasField(TEXT("VelocityLookaheadScalar")) ? static_cast<float>(CalcObj->GetNumberField(TEXT("VelocityLookaheadScalar"))) : 0.15f;
@@ -1088,6 +1094,100 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.RoomTypeRegistry.Add(KeyTag, RoomDef);
         }
     }
+    
+    if (RootObject->HasField(TEXT("LawAndOrderConfig")))
+    {
+        TSharedPtr<FJsonObject> LawConfigObj = RootObject->GetObjectField(TEXT("LawAndOrderConfig"));
+        FLawAndOrderSystemConfig LawConfig;
+        LawConfig.DefaultJurisdictionTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("DefaultJurisdictionTag"))), false);
+        if (LawConfigObj->HasField(TEXT("InvestigateSoundBehaviorTag")))
+        {
+            LawConfig.InvestigateSoundBehaviorTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("InvestigateSoundBehaviorTag"))), false);
+        }
+        if (LawConfigObj->HasField(TEXT("EnterPropertyActionTag")))
+        {
+            LawConfig.EnterPropertyActionTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("EnterPropertyActionTag"))), false);
+        }
+        if (LawConfigObj->HasField(TEXT("ExitPropertyActionTag")))
+        {
+            LawConfig.ExitPropertyActionTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("ExitPropertyActionTag"))), false);
+        }
+        if (LawConfigObj->HasField(TEXT("LethalForceBountyThreshold")))
+        {
+            LawConfig.LethalForceBountyThreshold = static_cast<float>(LawConfigObj->GetNumberField(TEXT("LethalForceBountyThreshold")));
+        }
+        OutStaging.bHasLawAndOrderConfig = true;
+        OutStaging.LawAndOrderConfig = LawConfig;
+    }
+    if (RootObject->HasField(TEXT("CloudAIConfig")))
+    {
+        TSharedPtr<FJsonObject> CloudObj = RootObject->GetObjectField(TEXT("CloudAIConfig"));
+        FCloudAISystemConfig CloudConfig;
+        if (FJsonObjectConverter::JsonObjectToUStruct(CloudObj.ToSharedRef(), &CloudConfig, 0, 0))
+        {
+            OutStaging.bHasCloudAIConfig = true;
+            OutStaging.CloudAIConfig = CloudConfig;
+        }
+    }
+    if (RootObject->HasField(TEXT("CrimeMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("CrimeMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> CrimeObj = Pair.Value->AsObject();
+            FDynamicCrimeDef Def;
+            Def.CrimeTag = KeyTag;
+            Def.BaseSeverity = CrimeObj->HasField(TEXT("BaseSeverity")) ? static_cast<float>(CrimeObj->GetNumberField(TEXT("BaseSeverity"))) : 10.0f;
+            Def.bRequiresProofOfOwnership = CrimeObj->HasField(TEXT("bRequiresProofOfOwnership")) ? CrimeObj->GetBoolField(TEXT("bRequiresProofOfOwnership")) : false;
+            
+            Def.ExemptionConditionTree = CrimeObj->HasField(TEXT("ExemptionConditionTree")) ? FName(*CrimeObj->GetStringField(TEXT("ExemptionConditionTree"))) : NAME_None;
+            Def.WitnessInterpretationTree = CrimeObj->HasField(TEXT("WitnessInterpretationTree")) ? FName(*CrimeObj->GetStringField(TEXT("WitnessInterpretationTree"))) : NAME_None;
+            
+            DeserializeMapWrapper(CrimeObj, TEXT("SensorySignatures"), Def.SensorySignatures);
+            
+            if (CrimeObj->HasField(TEXT("AssociatedWitnessBehaviors")))
+            {
+                for (const auto& BehavVal : CrimeObj->GetArrayField(TEXT("AssociatedWitnessBehaviors")))
+                {
+                    Def.AssociatedWitnessBehaviors.Add(FGameplayTag::RequestGameplayTag(FName(*BehavVal->AsString()), false));
+                }
+            }
+            OutStaging.CrimeMasterRegistry.Add(KeyTag, Def);
+        }
+    }
+
+    if (RootObject->HasField(TEXT("JurisdictionMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("JurisdictionMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            
+            TSharedPtr<FJsonObject> JurObj = Pair.Value->AsObject();
+            FDynamicJurisdictionDef Def;
+            Def.JurisdictionTag = KeyTag;
+            Def.GoverningFactionTag = FGameplayTag::RequestGameplayTag(FName(*JurObj->GetStringField(TEXT("GoverningFactionTag"))), false);
+            Def.PropertyAccessConditionTree = JurObj->HasField(TEXT("PropertyAccessConditionTree")) ? FName(*JurObj->GetStringField(TEXT("PropertyAccessConditionTree"))) : NAME_None;
+
+            DeserializeTagToTagMapWrapper(JurObj, TEXT("ActionToCrimeMap"), Def.ActionToCrimeMap);
+
+            if (JurObj->HasField(TEXT("LocalLaws")))
+            {
+                for (auto& LawPair : JurObj->GetObjectField(TEXT("LocalLaws"))->Values)
+                {
+                    FGameplayTag CrimeTag = FGameplayTag::RequestGameplayTag(FName(*LawPair.Key), false);
+                    if (CrimeTag.IsValid())
+                    {
+                        FCrimeSeverityOverride Override;
+                        FJsonObjectConverter::JsonObjectToUStruct(LawPair.Value->AsObject().ToSharedRef(), &Override, 0, 0);
+                        Def.LocalLaws.Add(CrimeTag, Override);
+                    }
+                }
+            }
+            OutStaging.JurisdictionMasterRegistry.Add(KeyTag, Def);
+        }
+    }
 
     return true;
 }
@@ -1104,15 +1204,43 @@ int32 UDynamicDataSerializer::FlattenAndParseJsonNode(const TSharedPtr<FJsonObje
 {
     if (!JsonObj.IsValid()) return INDEX_NONE;
 
+    // Support pre-flattened "FlatNodes" array schema (used in Conditionals.json)
+    if (JsonObj->HasField(TEXT("FlatNodes")))
+    {
+        for (const auto& ElemVal : JsonObj->GetArrayField(TEXT("FlatNodes")))
+        {
+            TSharedPtr<FJsonObject> NodeObj = ElemVal->AsObject();
+            if (!NodeObj.IsValid()) continue;
+
+            FDynamicConditionNode Node;
+            if (NodeObj->HasField(TEXT("ConditionType"))) Node.ConditionType = StringToEnum<EConditionType>(NodeObj->GetStringField(TEXT("ConditionType")));
+            if (NodeObj->HasField(TEXT("LogicOperator"))) Node.LogicOperator = StringToEnum<ELogicOperator>(NodeObj->GetStringField(TEXT("LogicOperator")));
+            if (NodeObj->HasField(TEXT("ComparisonOperator"))) Node.ComparisonOperator = StringToEnum<EComparisonOp>(NodeObj->GetStringField(TEXT("ComparisonOperator")));
+            if (NodeObj->HasField(TEXT("UserDefinedKey"))) Node.UserDefinedKey = FName(*NodeObj->GetStringField(TEXT("UserDefinedKey")));
+            if (NodeObj->HasField(TEXT("bCheckSource"))) Node.bCheckSource = NodeObj->GetBoolField(TEXT("bCheckSource"));
+            if (NodeObj->HasField(TEXT("ComparisonValue"))) Node.ComparisonValue = static_cast<float>(NodeObj->GetNumberField(TEXT("ComparisonValue")));
+
+            if (NodeObj->HasField(TEXT("ChildIndices")))
+            {
+                for (const auto& IdxVal : NodeObj->GetArrayField(TEXT("ChildIndices")))
+                {
+                    Node.ChildIndices.Add(static_cast<int32>(IdxVal->AsNumber()));
+                }
+            }
+            OutContainer.FlatNodes.Add(Node);
+        }
+        return OutContainer.FlatNodes.Num() > 0 ? 0 : INDEX_NONE;
+    }
+
     int32 NewNodeIndex = OutContainer.FlatNodes.AddDefaulted();
     FDynamicConditionNode& WorkingNode = OutContainer.FlatNodes[NewNodeIndex];
 
-    WorkingNode.ConditionType = StringToEnum<EConditionType>(JsonObj->GetStringField(TEXT("ConditionType")));
-    WorkingNode.LogicOperator = StringToEnum<ELogicOperator>(JsonObj->GetStringField(TEXT("LogicOperator")));
-    WorkingNode.ComparisonOperator = StringToEnum<EComparisonOp>(JsonObj->GetStringField(TEXT("ComparisonOperator")));
-    WorkingNode.UserDefinedKey = FName(*JsonObj->GetStringField(TEXT("UserDefinedKey")));
-    WorkingNode.bCheckSource = JsonObj->GetBoolField(TEXT("bCheckSource"));
-    WorkingNode.ComparisonValue = static_cast<float>(JsonObj->GetNumberField(TEXT("ComparisonValue")));
+    if (JsonObj->HasField(TEXT("ConditionType"))) WorkingNode.ConditionType = StringToEnum<EConditionType>(JsonObj->GetStringField(TEXT("ConditionType")));
+    if (JsonObj->HasField(TEXT("LogicOperator"))) WorkingNode.LogicOperator = StringToEnum<ELogicOperator>(JsonObj->GetStringField(TEXT("LogicOperator")));
+    if (JsonObj->HasField(TEXT("ComparisonOperator"))) WorkingNode.ComparisonOperator = StringToEnum<EComparisonOp>(JsonObj->GetStringField(TEXT("ComparisonOperator")));
+    if (JsonObj->HasField(TEXT("UserDefinedKey"))) WorkingNode.UserDefinedKey = FName(*JsonObj->GetStringField(TEXT("UserDefinedKey")));
+    WorkingNode.bCheckSource = JsonObj->HasField(TEXT("bCheckSource")) ? JsonObj->GetBoolField(TEXT("bCheckSource")) : true;
+    WorkingNode.ComparisonValue = JsonObj->HasField(TEXT("ComparisonValue")) ? static_cast<float>(JsonObj->GetNumberField(TEXT("ComparisonValue"))) : 0.0f;
 
     if (JsonObj->HasField(TEXT("ChildNodes")))
     {
@@ -1298,6 +1426,7 @@ bool UDynamicDataSerializer::ApplySnapshotToPlayerCharacter(ADynamicCharacter* T
         Cust->HairColor = Snapshot.HairColor;
         Cust->ActiveHairArchetypeTag = Snapshot.ActiveHairArchetypeTag;
         Cust->OnRep_AppearanceColors();
+
         for (const FTagFloatPair& Slider : Snapshot.MorphSliders)
         {
             Cust->ServerSetMorphSliderValue(Slider.KeyTag, Slider.Value);
@@ -1354,16 +1483,19 @@ bool UDynamicDataSerializer::ApplySnapshotToPlayerCharacter(ADynamicCharacter* T
         Lang->RebuildKnownWordCache();
     }
 
-    // 8. Social Graph, Needs, and Locations
+    // 8. Social Graph, Needs, Locations, and O(1) GameState GUID Re-Indexing
     if (UDynamicSocialComponent* Social = TargetCharacter->FindComponentByClass<UDynamicSocialComponent>())
     {
-        Social->CharacterPersistentGuid = Snapshot.CharacterGuid;
+        Social->SetCharacterPersistentGuid(Snapshot.CharacterGuid.IsValid() ? Snapshot.CharacterGuid : FGuid::NewGuid());
+
         Social->ReplicatedRelationships.Items = Snapshot.Relationships;
         Social->ReplicatedRelationships.MarkArrayDirty();
         Social->RebuildRelationshipCache();
+
         Social->ReplicatedNeedsAndMoods.Items = Snapshot.Needs;
         Social->ReplicatedNeedsAndMoods.MarkArrayDirty();
         Social->RebuildNeedCache();
+
         Social->ReplicatedKnownPlaces.Items = Snapshot.KnownPlaces;
         Social->ReplicatedKnownPlaces.MarkArrayDirty();
         Social->RebuildPlaceCache();
@@ -1429,6 +1561,7 @@ bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharact
         Snapshot.SkinColor = Cust->SkinColor;
         Snapshot.HairColor = Cust->HairColor;
         Snapshot.ActiveHairArchetypeTag = Cust->ActiveHairArchetypeTag;
+
         for (const FDynamicCharacterMorphItem& Morph : Cust->ReplicatedMorphs.Items)
         {
             FTagFloatPair Pair;
@@ -1484,49 +1617,76 @@ bool UDynamicDataSerializer::SerializePlayerToSnapshotJson(const ADynamicCharact
         Snapshot.KnownPlaces = Social->ReplicatedKnownPlaces.Items;
     }
 
-    // 9. Serializing Dragged / Tethered World Physics Actors
-    for (TActorIterator<ADynamicPhysicsActor> It(InCharacter->GetWorld()); It; ++It)
+    // 9. Serializing Dragged / Tethered World Physics Actors without TActorIterator
+    UWorld* World = InCharacter->GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    TSet<ADynamicPhysicsActor*> CandidatePhysicsActors;
+
+    TArray<AActor*> AttachedActors;
+    InCharacter->GetAttachedActors(AttachedActors, true);
+    for (AActor* Attached : AttachedActors)
     {
-        ADynamicPhysicsActor* PhysActor = *It;
-        if (PhysActor && !PhysActor->IsPendingKillPending())
+        if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Attached))
         {
-            const float DistSq = FVector::DistSquared(PhysActor->GetActorLocation(), InCharacter->GetActorLocation());
-            const bool bIsAttached = PhysActor->GetAttachParentActor() == InCharacter;
-
-            if (bIsAttached || DistSq <= FMath::Square(600.0f))
+            if (!PhysActor->IsPendingKillPending())
             {
-                FDraggedPhysicsActorSnapshot ActorSnapshot;
-                ActorSnapshot.ActorArchetypeTag = PhysActor->GetActorArchetypeTag();
-                ActorSnapshot.WorldTransform = PhysActor->GetActorTransform();
+                CandidatePhysicsActors.Add(PhysActor);
+            }
+        }
+    }
 
-                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+    if (World)
+    {
+        TArray<FOverlapResult> Overlaps;
+        FCollisionObjectQueryParams ObjParams;
+        ObjParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+        ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+        FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(SerializeDraggedActorsOverlap), false, InCharacter);
+
+        if (World->OverlapMultiByObjectType(Overlaps, InCharacter->GetActorLocation(), FQuat::Identity, ObjParams, FCollisionShape::MakeSphere(600.0f), QueryParams))
+        {
+            for (const FOverlapResult& Overlap : Overlaps)
+            {
+                if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Overlap.GetActor()))
                 {
-                    ActorSnapshot.LinearVelocity = Prim->GetPhysicsLinearVelocity();
-                    ActorSnapshot.AngularVelocity = Prim->GetPhysicsAngularVelocityInDegrees();
-                }
-
-                if (const UDynamicAttributeSet* AttrSet = PhysActor->GetDynamicAttributeSet())
-                {
-                    ActorSnapshot.SavedAttributes = AttrSet->FastAttributes.Items;
-                }
-
-                if (const UDynamicInteractableComponent* Interactable = PhysActor->GetInteractableComponent())
-                {
-                    ActorSnapshot.SavedInteractableStates = Interactable->GetCurrentStateTags();
-                }
-
-                if (const UDynamicContainerComponent* Container = PhysActor->GetContainerComponent())
-                {
-                    ActorSnapshot.ContainerInventory = Container->GetReplicatedSlots().Items;
-                }
-
-                Snapshot.DraggedPhysicsActors.Add(ActorSnapshot);
-
-                if (ADynamicGameState* GS = InCharacter->GetWorld()->GetGameState<ADynamicGameState>())
-                {
-                    GS->ReleasePhysicsActorToPool(PhysActor);
+                    if (!PhysActor->IsPendingKillPending())
+                    {
+                        CandidatePhysicsActors.Add(PhysActor);
+                    }
                 }
             }
+        }
+    }
+
+    for (ADynamicPhysicsActor* PhysActor : CandidatePhysicsActors)
+    {
+        FDraggedPhysicsActorSnapshot ActorSnapshot;
+        ActorSnapshot.ActorArchetypeTag = PhysActor->GetActorArchetypeTag();
+        ActorSnapshot.WorldTransform = PhysActor->GetActorTransform();
+
+        if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+        {
+            ActorSnapshot.LinearVelocity = Prim->GetPhysicsLinearVelocity();
+            ActorSnapshot.AngularVelocity = Prim->GetPhysicsAngularVelocityInDegrees();
+        }
+        if (const UDynamicAttributeSet* AttrSet = PhysActor->GetDynamicAttributeSet())
+        {
+            ActorSnapshot.SavedAttributes = AttrSet->FastAttributes.Items;
+        }
+        if (const UDynamicInteractableComponent* Interactable = PhysActor->GetInteractableComponent())
+        {
+            ActorSnapshot.SavedInteractableStates = Interactable->GetCurrentStateTags();
+        }
+        if (const UDynamicContainerComponent* Container = PhysActor->GetContainerComponent())
+        {
+            ActorSnapshot.ContainerInventory = Container->GetReplicatedSlots().Items;
+        }
+
+        Snapshot.DraggedPhysicsActors.Add(ActorSnapshot);
+
+        if (GS)
+        {
+            GS->ReleasePhysicsActorToPool(PhysActor);
         }
     }
 
@@ -1738,4 +1898,36 @@ bool UDynamicDataSerializer::DeserializeWorldStateFromJson(const UObject* WorldC
     }
 
     return true;
+}
+
+void UDynamicDataSerializer::DeserializeTagToTagMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagToTagMapWrapper& OutWrapper)
+{
+    OutWrapper.ReplicatedEntries.Empty();
+    if (!InObject.IsValid() || !InObject->HasField(FieldName)) return;
+    
+    TSharedPtr<FJsonObject> MapSection = InObject->GetObjectField(FieldName);
+    if (!MapSection.IsValid()) return;
+
+    if (MapSection->HasField(TEXT("ReplicatedEntries")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>& ArrayField = MapSection->GetArrayField(TEXT("ReplicatedEntries"));
+        for (const auto& Element : ArrayField)
+        {
+            TSharedPtr<FJsonObject> EntryObj = Element->AsObject();
+            if (EntryObj.IsValid())
+            {
+                FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("KeyTag"))), false);
+                FGameplayTag ValTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("ValueTag"))), false);
+                
+                if (KeyTag.IsValid() && ValTag.IsValid())
+                {
+                    FTagTagPair Entry;
+                    Entry.KeyTag = KeyTag;
+                    Entry.ValueTag = ValTag;
+                    OutWrapper.ReplicatedEntries.Add(Entry);
+                }
+            }
+        }
+    }
+    OutWrapper.SyncMapFromChangesArray();
 }

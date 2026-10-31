@@ -74,14 +74,14 @@ FGuid UDynamicCloudAISubsystem::DispatchDistributedAIRequest(
     FCloudAIQueuedTask NewTask;
     NewTask.PrimaryAccumulatedJson.Reserve(2048);
     NewTask.ValidatorAccumulatedJson.Reserve(2048);
-    
+
     NewTask.TaskId = FGuid::NewGuid();
+    NewTask.RequestingAgentPawn = AgentPawn;
     NewTask.Priority = Priority;
     NewTask.ContextPrompt = ContextJsonPrompt;
     NewTask.TimeQueued = CurrentTime;
     NewTask.TimeoutSeconds = TimeoutSeconds;
-    
-    // Bind to the updated global delegates
+
     NewTask.TokenStreamDelegate = TokenStreamCallback;
     NewTask.FinalCompletionDelegate = DirectCallback;
     NewTask.TaskAssignedDelegate = AssignedCallback;
@@ -115,9 +115,42 @@ void UDynamicCloudAISubsystem::Tick(float DeltaTime)
 
 void UDynamicCloudAISubsystem::ProcessTaskQueue()
 {
-    if (TaskQueue.Num() == 0 || ConnectedMiners.Num() < 2) return;
+    if (TaskQueue.Num() == 0) return;
+
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    const FCloudAISystemConfig& Config = GS ? GS->CloudAIConfig : FCloudAISystemConfig();
+
+    const FString ResolvedModel = !Config.DefaultModelName.IsEmpty() ? Config.DefaultModelName : ModelName;
+
+    // Instant local rule-based fallback mode for single-player / small co-op without miners
+    if (Config.ExecutionBackend == ECloudAIExecutionBackend::LocalRuleBasedFallback)
+    {
+        for (int32 i = TaskQueue.Num() - 1; i >= 0; --i)
+        {
+            FCloudAIQueuedTask Task = TaskQueue[i];
+            TaskQueue.RemoveAt(i);
+
+            FCloudAIDirectiveResponse FallbackResp;
+            ExecuteRuleBasedFallback(Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()), FallbackResp);
+
+            TArray<FCloudAICommandOutput> Output;
+            for (const FCloudAICommand& Cmd : FallbackResp.Commands)
+            {
+                FCloudAICommandOutput OutCmd;
+                OutCmd.CommandActionTag = Cmd.CommandActionTag;
+                OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
+                OutCmd.UtteranceText = Cmd.UtteranceText;
+                OutCmd.PriorityWeight = Cmd.PriorityWeight;
+                Output.Add(OutCmd);
+            }
+            Task.FinalCompletionDelegate.ExecuteIfBound(Output);
+        }
+        return;
+    }
 
     ConnectedMiners.RemoveAll([](const TWeakObjectPtr<UDynamicAILinkComponent>& M) { return !M.IsValid(); });
+    if (ConnectedMiners.Num() < 2) return;
 
     TaskQueue.Sort([](const FCloudAIQueuedTask& A, const FCloudAIQueuedTask& B) {
         if (A.Priority != B.Priority) return A.Priority > B.Priority;
@@ -131,7 +164,7 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
         {
             if (UDynamicAILinkComponent* Miner = WeakMiner.Get())
             {
-                if (!Miner->NodeStats.bIsCurrentlyProcessing && Miner->NodeStats.TrustScore > 0.5f)
+                if (!Miner->NodeStats.bIsCurrentlyProcessing && Miner->NodeStats.TrustScore > Config.MinimumMinerTrustScore)
                 {
                     AvailableMiners.Add(Miner);
                 }
@@ -145,8 +178,7 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
         });
 
         FCloudAIQueuedTask& Task = TaskQueue[i];
-
-        if (Task.Priority == ECloudAITaskPriority::High && AvailableMiners[0]->NodeStats.AveragePingMs > 150.0f)
+        if (Task.Priority == ECloudAITaskPriority::High && AvailableMiners[0]->NodeStats.AveragePingMs > Config.HighPriorityMaxPingMs)
         {
             continue;
         }
@@ -163,8 +195,9 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
         const float EstimatedLatency = (Primary->NodeStats.AveragePingMs + Validator->NodeStats.AveragePingMs) / 2000.0f;
         Task.TaskAssignedDelegate.ExecuteIfBound(EstimatedLatency);
 
-        Primary->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ModelName, EndpointUrl, ApiKey);
-        Validator->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ModelName, EndpointUrl, ApiKey);
+        // SECURITY HARDENED: Never transmit server ApiKey or central EndpointUrl to client miner nodes
+        Primary->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ResolvedModel);
+        Validator->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ResolvedModel);
 
         ActiveTasks.Add(Task);
         TaskQueue.RemoveAt(i);
@@ -174,9 +207,16 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
 void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Miner, const FGuid& TaskId, const FString& Chunk)
 {
     FCloudAIQueuedTask* Task = ActiveTasks.FindByPredicate([&](const FCloudAIQueuedTask& T) { return T.TaskId == TaskId; });
-    if (!Task || Task->PrimaryMiner.Get() != Miner) return;
+    if (!Task || !Miner) return;
 
-    // OPTIMIZATION: Reconstructing the JSON strictly from the sanitized client deltas
+    if (Task->ValidatorMiner.Get() == Miner)
+    {
+        Task->ValidatorAccumulatedJson += Chunk;
+        return;
+    }
+
+    if (Task->PrimaryMiner.Get() != Miner) return;
+
     Task->PrimaryAccumulatedJson += Chunk;
 
     if (!Task->bStartedStreamingUtterance)
@@ -221,6 +261,10 @@ void UDynamicCloudAISubsystem::HandleMinerCompletion(UDynamicAILinkComponent* Mi
 
 void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Task)
 {
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    const FCloudAISystemConfig& Config = GS ? GS->CloudAIConfig : FCloudAISystemConfig();
+
     const FString CleanPrimary = SanitizeMarkdownJson(Task.PrimaryAccumulatedJson);
     const FString CleanValidator = SanitizeMarkdownJson(Task.ValidatorAccumulatedJson);
 
@@ -229,7 +273,6 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
     const bool bValidatorValid = FJsonObjectConverter::JsonObjectStringToUStruct(CleanValidator, &ValidatorResponse, 0, 0);
 
     bool bConsensusReached = false;
-
     if (bPrimaryValid && bValidatorValid && PrimaryResponse.Commands.Num() > 0 && ValidatorResponse.Commands.Num() > 0)
     {
         const FCloudAICommand& PriCmd = PrimaryResponse.Commands[0];
@@ -238,9 +281,7 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
         if (PriCmd.CommandActionTag == ValCmd.CommandActionTag &&
             PriCmd.TargetEntityOrPlaceRoleTag == ValCmd.TargetEntityOrPlaceRoleTag)
         {
-            // SECURITY: Length delta constraint ensures the Primary didn't maliciously inject hate-speech 
-            // into the Utterance payload that bypassed the validator's structural tags.
-            if (FMath::Abs(PriCmd.UtteranceText.Len() - ValCmd.UtteranceText.Len()) <= 20)
+            if (FMath::Abs(PriCmd.UtteranceText.Len() - ValCmd.UtteranceText.Len()) <= Config.MaxConsensusUtteranceLengthDelta)
             {
                 bConsensusReached = true;
             }
@@ -249,20 +290,27 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
 
     if (bConsensusReached)
     {
-        if (MiningRewardAttributeTag.IsValid())
+        const FGameplayTag ResolvedRewardTag = Config.MiningRewardAttributeTag.IsValid()
+            ? Config.MiningRewardAttributeTag
+            : MiningRewardAttributeTag;
+        const float RewardAmount = FMath::Max(0.0f, Config.MiningRewardGrantAmount);
+
+        if (ResolvedRewardTag.IsValid() && RewardAmount > 0.0f)
         {
             auto GrantReward = [&](UDynamicAILinkComponent* Miner) {
-                if (!Miner) return;
+                if (!Miner || !Miner->GetOwner()) return;
                 Miner->NodeStats.TasksCompleted++;
                 Miner->NodeStats.TrustScore = FMath::Min(1.0f, Miner->NodeStats.TrustScore + 0.05f);
+
                 if (UAbilitySystemComponent* ASC = Miner->GetOwner()->FindComponentByClass<UAbilitySystemComponent>())
                 {
                     if (UDynamicAttributeSet* Attr = const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))))
                     {
-                        Attr->SetDynamicAttributeValue(MiningRewardAttributeTag, Attr->GetDynamicAttributeValue(MiningRewardAttributeTag) + 1.0f);
+                        Attr->SetDynamicAttributeValue(ResolvedRewardTag, Attr->GetDynamicAttributeValue(ResolvedRewardTag) + RewardAmount);
                     }
                 }
             };
+
             GrantReward(Task.PrimaryMiner.Get());
             GrantReward(Task.ValidatorMiner.Get());
         }
@@ -273,9 +321,7 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
             FCloudAICommandOutput OutCmd;
             OutCmd.CommandActionTag = Cmd.CommandActionTag;
             OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
-            
-            // Prefer validator text to penalize tampering attempts that squeaked by length checks
-            OutCmd.UtteranceText = ValidatorResponse.Commands[0].UtteranceText; 
+            OutCmd.UtteranceText = ValidatorResponse.Commands[0].UtteranceText;
             Output.Add(OutCmd);
         }
         Task.FinalCompletionDelegate.ExecuteIfBound(Output);
@@ -284,7 +330,7 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
     {
         if (Task.PrimaryMiner.IsValid()) Task.PrimaryMiner->NodeStats.TrustScore -= 0.2f;
         if (Task.ValidatorMiner.IsValid()) Task.ValidatorMiner->NodeStats.TrustScore -= 0.2f;
-        
+
         Task.FinalCompletionDelegate.ExecuteIfBound(TArray<FCloudAICommandOutput>());
     }
 }

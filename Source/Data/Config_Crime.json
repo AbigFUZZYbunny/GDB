@@ -1,0 +1,41 @@
+﻿{
+  "CrimeMasterRegistry": {
+    "Crime.Type.Theft": {
+      "CrimeTag": "Crime.Type.Theft",
+      "BaseSeverity": 25.0,
+      "bRequiresProofOfOwnership": true,
+      "SensorySignatures": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Sense.Vision.Peripheral", "Value": 4000.0 },
+          { "KeyTag": "Sense.Hearing", "Value": 8000.0 }
+        ]
+      },
+      "WitnessInterpretationTree": "Condition.Witness.InterpretTheft",
+      "AssociatedWitnessBehaviors": [ "Behavior.ReportGuard" ]
+    },
+    "Crime.Type.Murder": {
+      "CrimeTag": "Crime.Type.Murder",
+      "BaseSeverity": 1000.0,
+      "bRequiresProofOfOwnership": false,
+      "SensorySignatures": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Sense.Vision.Peripheral", "Value": 4000.0 },
+          { "KeyTag": "Sense.Hearing", "Value": 8000.0 }
+        ]
+      },
+      "WitnessInterpretationTree": "Condition.Witness.InterpretMurder",
+      "AssociatedWitnessBehaviors": [ "Behavior.Combat.DefendVictim", "Behavior.Flee" ]
+    },
+    "Crime.Type.Trespassing": {
+      "CrimeTag": "Crime.Type.Trespassing",
+      "BaseSeverity": 20.0,
+      "ExemptionConditionTree": "Condition.Property.HasAccess",
+      "SensorySignatures": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Sense.Vision", "Value": 2500.0 }
+        ]
+      },
+      "AssociatedWitnessBehaviors": [ "Behavior.ReportGuard" ]
+    }
+  }
+}

@@ -8,6 +8,7 @@
 #include "DynamicEvolutionComponent.h"
 #include "DynamicCustomizationComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/AssetManager.h"
 
 UDynamicEquipmentComponent::UDynamicEquipmentComponent()
 {
@@ -142,13 +143,21 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
 
     if (!Def->EquipmentRequirement.EquipAnimMontage.IsNull())
     {
-        if (UAnimMontage* Montage = Def->EquipmentRequirement.EquipAnimMontage.LoadSynchronous())
-        {
-            if (CharOwner->GetMeshComponent() && CharOwner->GetMeshComponent()->GetAnimInstance())
+        FSoftObjectPath MontagePath = Def->EquipmentRequirement.EquipAnimMontage.ToSoftObjectPath();
+        TWeakObjectPtr<ADynamicCharacter> WeakChar(CharOwner);
+        
+        UAssetManager::GetStreamableManager().RequestAsyncLoad(MontagePath, FStreamableDelegate::CreateLambda([WeakChar, MontagePath]() {
+            if (ADynamicCharacter* StrongChar = WeakChar.Get())
             {
-                CharOwner->GetMeshComponent()->GetAnimInstance()->Montage_Play(Montage);
+                if (UAnimMontage* Montage = Cast<UAnimMontage>(MontagePath.ResolveObject()))
+                {
+                    if (StrongChar->GetMeshComponent() && StrongChar->GetMeshComponent()->GetAnimInstance())
+                    {
+                        StrongChar->GetMeshComponent()->GetAnimInstance()->Montage_Play(Montage);
+                    }
+                }
             }
-        }
+        }));
     }
 
     for (const FGameplayTag& ReqSlot : Def->EquipmentRequirement.RequiredEquipmentSlots)
@@ -158,12 +167,21 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
             if (SlotItem.SlotTag == ReqSlot)
             {
                 SlotItem.EquippedItemArchetypeTag = ActorToEquip->GetActorArchetypeTag();
+                SlotItem.SavedItemAttributeState.Empty();
 
-                // Save item state snapshots
                 if (const UDynamicAttributeSet* ItemAttr = ActorToEquip->GetDynamicAttributeSet())
                 {
-                    SlotItem.SavedItemAttributeState = ItemAttr->FastAttributes.Items;
+                    // Retain only dynamic lifecycle deltas vs baseline def
+                    for (const FDynamicAttributeItem& Attr : ItemAttr->FastAttributes.Items)
+                    {
+                        const float* DefaultVal = Def->DefaultGlobalAttributes.LocalLookupMap.Find(Attr.AttributeTag);
+                        if (!DefaultVal || !FMath::IsNearlyEqual(*DefaultVal, Attr.Value))
+                        {
+                            SlotItem.SavedItemAttributeState.Add(Attr);
+                        }
+                    }
                 }
+
                 if (const UDynamicInteractableComponent* ItemInteractable = ActorToEquip->GetInteractableComponent())
                 {
                     SlotItem.SavedItemInteractableStates = ItemInteractable->GetCurrentStateTags();

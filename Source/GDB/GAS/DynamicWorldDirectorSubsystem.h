@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿// DynamicWorldDirectorSubsystem.h
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -55,6 +56,10 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|World Director")
     void RegisterActiveNPC(ADynamicCharacter* NPC);
 
+    // Unregisters an NPC from the world tracker (e.g., when they die or are permanently removed)
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|World Director")
+    void UnregisterActiveNPC(ADynamicCharacter* NPC);
+
     // Forces an NPC into hibernation regardless of player distance (e.g., entering a fast-travel state)
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|World Director")
     void VirtualizeNPC(ADynamicCharacter* NPC);
@@ -75,7 +80,7 @@ public:
 private:
     void PerformProximityChecks();
     void SimulateVirtualNPCs(float DeltaTime);
-    void PerformCatchUpSimulation(ADynamicCharacter* WokenNPC, double HibernationDurationSeconds);
+    void PerformCatchUpSimulation(ADynamicCharacter* NPC, float OfflineHours);
 
     TMap<FGuid, FVirtualNPCRecord> VirtualNPCRegistry;
     TArray<TWeakObjectPtr<ADynamicCharacter>> ActiveNPCs;

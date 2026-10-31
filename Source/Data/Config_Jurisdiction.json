@@ -1,0 +1,29 @@
+﻿{
+  "LawAndOrderConfig": {
+    "DefaultJurisdictionTag": "Jurisdiction.HighKingCity",
+    "EnterPropertyActionTag": "Action.Movement.EnterProperty",
+    "ExitPropertyActionTag": "Action.Movement.ExitProperty"
+  },
+  "JurisdictionMasterRegistry": {
+    "Jurisdiction.HighKingCity": {
+      "JurisdictionTag": "Jurisdiction.HighKingCity",
+      "GoverningFactionTag": "Faction.Kingdom",
+      "PropertyAccessConditionTree": "Condition.Property.HasAccess",
+      "ActionToCrimeMap": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Action.Interaction.LootOwned", "ValueTag": "Crime.Type.Theft" },
+          { "KeyTag": "Action.Combat.Kill", "ValueTag": "Crime.Type.Murder" },
+          { "KeyTag": "Action.Movement.EnterProperty", "ValueTag": "Crime.Type.Trespassing" }
+        ]
+      },
+      "LocalLaws": {
+        "Crime.Type.Theft": { "bIsIllegal": true, "SeverityOverride": 50.0 },
+        "Crime.Type.Murder": { "bIsIllegal": true, "SeverityOverride": 1000.0 },
+        "Crime.Type.Trespassing": { "bIsIllegal": true, "SeverityOverride": 20.0 }
+      },
+      "LegalExemptionTrees": {
+        "Crime.Type.Murder": "Condition.Exemptions.LethalForceAuthorized"
+      }
+    }
+  }
+}

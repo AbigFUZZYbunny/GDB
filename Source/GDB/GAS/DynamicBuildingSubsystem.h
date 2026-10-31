@@ -34,8 +34,7 @@ public:
     float EvaluateShelterInsulationAtLocation(const FVector& WorldLocation) const;
 
     void RequestAsynchronousRoomEvaluation();
-    
-    // AI Ownership Queries (FIXED: Out parameters instead of raw struct pointers)
+
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Building|Rooms")
     bool GetRoomOwnedByCharacter(FGuid CharacterGuid, FGameplayTag RoomTypeTag, FDynamicRoomInstance& OutRoom) const;
 
@@ -44,6 +43,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Building|Rooms")
     class UDynamicContainerComponent* FindOptimalAIContainerInRoomType(FVector SearchOrigin, FGameplayTag RoomTypeTag, FGameplayTag ItemArchetypeToStore, FGuid OptionalOwnerGuid) const;
+
+    const TArray<FDynamicPropertyInstance>& GetActiveProperties() const { return ActiveProperties; }
 
 private:
     UPROPERTY()
@@ -56,12 +57,15 @@ private:
     TArray<FDynamicPropertyInstance> ActiveProperties;
 
     float StreamingTimer = 0.0f;
+    float TransitionTimer = 0.0f;
     float StreamingRadius = 40000.0f;
     bool bRoomEvaluationPending = false;
 
     ADynamicBuildingChunkActor* GetOrCreateChunkAtLocation(const FVector& WorldLocation);
     void ProcessBuildingStreaming();
-
     void ExecuteRoomFloodFillAsync();
     FGameplayTag ClassifyRoomByContents(const FBox& RoomBounds, float RoomVolume) const;
+
+    // Evaluates all active characters via O(1) GameState GUID map to detect structural entry/exit
+    void ProcessCharacterRoomTransitions();
 };

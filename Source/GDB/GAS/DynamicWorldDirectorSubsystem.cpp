@@ -252,37 +252,47 @@ void UDynamicWorldDirectorSubsystem::SimulateVirtualNPCs(float DeltaTime)
     }
 }
 
-void UDynamicWorldDirectorSubsystem::PerformCatchUpSimulation(ADynamicCharacter* WokenNPC, double HibernationDurationSeconds)
+void UDynamicWorldDirectorSubsystem::PerformCatchUpSimulation(ADynamicCharacter* NPC, float OfflineHours)
 {
-    if (!WokenNPC || HibernationDurationSeconds <= 0.0) return;
+    if (!NPC || OfflineHours <= 0.0f) return;
 
-    ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
-    if (!GS) return;
+    UDynamicSocialComponent* SocialComp = NPC->FindComponentByClass<UDynamicSocialComponent>();
+    UDynamicAttributeSet* AttrSet = NPC->GetDynamicAttributeSet();
+    if (!SocialComp || !AttrSet) return;
 
-    const float GameHoursPassed = (HibernationDurationSeconds * GS->CalendarConfig.TimeScalar) / 3600.0f;
-
-    // Scale vital needs based on elapsed time out-of-range
-    if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(WokenNPC->GetDynamicAttributeSet()))
+    for (const FDynamicNeedStateItem& Need : SocialComp->ReplicatedNeedsAndMoods.Items)
     {
-        static const FGameplayTag HungerTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.Hunger"), false);
-        static const FGameplayTag EnergyTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.Energy"), false);
-
-        if (HungerTag.IsValid())
+        if (Need.NeedTag.IsValid() && Need.ShiftRatePerHour != 0.0f)
         {
-            const float CurrentHunger = AttrSet->GetDynamicAttributeValue(HungerTag, 0);
-            AttrSet->SetDynamicAttributeValue(HungerTag, FMath::Max(0.0f, CurrentHunger - (10.0f * GameHoursPassed)), 0);
-        }
-
-        if (EnergyTag.IsValid())
-        {
-            const float CurrentEnergy = AttrSet->GetDynamicAttributeValue(EnergyTag, 0);
-            AttrSet->SetDynamicAttributeValue(EnergyTag, FMath::Max(0.0f, CurrentEnergy - (15.0f * GameHoursPassed)), 0);
+            // Degradation is governed strictly by the JSON-defined ShiftRatePerHour configured per template/need
+            const float CurrentVal = AttrSet->GetDynamicAttributeValue(Need.NeedTag, 0);
+            const float DeltaShift = Need.ShiftRatePerHour * OfflineHours;
+            const float NewVal = FMath::Max(0.0f, CurrentVal + DeltaShift);
+            
+            AttrSet->SetDynamicAttributeValue(Need.NeedTag, NewVal, 0);
         }
     }
+}
 
-    // Fast-forward evolutionary/aging schedules
-    if (UDynamicEvolutionComponent* EvoComp = WokenNPC->FindComponentByClass<UDynamicEvolutionComponent>())
+void UDynamicWorldDirectorSubsystem::UnregisterActiveNPC(ADynamicCharacter* NPC)
+{
+    if (!NPC || !GetWorld() || GetWorld()->GetNetMode() == NM_Client) return;
+
+    // Remove the character from the ActiveNPCs array
+    int32 RemovedCount = ActiveNPCs.RemoveAllSwap([NPC](const TWeakObjectPtr<ADynamicCharacter>& WeakNPC) {
+        return !WeakNPC.IsValid() || WeakNPC.Get() == NPC;
+    });
+
+    // Optionally: If the NPC is currently hibernating (virtualized), we should ensure they 
+    // are scrubbed from the virtual registry if they are being permanently destroyed.
+    if (RemovedCount == 0)
     {
-        EvoComp->RecalculateEvolutionSchedule();
+        if (UDynamicSocialComponent* Social = NPC->FindComponentByClass<UDynamicSocialComponent>())
+        {
+            if (Social->CharacterPersistentGuid.IsValid())
+            {
+                VirtualNPCRegistry.Remove(Social->CharacterPersistentGuid);
+            }
+        }
     }
 }

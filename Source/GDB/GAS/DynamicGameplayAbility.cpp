@@ -18,8 +18,12 @@
 #include "DynamicPhysicsActor.h"
 #include "DynamicVoxelSubsystem.h"
 #include "DynamicBuildingChunkActor.h"
+#include "Engine/AssetManager.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/OverlapResult.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Engine/StreamableManager.h"
 
 UDynamicGameplayAbility::UDynamicGameplayAbility()
 {
@@ -230,36 +234,32 @@ bool UDynamicGameplayAbility::EvaluateDynamicRule(const FGameplayTag& RuleTag, c
     return UDynamicLogicEvaluator::EvaluateConditionTree(*ValidationTree, ASC, ASC, SourceTags, TargetTags);
 }
 
-void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentation& StageVisual) const
+void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStageConfig& StageConfig)
 {
-    ADynamicCharacter* AvatarChar = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo());
-    if (!AvatarChar) return;
+    if (StageConfig.PresentationMontage.IsNull()) return;
 
-    if (USkeletalMeshComponent* MeshComp = AvatarChar->GetMeshComponent())
-    {
-        if (!StageVisual.StageMontage.IsNull())
+    const FSoftObjectPath MontagePath = StageConfig.PresentationMontage.ToSoftObjectPath();
+    TWeakObjectPtr<UDynamicGameplayAbility> WeakThis(this);
+    const float PlayRate = StageConfig.PlayRate;
+
+    UAssetManager::GetStreamableManager().RequestAsyncLoad(MontagePath, FStreamableDelegate::CreateLambda([WeakThis, MontagePath, PlayRate]() {
+        if (UDynamicGameplayAbility* StrongThis = WeakThis.Get())
         {
-            if (UAnimMontage* Montage = StageVisual.StageMontage.LoadSynchronous())
+            if (UAnimMontage* Montage = Cast<UAnimMontage>(MontagePath.ResolveObject()))
             {
-                if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+                if (ADynamicCharacter* Avatar = Cast<ADynamicCharacter>(StrongThis->GetAvatarActorFromActorInfo()))
                 {
-                    AnimInst->Montage_Play(Montage, StageVisual.PlayRate);
-                    if (StageVisual.MontageSectionName != NAME_None)
+                    if (USkeletalMeshComponent* MeshComp = Avatar->GetMeshComponent())
                     {
-                        AnimInst->Montage_JumpToSection(StageVisual.MontageSectionName, Montage);
+                        if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+                        {
+                            AnimInst->Montage_Play(Montage, PlayRate);
+                        }
                     }
                 }
             }
         }
-    }
-
-    if (StageVisual.StageVfxCueTag.IsValid())
-    {
-        if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-        {
-            ASC->ExecuteGameplayCue(StageVisual.StageVfxCueTag);
-        }
-    }
+    }));
 }
 
 void UDynamicGameplayAbility::GrantSourcePassBack(EPassBackTriggerEvent EventType, float Scalar) const

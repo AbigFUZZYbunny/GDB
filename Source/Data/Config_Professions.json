@@ -1,29 +1,26 @@
 ﻿{
-  "_comment": "Multi-Profession Master Registry: Defines independent career paths that characters can hold simultaneously to sustain small town economies.",
+  "_comment": "AI Sociological Roles & Professions mapping to FDynamicProfessionDef",
   "ProfessionMasterRegistry": {
     "Profession.Labor.Woodcutter": {
       "ProfessionTag": "Profession.Labor.Woodcutter",
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Woodcutter" },
-          { "KeyTag": "Localization.Description", "Value": "Fells timber and splits firewood for winter heating." }
+          { "KeyTag": "Localization.Description", "Value": "Fells timber and splits firewood." }
         ]
       },
-      "ExpectedTasks": [
-        {
-          "TaskTag": "Task.Crafting.ChopWood",
-          "BasePriorityWeight": 85.0,
-          "LinkedAbilityOrRecipeTag": "Ability.Harvest.FellTree",
-          "RequiredItemTags": [ "Actor.Tool.Axe.Felling" ],
-          "ProducedOutputTags": [ "Actor.Material.TimberLog" ]
-        }
-      ],
       "PrioritizedItemWeights": {
         "ReplicatedEntries": [ { "KeyTag": "Actor.Tool.Axe.Felling", "Value": 100.0 } ]
       },
-      "StatPriorities": [],
-      "DefaultDailySchedule": [
-        { "StartHour24": 6.0, "EndHour24": 12.0, "ScheduledActivityTag": "Activity.Work.FellTimber", "PreferredPlaceRoleTag": "Place.Workstation.Forest", "ScheduleAdherenceWeight": 5.0 }
+      "GrantedBehaviors": [
+        "Behavior.Work.FellTimber"
+      ],
+      "SensoryResponses": [
+        {
+          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
+          "PrerequisiteConditionTree": "None",
+          "ResultingBehaviorTag": "Behavior.Flee"
+        }
       ]
     },
     "Profession.Crafting.Carpenter": {
@@ -31,24 +28,53 @@
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Carpenter" },
-          { "KeyTag": "Localization.Description", "Value": "Crafts wooden tables, chairs, and structural housing components for the town." }
+          { "KeyTag": "Localization.Description", "Value": "Crafts wooden tables, chairs, and structures." }
         ]
       },
-      "ExpectedTasks": [
-        {
-          "TaskTag": "Task.Crafting.BuildFurniture",
-          "BasePriorityWeight": 90.0,
-          "LinkedAbilityOrRecipeTag": "Recipe.Crafting.WoodenTable",
-          "RequiredItemTags": [ "Actor.Material.WoodPlank", "Actor.Tool.Hammer" ],
-          "ProducedOutputTags": [ "Actor.Furniture.Table" ]
-        }
-      ],
       "PrioritizedItemWeights": {
         "ReplicatedEntries": [ { "KeyTag": "Actor.Material.WoodPlank", "Value": 100.0 } ]
       },
-      "StatPriorities": [],
-      "DefaultDailySchedule": [
-        { "StartHour24": 13.0, "EndHour24": 18.0, "ScheduledActivityTag": "Activity.Work.Carpentry", "PreferredPlaceRoleTag": "Place.Workstation.Sawmill", "ScheduleAdherenceWeight": 5.5 }
+      "GrantedBehaviors": [
+        "Behavior.Work.Carpentry"
+      ],
+      "SensoryResponses": [
+        {
+          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
+          "PrerequisiteConditionTree": "None",
+          "ResultingBehaviorTag": "Behavior.Flee"
+        }
+      ]
+    },
+    "Profession.CityGuard": {
+      "ProfessionTag": "Profession.CityGuard",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Lang.English", "Value": "City Guard" },
+          { "KeyTag": "Localization.Description", "Value": "Patrols jurisdictions and maintains law and order." }
+        ]
+      },
+      "PrioritizedItemWeights": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Item.Weapon.Halberd", "Value": 10.0 },
+          { "KeyTag": "Item.Armor.CityWatch", "Value": 10.0 }
+        ]
+      },
+      "GrantedBehaviors": [
+        "Behavior.Patrol",
+        "Behavior.Investigate",
+        "Behavior.Combat.Arrest"
+      ],
+      "SensoryResponses": [
+        {
+          "TriggeringStimulusTag": "Stimulus.Sound.Footstep",
+          "PrerequisiteConditionTree": "Condition.AI.IsSuspicious",
+          "ResultingBehaviorTag": "Behavior.Investigate"
+        },
+        {
+          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
+          "PrerequisiteConditionTree": "Condition.AI.OnDuty",
+          "ResultingBehaviorTag": "Behavior.Combat.Alert"
+        }
       ]
     }
   }

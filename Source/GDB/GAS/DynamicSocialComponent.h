@@ -7,7 +7,10 @@
 #include "DynamicGASTypes.h"
 #include "DynamicSocialComponent.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnFastPathDialogueSpokenSignature, AActor*, Speaker, AActor*, Target, const FString&, Utterance);
+class ADynamicCharacter;
+class UAnimMontage;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnFastPathDialogueSpokenSignature, AActor*, Speaker, AActor*, Listener, const FString&, SpokenText);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicSocialComponent : public UActorComponent
@@ -21,31 +24,38 @@ public:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Social|Dialogue")
-    FOnFastPathDialogueSpokenSignature OnFastPathDialogueSpoken;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Social")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_CharacterPersistentGuid, Category = "Dynamic GAS|Social")
     FGuid CharacterPersistentGuid;
 
+    UFUNCTION()
+    void OnRep_CharacterPersistentGuid(const FGuid& OldGuid);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social")
+    void SetCharacterPersistentGuid(const FGuid& NewGuid);
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Social")
-    FString CharacterDisplayName;
+    FString CharacterDisplayName = TEXT("");
 
-    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social")
-    FFastRelationshipEdgeArray ReplicatedRelationships;
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Social")
+    FGuid CurrentPropertyID;
 
-    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social")
-    FFastNeedStateArray ReplicatedNeedsAndMoods;
+    UPROPERTY(ReplicatedUsing = OnRep_Relationships) FFastRelationshipEdgeArray ReplicatedRelationships;
+    UPROPERTY(ReplicatedUsing = OnRep_NeedsAndMoods) FFastNeedStateArray ReplicatedNeedsAndMoods;
+    UPROPERTY(ReplicatedUsing = OnRep_KnownPlaces) FFastKnownPlaceArray ReplicatedKnownPlaces;
+    UPROPERTY(ReplicatedUsing = OnRep_Professions) FFastAssignedProfessionArray ReplicatedProfessions;
+    UPROPERTY(ReplicatedUsing = OnRep_CrimeMemories) FFastCrimeMemoryArray ReplicatedCrimeMemories;
 
-    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social")
-    FFastKnownPlaceArray ReplicatedKnownPlaces;
+    UFUNCTION() void OnRep_Relationships();
+    UFUNCTION() void OnRep_NeedsAndMoods();
+    UFUNCTION() void OnRep_KnownPlaces();
+    UFUNCTION() void OnRep_Professions();
+    UFUNCTION() void OnRep_CrimeMemories();
+    void HandleSingleCrimeMemoryReplicated(const FCrimeMemoryItem& Item);
 
-    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social")
-    FFastAssignedProfessionArray ReplicatedProfessions;
+    void RebuildRelationshipCache();
+    void RebuildNeedCache();
+    void RebuildPlaceCache();
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|LLM")
-    FCloudAIContextFilterConfig ContextFilterConfig;
-
-    // --- Social & Relational Query API ---
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")
     bool GetNeedValue(const FGameplayTag& NeedTag, float& OutValue) const;
 
@@ -58,7 +68,6 @@ public:
     const FDynamicRelationshipEdgeItem* FindRelationshipWithActor(const AActor* TargetActor) const;
     const FDynamicRelationshipEdgeItem* FindRelationshipByGuid(const FGuid& TargetGuid) const;
 
-    // --- Authority Modification API ---
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social")
     void ServerRegisterKnownPlace(const FGameplayTag& PlaceTag, const FGameplayTag& RoleTag, const FGuid& AreaGuid, const FVector& WorldLocation, float InitialConfidence = 1.0f);
 
@@ -75,111 +84,92 @@ public:
         const FGameplayTagContainer& ContextTags
     );
 
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Cloud AI")
+    FCloudAIContextFilterConfig ContextFilterConfig;
+
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Cloud AI")
+    bool bCloudAISuspended = false;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Cloud AI")
     void ServerSetCloudAISuspension(bool bSuspended);
 
-    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social")
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Cloud AI")
     FString SerializeAgentContextForLLM(ECloudAIRequestType RequestType) const;
 
-    // --- Fast-Path Dialogue, Wildcards, & Relational Utterance Selection ---
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|Dialogue")
-    bool SelectBestUtterance(
-        const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances,
-        AActor* TargetActor,
-        FDynamicDialogueUtteranceDef& OutSelectedUtterance,
-        float& OutComputedWeight
-    ) const;
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Dialogue")
+    FOnFastPathDialogueSpokenSignature OnFastPathDialogueSpoken;
 
-    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|Dialogue", meta = (AdvancedDisplay = "TargetActor,CustomLocation,CustomTime"))
-    FString FormatDialogueTokens(
-        const FString& TemplateString,
-        AActor* TargetActor = nullptr,
-        const FString& CustomLocation = TEXT("the tavern"),
-        const FString& CustomTime = TEXT("recently")
-    ) const;
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Dialogue")
+    FString ResolveActorDisplayName(const AActor* InActor) const;
 
-    FString FormatDialogueTokens(
-        const FString& TemplateString,
-        AActor* TargetActor,
-        const FString& CustomLocation,
-        const FString& CustomTime,
-        const TMap<FString, FString>& CustomWildcards
-    ) const;
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Dialogue")
+    FString ExtractFirstName(const FString& FullName) const;
 
-    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Dialogue")
-    bool TryResolveFastPathDialogue(
-        FGameplayTag CategoryTag,
-        AActor* TargetActor,
-        FString& OutUtterance,
-        TSoftObjectPtr<UAnimMontage>& OutMontage,
-        FGameplayTag& OutVoiceCueTag,
-        FGameplayTag SpecificProfileTag
-    );
+    bool SelectBestUtterance(const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances, AActor* TargetActor, FDynamicDialogueUtteranceDef& OutSelectedUtterance, float& OutComputedWeight) const;
+    FString FormatDialogueTokens(const FString& TemplateString, AActor* TargetActor, const FString& CustomLocation, const FString& CustomTime) const;
+    FString FormatDialogueTokens(const FString& TemplateString, AActor* TargetActor, const FString& CustomLocation, const FString& CustomTime, const TMap<FString, FString>& CustomWildcards) const;
 
-    bool TryResolveFastPathDialogue(
-        FGameplayTag CategoryTag,
-        AActor* TargetActor,
-        FString& OutUtterance,
-        TSoftObjectPtr<UAnimMontage>& OutMontage,
-        FGameplayTag& OutVoiceCueTag,
-        const TMap<FString, FString>& CustomWildcards,
-        FGameplayTag SpecificProfileTag
-    );
+    bool TryResolveFastPathDialogue(FGameplayTag CategoryTag, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag, FGameplayTag SpecificProfileTag = FGameplayTag());
+    bool TryResolveFastPathDialogue(FGameplayTag CategoryTag, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag, const TMap<FString, FString>& CustomWildcards, FGameplayTag SpecificProfileTag = FGameplayTag());
+    bool TryResolveDialogueForBehavior(const FDynamicAIBehaviorDef& BehaviorDef, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag);
+    bool TryResolveDialogueForBehavior(const FDynamicAIBehaviorDef& BehaviorDef, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag, const TMap<FString, FString>& CustomWildcards);
 
-    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Dialogue")
-    bool TryResolveDialogueForBehavior(
-        const FDynamicAIBehaviorDef& BehaviorDef,
-        AActor* TargetActor,
-        FString& OutUtterance,
-        TSoftObjectPtr<UAnimMontage>& OutMontage,
-        FGameplayTag& OutVoiceCueTag
-    );
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Dialogue")
+    bool TriggerCalloutToTarget(AActor* TargetActor, float IgnoreTimeout = 5.0f);
 
-    bool TryResolveDialogueForBehavior(
-        const FDynamicAIBehaviorDef& BehaviorDef,
-        AActor* TargetActor,
-        FString& OutUtterance,
-        TSoftObjectPtr<UAnimMontage>& OutMontage,
-        FGameplayTag& OutVoiceCueTag,
-        const TMap<FString, FString>& CustomWildcards
-    );
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Dialogue")
-    bool TriggerCalloutToTarget(AActor* TargetActor, float IgnoreTimeout = 6.0f);
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Dialogue")
-    void HandleCalloutIgnored();
-
-    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Dialogue")
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Dialogue")
     void ClearActiveCallout();
 
-    void RebuildRelationshipCache();
-    void RebuildNeedCache();
-    void RebuildPlaceCache();
-    
-    // Retrieves the world-space center of this agent's house/property
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag AssignedJurisdictionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Senses")
+    float SightFieldOfViewDegrees = 120.0f;
+
+    // FIX: Default parameters removed from UFUNCTIONs to satisfy UHT constraints
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
+    void ServerEvaluateAndBroadcastAction(
+        FGameplayTag ActionTag,
+        AActor* Perpetrator,
+        AActor* Victim,
+        FGuid OptionalStolenItemGuid,
+        const TArray<FGuid>& CoConspirators
+    );
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
+    void ServerProcessCrimeSensoryEvent(
+        FGameplayTag CrimeTag,
+        AActor* Perpetrator,
+        AActor* Victim,
+        FGuid OptionalStolenItemGuid,
+        const TArray<FGuid>& CoConspirators,
+        const TMap<FGameplayTag, float>& SensorySignatures
+    );
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
+    bool ServerReportCrimesToAuthority(AActor* AuthorityFigure);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
+    bool ServerSearchTargetForContraband(ADynamicCharacter* Suspect);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
+    bool ServerInterrogateSuspect(ADynamicCharacter* Suspect, FName InterrogationConditionTree);
+
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|AI")
     bool GetOwnedPropertyLocation(FVector& OutLocation) const;
 
-    // Retrieves the center of a specific room they own (e.g., Bedroom, Kitchen)
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|AI")
     bool GetOwnedRoomLocation(FGameplayTag RoomTypeTag, FVector& OutLocation) const;
 
-protected:
-    UPROPERTY()
-    TMap<FGameplayTag, float> CachedNeeds;
+private:
+    void HandleCalloutIgnored();
+    void ExecuteDynamicWitnessReaction(const FCrimeMemoryItem& Memory, AActor* Perpetrator, AActor* Victim);
 
-    UPROPERTY()
+    TMap<FGuid, int32> CachedRelationshipIndices;
+    TMap<FGameplayTag, float> CachedNeeds;
     TMap<FGameplayTag, FDynamicKnownPlaceItem> CachedPlacesByRole;
 
-    UPROPERTY(Replicated)
-    bool bCloudAISuspended = false;
-
-private:
-    FString ResolveActorDisplayName(const AActor* InActor) const;
-    FString ExtractFirstName(const FString& FullName) const;
-
-    mutable double LastContextSerializationTime = 0.0;
     TWeakObjectPtr<AActor> ActiveCalloutTarget;
     FTimerHandle TimerHandle_CalloutTimeout;
+    mutable double LastContextSerializationTime = 0.0;
 };

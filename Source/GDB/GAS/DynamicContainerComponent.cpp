@@ -3,6 +3,7 @@
 #include "DynamicPhysicsActor.h"
 #include "DynamicCharacter.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicSocialComponent.h"
 #include "DynamicInteractableComponent.h"
 #include "DynamicGameState.h"
 #include "TimerManager.h"
@@ -240,20 +241,34 @@ bool UDynamicContainerComponent::ServerStorePhysicalActor(ADynamicPhysicsActor* 
     bool bRotated = false;
     if (!FindSpaceForItem(ArchetypeTag, FoundX, FoundY, bRotated)) return false;
 
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    const FDynamicPhysicsActorDef* ActorDef = GS ? GS->MasterPhysicsActorRegistry.Find(ArchetypeTag) : nullptr;
+
     FDynamicContainerSlotItem NewSlot;
     NewSlot.GridX = FoundX;
     NewSlot.GridY = FoundY;
     NewSlot.bIsRotated = bRotated;
     NewSlot.StoredActorArchetypeTag = ArchetypeTag;
     NewSlot.StackCount = 1;
-    
-    // CAPTURE ITEM OWNERSHIP
     NewSlot.OwnerGuid = ActorToStore->GetItemOwnerGuid();
 
     if (const UDynamicAttributeSet* AttrSet = ActorToStore->GetDynamicAttributeSet())
     {
-        NewSlot.SavedAttributeState = AttrSet->FastAttributes.Items;
+        // Store only delta overrides missing or differing from the base MasterRegistry template
+        for (const FDynamicAttributeItem& Attr : AttrSet->FastAttributes.Items)
+        {
+            if (ActorDef)
+            {
+                const float* DefaultVal = ActorDef->DefaultGlobalAttributes.LocalLookupMap.Find(Attr.AttributeTag);
+                if (DefaultVal && FMath::IsNearlyEqual(*DefaultVal, Attr.Value))
+                {
+                    continue; // Matches baseline data; omit to compress serialization size
+                }
+            }
+            NewSlot.SavedAttributeState.Add(Attr);
+        }
     }
+
     if (const UDynamicInteractableComponent* Interactable = ActorToStore->GetInteractableComponent())
     {
         NewSlot.SavedInteractableStates = Interactable->GetCurrentStateTags();
@@ -407,6 +422,29 @@ ADynamicPhysicsActor* UDynamicContainerComponent::ServerExtractActorToHands(int3
     if (!GetOwner() || !GetOwner()->HasAuthority() || !Looter || !Looter->GetMeshComponent()) return nullptr;
 
     const FTransform HandTransform = Looter->GetMeshComponent()->GetSocketTransform(HandBone);
+    
+    // We need to peek at the item before extracting to check ownership
+    FDynamicContainerSlotItem TargetSlot;
+    if (GetSlotItemAtGrid(GridX, GridY, TargetSlot))
+    {
+        ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    
+        if (TargetSlot.OwnerGuid.IsValid())
+        {
+            UDynamicSocialComponent* LooterSocial = Looter->FindComponentByClass<UDynamicSocialComponent>();
+            if (LooterSocial && TargetSlot.OwnerGuid != LooterSocial->CharacterPersistentGuid)
+            {
+                LooterSocial->ServerEvaluateAndBroadcastAction(
+                    FGameplayTag::RequestGameplayTag(TEXT("Action.Interaction.LootOwned"), false), 
+                    Looter, 
+                    GetOwner(), 
+                    TargetSlot.OwnerGuid,
+                    TArray<FGuid>()
+                );
+            }
+        }
+    }
+    
     ADynamicPhysicsActor* Extracted = ServerExtractActorToWorld(GridX, GridY, 1, HandTransform, Looter);
     if (Extracted)
     {

@@ -23,18 +23,9 @@ public:
     static bool DeserializeMasterRegistry(const FString& InJsonString, ADynamicGameState* TargetGameState);
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
-    static void DeserializeMasterRegistryAsync(
-        const FString& InJsonString, 
-        ADynamicGameState* TargetGameState, 
-        FOnMasterRegistryDeserializedSignature OnComplete
-    );
+    static void DeserializeMasterRegistryAsync(const FString& InJsonString, ADynamicGameState* TargetGameState, FOnMasterRegistryDeserializedSignature OnComplete);
 
-    static void DeserializeMasterRegistryAsyncNative(
-        const FString& InJsonString, 
-        ADynamicGameState* TargetGameState, 
-        TFunction<void(bool)> OnComplete = nullptr
-    );
-
+    static void DeserializeMasterRegistryAsyncNative(const FString& InJsonString, ADynamicGameState* TargetGameState, TFunction<void(bool)> OnComplete = nullptr);
     static bool DeserializeMasterRegistryToStaging(const FString& InJsonString, FMasterRegistryStagingData& OutStaging);
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
@@ -51,10 +42,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Serialization")
     static bool DeserializeContainerSlots(const FString& InJsonString, FFastContainerSlotArray& OutSlots);
-    
+
     static void DeserializeMovementStatConfig(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FMovementStatConfig& OutConfig);
     static void DeserializeImpactReactionRule(const TSharedPtr<FJsonObject>& InObject, FDynamicImpactReactionRule& OutRule);
-    
     static bool DeserializeVoxelMasterRegistry(const TSharedPtr<FJsonObject>& RootObject, FMasterRegistryStagingData& OutStaging);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
@@ -63,24 +53,13 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
     static bool DeserializePlayerFromSnapshotJson(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload);
 
-    // Asynchronous thread pool parsing that marshals component hydration back to GameThread
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
-    static void DeserializePlayerFromSnapshotJsonAsync(
-        ADynamicCharacter* TargetCharacter, 
-        const FString& InJsonPayload, 
-        FOnPlayerHydrationCompletedSignature OnComplete
-    );
+    static void DeserializePlayerFromSnapshotJsonAsync(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload, FOnPlayerHydrationCompletedSignature OnComplete);
 
-    static void DeserializePlayerFromSnapshotJsonAsyncNative(
-        ADynamicCharacter* TargetCharacter, 
-        const FString& InJsonPayload, 
-        TFunction<void(bool)> OnComplete = nullptr
-    );
-
+    static void DeserializePlayerFromSnapshotJsonAsyncNative(ADynamicCharacter* TargetCharacter, const FString& InJsonPayload, TFunction<void(bool)> OnComplete = nullptr);
     static bool ParseSnapshotFromJsonString(const FString& InJsonPayload, FPlayerPersistenceSnapshot& OutSnapshot);
     static bool ApplySnapshotToPlayerCharacter(ADynamicCharacter* TargetCharacter, const FPlayerPersistenceSnapshot& Snapshot);
 
-    // World state persistence (Voxel grids and Building structures)
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Persistence")
     static bool SerializeWorldStateToJson(const UObject* WorldContextObject, FString& OutJsonPayload);
 
@@ -90,27 +69,25 @@ public:
     template<typename TEnum>
     static FString EnumToString(TEnum Value)
     {
-        if (const UEnum* EnumPtr = StaticEnum<TEnum>())
-        {
-            return EnumPtr->GetNameStringByValue(static_cast<int64>(Value));
-        }
+        if (const UEnum* EnumPtr = StaticEnum<TEnum>()) return EnumPtr->GetNameStringByValue(static_cast<int64>(Value));
         return TEXT("Invalid");
     }
 
     template<typename TEnum>
     static TEnum StringToEnum(const FString& ValueStr)
     {
-        if (const UEnum* EnumPtr = StaticEnum<TEnum>())
-        {
-            return static_cast<TEnum>(EnumPtr->GetValueByNameString(ValueStr));
-        }
+        if (const UEnum* EnumPtr = StaticEnum<TEnum>()) return static_cast<TEnum>(EnumPtr->GetValueByNameString(ValueStr));
         return static_cast<TEnum>(0);
     }
 
     static int32 FlattenAndParseJsonNode(const TSharedPtr<FJsonObject>& JsonObj, FDynamicConditionTreeContainer& OutContainer);
     static TSharedPtr<FJsonObject> ReconstructJsonFromFlatNode(int32 NodeIndex, const FDynamicConditionTreeContainer& TreeContainer);
+
     static void DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper);
     static TSharedPtr<FJsonObject> SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper);
+
+    static void DeserializeTagToTagMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagToTagMapWrapper& OutWrapper);
+
     static void DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile);
     static TSharedPtr<FJsonObject> SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile);
 };

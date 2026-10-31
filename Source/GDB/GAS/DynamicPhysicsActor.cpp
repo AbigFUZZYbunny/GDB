@@ -6,9 +6,10 @@
 #include "DynamicForceComponent.h"
 #include "DynamicInteractableComponent.h"
 #include "DynamicContainerComponent.h"
-#include "DynamicGameplayAbility.h"
+#include "Engine/AssetManager.h"
 #include "DynamicGameState.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/StreamableManager.h"
 
 ADynamicPhysicsActor::ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -210,62 +211,42 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
 
 void ADynamicPhysicsActor::ApplyArchetypePresentationAndTopology(const FDynamicPhysicsActorDef& Def)
 {
-    LocalLimbLookupMap.Empty(Def.CustomLimbs.Num());
-    LocalBoneToLimbMap.Empty();
+    ActorArchetypeTag = Def.ArchetypeTag;
 
-    for (const FPhysicsLimbConfig& Limb : Def.CustomLimbs)
+    if (UPrimitiveComponent* ActivePrim = GetActivePhysicsPrimitive())
     {
-        LocalLimbLookupMap.Add(Limb.LimbId, &Limb);
-        for (const FPhysicsJointNodeConfig& Joint : Limb.JointChain)
-        {
-            if (!Joint.BoneName.IsNone()) LocalBoneToLimbMap.Add(Joint.BoneName, Limb.LimbId);
-        }
+        ActivePrim->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
     }
 
-    if (!Def.SkeletalMeshAsset.IsNull())
+    if (!Def.PresentationAsset.IsNull())
     {
-        if (USkeletalMesh* SkelMesh = Def.SkeletalMeshAsset.LoadSynchronous())
-        {
-            if (RootComponent != SkeletalMeshComponent)
+        const FSoftObjectPath AssetPath = Def.PresentationAsset.ToSoftObjectPath();
+        TWeakObjectPtr<ADynamicPhysicsActor> WeakThis(this);
+
+        UAssetManager::GetStreamableManager().RequestAsyncLoad(AssetPath, FStreamableDelegate::CreateLambda([WeakThis, AssetPath]() {
+            if (ADynamicPhysicsActor* StrongThis = WeakThis.Get())
             {
-                StaticMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-                SkeletalMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-                SetRootComponent(SkeletalMeshComponent);
-                StaticMeshComponent->SetupAttachment(RootComponent);
+                UObject* LoadedObj = AssetPath.ResolveObject();
+                if (UStaticMesh* SMesh = Cast<UStaticMesh>(LoadedObj))
+                {
+                    if (StrongThis->GetStaticMeshComponent())
+                    {
+                        StrongThis->GetStaticMeshComponent()->SetStaticMesh(SMesh);
+                        StrongThis->GetStaticMeshComponent()->SetVisibility(true);
+                        if (StrongThis->GetMeshComponent()) StrongThis->GetMeshComponent()->SetVisibility(false);
+                    }
+                }
+                else if (USkeletalMesh* SkelMesh = Cast<USkeletalMesh>(LoadedObj))
+                {
+                    if (StrongThis->GetMeshComponent())
+                    {
+                        StrongThis->GetMeshComponent()->SetSkeletalMeshAsset(SkelMesh);
+                        StrongThis->GetMeshComponent()->SetVisibility(true);
+                        if (StrongThis->GetStaticMeshComponent()) StrongThis->GetStaticMeshComponent()->SetVisibility(false);
+                    }
+                }
             }
-            SkeletalMeshComponent->SetSkeletalMeshAsset(SkelMesh);
-            SkeletalMeshComponent->SetHiddenInGame(false);
-            SkeletalMeshComponent->SetCollisionProfileName(Def.CollisionProfileName);
-            SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-            SkeletalMeshComponent->SetSimulatePhysics(Def.bSimulatePhysicsOnSpawn);
-            if (Def.MassOverride > 0.0f) SkeletalMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
-        }
-        StaticMeshComponent->SetSimulatePhysics(false);
-        StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        StaticMeshComponent->SetHiddenInGame(true);
-    }
-    else if (!Def.StaticMeshAsset.IsNull())
-    {
-        if (UStaticMesh* StatMesh = Def.StaticMeshAsset.LoadSynchronous())
-        {
-            if (RootComponent != StaticMeshComponent)
-            {
-                SkeletalMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-                StaticMeshComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-                SetRootComponent(StaticMeshComponent);
-                SkeletalMeshComponent->SetupAttachment(RootComponent);
-            }
-            StaticMeshComponent->SetStaticMesh(StatMesh);
-            StaticMeshComponent->SetHiddenInGame(false);
-            StaticMeshComponent->SetCollisionProfileName(Def.CollisionProfileName);
-            StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-            StaticMeshComponent->SetNotifyRigidBodyCollision(true);
-            StaticMeshComponent->SetSimulatePhysics(Def.bSimulatePhysicsOnSpawn);
-            if (Def.MassOverride > 0.0f) StaticMeshComponent->SetMassOverrideInKg(NAME_None, Def.MassOverride, true);
-        }
-        SkeletalMeshComponent->SetSimulatePhysics(false);
-        SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        SkeletalMeshComponent->SetHiddenInGame(true);
+        }));
     }
 }
 

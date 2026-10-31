@@ -4,6 +4,8 @@
 #include "CoreMinimal.h"
 #include "Abilities/GameplayAbility.h"
 #include "DynamicGASTypes.h"
+#include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "DynamicGameplayAbility.generated.h"
 
 class UDynamicInteractableComponent;

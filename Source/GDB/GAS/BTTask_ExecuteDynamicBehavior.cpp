@@ -1,6 +1,7 @@
 ﻿// BTTask_ExecuteDynamicBehavior.cpp
 #include "BTTask_ExecuteDynamicBehavior.h"
 #include "AIController.h"
+#include "Engine/AssetManager.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "DynamicCharacter.h"
 #include "DynamicGameState.h"
@@ -8,6 +9,8 @@
 #include "DynamicInteractableComponent.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimInstance.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 
 UBTTask_ExecuteDynamicBehavior::UBTTask_ExecuteDynamicBehavior()
 {
@@ -131,7 +134,6 @@ EBTNodeResult::Type UBTTask_ExecuteDynamicBehavior::ExecuteTask(UBehaviorTreeCom
             }
             return EBTNodeResult::Succeeded;
         }
-
         case ENpcBehaviorExecutionType::Interaction:
         {
             if (TargetActor)
@@ -145,7 +147,6 @@ EBTNodeResult::Type UBTTask_ExecuteDynamicBehavior::ExecuteTask(UBehaviorTreeCom
             }
             return EBTNodeResult::Succeeded;
         }
-
         case ENpcBehaviorExecutionType::Movement:
         {
             if (ActiveBehaviorDef.MovementStateTagToSet.IsValid())
@@ -160,24 +161,36 @@ EBTNodeResult::Type UBTTask_ExecuteDynamicBehavior::ExecuteTask(UBehaviorTreeCom
             }
             return EBTNodeResult::Succeeded;
         }
-
-        case ENpcBehaviorExecutionType::Montage:
+    case ENpcBehaviorExecutionType::Montage:
         {
-            if (UAnimMontage* Montage = ActiveBehaviorDef.MontageToPlay.LoadSynchronous())
+            if (ActiveBehaviorDef.MontageToPlay.IsValid())
             {
-                if (USkeletalMeshComponent* MeshComp = DynChar->GetMeshComponent())
-                {
-                    if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+                FSoftObjectPath MontagePath = ActiveBehaviorDef.MontageToPlay.ToSoftObjectPath();
+                TWeakObjectPtr<UBTTask_ExecuteDynamicBehavior> WeakThis(this);
+                
+                UAssetManager::GetStreamableManager().RequestAsyncLoad(MontagePath, FStreamableDelegate::CreateLambda([WeakThis, MontagePath]() {
+                    if (UBTTask_ExecuteDynamicBehavior* StrongThis = WeakThis.Get())
                     {
-                        AnimInst->Montage_Play(Montage, 1.0f);
-                        TargetExecutionDuration = Montage->GetPlayLength();
-                        return EBTNodeResult::InProgress;
+                        if (UAnimMontage* Montage = Cast<UAnimMontage>(MontagePath.ResolveObject()))
+                        {
+                            if (StrongThis->CachedCharacter.IsValid())
+                            {
+                                if (USkeletalMeshComponent* MeshComp = StrongThis->CachedCharacter->GetMeshComponent())
+                                {
+                                    if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+                                    {
+                                        AnimInst->Montage_Play(Montage, 1.0f);
+                                        StrongThis->TargetExecutionDuration = Montage->GetPlayLength();
+                                    }
+                                }
+                            }
+                        }
                     }
-                }
+                }));
+                return EBTNodeResult::InProgress;
             }
             return EBTNodeResult::Succeeded;
         }
-
         case ENpcBehaviorExecutionType::Wait:
         default:
             return EBTNodeResult::InProgress;

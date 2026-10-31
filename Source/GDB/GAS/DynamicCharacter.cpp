@@ -4,6 +4,7 @@
 #include "DynamicInteractableComponent.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicSocialComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
 #include "DynamicWorldDirectorSubsystem.h"
@@ -27,7 +28,6 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     bReplicates = true;
     SetReplicateMovement(false);
     bIsRagdolling = false;
-    //bIsHangingPhysical = false;
     bCurrentFootingActive = false;
 
     CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
@@ -51,11 +51,19 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     MoverComponent->SetUpdatedComponent(CapsuleComponent);
     MoverComponent->SetIsReplicated(true);
     SetupDefaultMoverModes();
-
     DefaultMovementStateTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Walk"), false);
 
+    // Instantiation of Modular Data-Driven Components
     CustomizationComponent = CreateDefaultSubobject<UDynamicCustomizationComponent>(TEXT("CustomizationComponent"));
+    SocialComponent = CreateDefaultSubobject<UDynamicSocialComponent>(TEXT("SocialComponent"));
+    EquipmentComponent = CreateDefaultSubobject<UDynamicEquipmentComponent>(TEXT("EquipmentComponent"));
+    ContainerComponent = CreateDefaultSubobject<UDynamicContainerComponent>(TEXT("ContainerComponent"));
+    LifeComponent = CreateDefaultSubobject<UDynamicLifeComponent>(TEXT("LifeComponent"));
+    LanguageComponent = CreateDefaultSubobject<UDynamicLanguageComponent>(TEXT("LanguageComponent"));
+    QuestComponent = CreateDefaultSubobject<UDynamicQuestComponent>(TEXT("QuestComponent"));
+
     PhysicsControlComponent = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControlComponent"));
+    
     ForceComponent = CreateDefaultSubobject<UDynamicForceComponent>(TEXT("ForceComponent"));
     ForceComponent->SetIsReplicated(true);
 
@@ -69,6 +77,14 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     TransformHistoryBuffer.SetNum(HistoryRingBufferSize);
     HistoryBufferWriteIndex = 0;
     HistoryBufferCount = 0;
+
+    ClimbProximitySphere = CreateDefaultSubobject<USphereComponent>(TEXT("ClimbProximitySphere"));
+    ClimbProximitySphere->SetupAttachment(RootComponent);
+    ClimbProximitySphere->InitSphereRadius(180.0f);
+    ClimbProximitySphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    ClimbProximitySphere->SetCollisionResponseToAllChannels(ECR_Ignore);
+    ClimbProximitySphere->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+    ClimbProximitySphere->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
 }
 
 void ADynamicCharacter::SetupDefaultMoverModes()
@@ -121,6 +137,12 @@ void ADynamicCharacter::BeginPlay()
                 }
             }
         }
+        
+        if (ClimbProximitySphere)
+        {
+            ClimbProximitySphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ADynamicCharacter::OnClimbProximityOverlap);
+            ClimbProximitySphere->OnComponentEndOverlap.AddUniqueDynamic(this, &ADynamicCharacter::OnClimbProximityEndOverlap);
+        }
 
         if (DefaultMovementStateTag.IsValid())
         {
@@ -132,21 +154,19 @@ void ADynamicCharacter::BeginPlay()
 void ADynamicCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-
     PreviousVelocity = GetVelocity();
 
     if (HasAuthority())
     {
         if (CapsuleComponent)
         {
-            // MATHEMATICAL LAG COMPENSATION: Decoupled from expensive skeletal mesh evaluations.
             const double CurrentTime = GetWorld()->GetTimeSeconds();
             FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[HistoryBufferWriteIndex];
             Snapshot.ServerTimestamp = CurrentTime;
             Snapshot.CapsuleLocation = CapsuleComponent->GetComponentLocation();
             Snapshot.CapsuleRotation = CapsuleComponent->GetComponentQuat();
             Snapshot.ActiveMovementState = ActiveMovementStateTag;
-
+            
             if (APlayerController* PC = Cast<APlayerController>(GetController()))
             {
                 Snapshot.ViewPitch = PC->GetControlRotation().Pitch;
@@ -155,22 +175,26 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
             {
                 Snapshot.ViewPitch = GetActorRotation().Pitch;
             }
-
+            
             HistoryBufferWriteIndex = (HistoryBufferWriteIndex + 1) % HistoryRingBufferSize;
             HistoryBufferCount = FMath::Min(HistoryBufferCount + 1, HistoryRingBufferSize);
         }
-
-        // ... [Attribute Scalars Evaluation] ...
     }
 
-    static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
-    static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
-
-    if (ActiveMovementStateTag.MatchesTag(HangTag) || ActiveMovementStateTag.MatchesTag(ClimbTag))
+    // DYNAMIC GATING: We only evaluate complex climbing overlaps if the character actively possesses the climbing capability
+    static const FGameplayTag CapabilityClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Movement.Climb"), false);
+    
+    if (AbilitySystemComponent && AbilitySystemComponent->HasMatchingGameplayTag(CapabilityClimbTag))
     {
-        if (HasAuthority() || IsLocallyControlled())
+        static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
+        static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
+        
+        if (ActiveMovementStateTag.MatchesTag(HangTag) || ActiveMovementStateTag.MatchesTag(ClimbTag))
         {
-            UpdateAutomatedClimbingState(DeltaSeconds);
+            if (HasAuthority() || IsLocallyControlled())
+            {
+                UpdateAutomatedClimbingState(DeltaSeconds);
+            }
         }
     }
 
@@ -191,7 +215,16 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
 
 float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
 {
-    float TotalMassKg = 80.0f; // Default baseline character body mass
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+
+    const float BaselineMass = GS ? FMath::Max(1.0f, GS->GetCalculationSettings().BaselineCharacterMassKg) : 80.0f;
+    const float ProximityRadius = GS ? FMath::Max(50.0f, GS->GetCalculationSettings().CarriedMassProximityRadius) : 300.0f;
+    const FGameplayTag WeightTag = (GS && GS->GetCalculationSettings().ObjectWeightAttributeTag.IsValid())
+        ? GS->GetCalculationSettings().ObjectWeightAttributeTag
+        : FGameplayTag::RequestGameplayTag(TEXT("Attribute.Object.Weight"), false);
+
+    float TotalMassKg = BaselineMass;
 
     if (const UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
     {
@@ -201,8 +234,10 @@ float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
             {
                 for (const FDynamicAttributeItem& Attr : Slot.SavedItemAttributeState)
                 {
-                    static const FGameplayTag WeightTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Object.Weight"), false);
-                    if (Attr.AttributeTag == WeightTag) TotalMassKg += Attr.Value;
+                    if (Attr.AttributeTag == WeightTag)
+                    {
+                        TotalMassKg += Attr.Value;
+                    }
                 }
             }
         }
@@ -213,30 +248,65 @@ float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
         TotalMassKg += Container->GetCurrentTotalWeight();
     }
 
-    if (UWorld* World = GetWorld())
+    TSet<const ADynamicPhysicsActor*> ProcessedPhysicsActors;
+
+    // 1. Directly attached/carried physics actors (O(1) hierarchy query)
+    TArray<AActor*> AttachedActors;
+    GetAttachedActors(AttachedActors, true);
+    for (AActor* Attached : AttachedActors)
     {
-        for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
+        if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Attached))
         {
-            ADynamicPhysicsActor* PhysActor = *It;
-            if (PhysActor && !PhysActor->IsPendingKillPending())
+            if (!PhysActor->IsPendingKillPending())
             {
-                if (PhysActor->GetAttachParentActor() == this || FVector::DistSquared(PhysActor->GetActorLocation(), GetActorLocation()) <= FMath::Square(300.0f))
+                ProcessedPhysicsActors.Add(PhysActor);
+                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
                 {
-                    if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                    TotalMassKg += Prim->GetMass();
+                }
+            }
+        }
+    }
+
+    // 2. Localized spatial sphere overlap for dragged/tethered physics actors (replaces TActorIterator)
+    if (World)
+    {
+        TArray<FOverlapResult> Overlaps;
+        FCollisionObjectQueryParams ObjParams;
+        ObjParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+        ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+        FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CharacterMassOverlap), false, this);
+
+        if (World->OverlapMultiByObjectType(Overlaps, GetActorLocation(), FQuat::Identity, ObjParams, FCollisionShape::MakeSphere(ProximityRadius), QueryParams))
+        {
+            for (const FOverlapResult& Overlap : Overlaps)
+            {
+                if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Overlap.GetActor()))
+                {
+                    if (!PhysActor->IsPendingKillPending() && !ProcessedPhysicsActors.Contains(PhysActor))
                     {
-                        TotalMassKg += Prim->GetMass();
+                        ProcessedPhysicsActors.Add(PhysActor);
+                        if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                        {
+                            TotalMassKg += Prim->GetMass();
+                        }
                     }
                 }
             }
         }
     }
+
     return TotalMassKg;
 }
 
 float ADynamicCharacter::GetEffectiveClimbingLoad() const
 {
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    const float BaselineMass = GS ? FMath::Max(1.0f, GS->GetCalculationSettings().BaselineCharacterMassKg) : 80.0f;
+
     const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
-    return FMath::Max(0.5f, TotalMass / 80.0f); // 80kg is the 1.0x baseline
+    return FMath::Max(0.5f, TotalMass / BaselineMass);
 }
 
 void ADynamicCharacter::OnClimbProximityOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -548,6 +618,7 @@ void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, 
         FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ImpactBoneTrace), true, this);
         const FVector Start = Hit.ImpactPoint + (Hit.ImpactNormal * 5.0f);
         const FVector End = Hit.ImpactPoint - (Hit.ImpactNormal * 15.0f);
+
         if (MeshComponent->LineTraceComponent(MeshHit, Start, End, QueryParams))
         {
             HitBoneName = MeshHit.BoneName;
@@ -557,24 +628,22 @@ void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, 
             HitBoneName = MeshComponent->FindClosestBone(Hit.ImpactPoint);
         }
     }
-    
+
     if (HitBoneName == NAME_None) HitBoneName = FName("pelvis");
     const uint8 ResolvedLimbId = GS->GetLimbIdForBone(HitBoneName);
-    
-    const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
-    const float MassFactor = 1.0f + ((TotalMass - 80.0f) * Rule->MassImpactMultiplier);
 
-    // OPTIMIZED: Route purely through GAS using the pre-warmed Zero-Allocation Generic Effect
+    const float BaselineMass = FMath::Max(1.0f, Settings.BaselineCharacterMassKg);
+    const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
+    const float MassFactor = 1.0f + ((TotalMass - BaselineMass) * Rule->MassImpactMultiplier);
+
     FDynamicGameplayEffectContext* CustomContext = new FDynamicGameplayEffectContext();
     CustomContext->ContextPayloadTag = ImpactTypeTag;
     CustomContext->AddInstigator(this, this);
     CustomContext->SetAuthoritativePhysicsPayload(ResolvedLimbId, ImpactVelocity, MassFactor, Hit.ImpactNormal, Hit.ImpactPoint);
 
     FGameplayEffectContextHandle ContextHandle(CustomContext);
-    
-    // Construct the Spec directly from the GameState's generic CDO to avoid GC allocations
     FGameplayEffectSpec ImpactSpec(GS->GenericInstantEffect, ContextHandle, 1.0f);
-    
+
     AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(ImpactSpec);
 }
 
@@ -703,15 +772,34 @@ void ADynamicCharacter::ApplyMovementStateConfig(const FDynamicMovementStateDef&
         MoverComponent->QueueNextMode(Def.MoverModeName);
     }
 
+    auto EvaluateMovementStat = [this](const FMovementStatConfig& StatConfig) -> float
+    {
+        float Multiplier = 1.0f;
+        if (AttributeSet)
+        {
+            for (const auto& Pair : StatConfig.AttributeScalars.LocalLookupMap)
+            {
+                if (Pair.Key.IsValid())
+                {
+                    Multiplier += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                }
+            }
+        }
+        return StatConfig.BaseValue * FMath::Max(0.01f, Multiplier);
+    };
+
+    if (Def.TargetCapsuleHalfHeight.BaseValue > 0.0f)
+    {
+        CachedTargetCapsuleHalfHeight = EvaluateMovementStat(Def.TargetCapsuleHalfHeight);
+    }
+
     if (HasAuthority() && AbilitySystemComponent)
     {
         if (GrantedMovementTags.Num() > 0)
         {
             AbilitySystemComponent->RemoveLooseGameplayTags(GrantedMovementTags);
         }
-        
         GrantedMovementTags = Def.GrantsTags;
-        
         if (GrantedMovementTags.Num() > 0)
         {
             AbilitySystemComponent->AddLooseGameplayTags(GrantedMovementTags);
@@ -1135,4 +1223,56 @@ bool ADynamicCharacter::CalculatePseudoBoneIntersection(const FCharacterTransfor
         return true;
     }
     return false;
+}
+
+void ADynamicCharacter::ServerProcessDeath(AActor* KillerActor)
+{
+    if (!HasAuthority()) return;
+
+    StartRagdoll();
+
+    if (KillerActor && KillerActor != this)
+    {
+        if (UDynamicSocialComponent* SocialComp = FindComponentByClass<UDynamicSocialComponent>())
+        {
+            SocialComp->ServerEvaluateAndBroadcastAction(
+                FGameplayTag::RequestGameplayTag(TEXT("Action.Combat.Kill"), false), 
+                KillerActor, 
+                this, 
+                FGuid(),
+                TArray<FGuid>()
+            );
+        }
+    }
+
+    if (UDynamicWorldDirectorSubsystem* Director = GetWorld()->GetSubsystem<UDynamicWorldDirectorSubsystem>())
+    {
+        Director->UnregisterActiveNPC(this);
+    }
+}
+
+void ADynamicCharacter::ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag, float BaseMagnitudeOverride)
+{
+    if (!HasAuthority() || !StimulusTag.IsValid()) return;
+
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    // Hypothetical MasterStimulusRegistry access (ensure it's added to ADynamicGameState)
+    // const FDynamicStimulusDef* StimDef = GS->MasterStimulusRegistry.Find(StimulusTag);
+    // if (!StimDef) return;
+
+    float FinalMagnitude = BaseMagnitudeOverride; // Typically fallback to StimDef->BaseMagnitude
+    
+    // Scale the stimulus using dynamic attributes (e.g. Mass/Weight affecting Footstep noise)
+    // for (const FTagFloatPair& Scalar : StimDef->AttributeMagnitudeScalars.ReplicatedEntries)
+    // {
+    //     if (AttributeSet)
+    //     {
+    //         FinalMagnitude += AttributeSet->GetDynamicAttributeValue(Scalar.KeyTag, 0) * Scalar.Value;
+    //     }
+    // }
+
+    // Broadcast `FinalMagnitude` and `StimulusTag` to your AI Perception or sensory grid...
 }

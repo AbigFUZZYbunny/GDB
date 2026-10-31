@@ -1,0 +1,20 @@
+﻿{
+  "_comment": "Defines how character attributes scale specific stimuli (e.g., Weight scales Footstep noise)",
+  "MasterStimulusRegistry": {
+    "Stimulus.Sound.Footstep": {
+      "StimulusTag": "Stimulus.Sound.Footstep",
+      "BaseMagnitude": 10.0,
+      "AttributeMagnitudeScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Attribute.Object.Weight", "Value": 0.2 },
+          { "KeyTag": "Attribute.Skill.Stealth", "Value": -0.5 }
+        ]
+      }
+    },
+    "Stimulus.Sound.Explosion": {
+      "StimulusTag": "Stimulus.Sound.Explosion",
+      "BaseMagnitude": 5000.0,
+      "AttributeMagnitudeScalars": {}
+    }
+  }
+}

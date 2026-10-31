@@ -48,23 +48,31 @@ void UDynamicAILinkComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
-void UDynamicAILinkComponent::Client_AssignAITask_Implementation(const FGuid& TaskId, const FString& Prompt, const FString& Model, const FString& Endpoint, const FString& ApiKey)
+void UDynamicAILinkComponent::Client_AssignAITask_Implementation(const FGuid& TaskId, const FString& Prompt, const FString& RequestedModel)
 {
     ActiveTaskId = TaskId;
     LastParsedSseIndex = 0;
 
+    const FString ResolvedEndpoint = LocalDaemonEndpointUrl.IsEmpty()
+        ? TEXT("http://127.0.0.1:11434/v1/chat/completions")
+        : LocalDaemonEndpointUrl;
+
+    const FString ResolvedModel = !LocalDaemonModelOverride.IsEmpty()
+        ? LocalDaemonModelOverride
+        : RequestedModel;
+
     ActiveHttpRequest = FHttpModule::Get().CreateRequest();
     ActiveHttpRequest->SetVerb(TEXT("POST"));
-    ActiveHttpRequest->SetURL(Endpoint);
+    ActiveHttpRequest->SetURL(ResolvedEndpoint);
     ActiveHttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 
-    if (!ApiKey.IsEmpty())
+    if (!LocalDaemonAuthToken.IsEmpty())
     {
-        ActiveHttpRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *ApiKey));
+        ActiveHttpRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *LocalDaemonAuthToken));
     }
 
     TSharedRef<FJsonObject> RootPayload = MakeShareable(new FJsonObject());
-    RootPayload->SetStringField(TEXT("model"), Model);
+    RootPayload->SetStringField(TEXT("model"), ResolvedModel);
     RootPayload->SetBoolField(TEXT("stream"), true);
 
     TArray<TSharedPtr<FJsonValue>> Messages;

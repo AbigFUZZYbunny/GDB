@@ -118,7 +118,9 @@ enum class EConditionType : uint8
     TagExists,
     TagValuePair,
     AttributeValue,
-    AttributeComparedToWorldTime
+    AttributeComparedToWorldTime,
+    RelationshipMetricCheck,
+    NeedValue
 };
 
 UENUM(BlueprintType)
@@ -531,6 +533,44 @@ struct FDynamicTagFloatMapWrapper
             NewPair.KeyTag = Key;
             NewPair.Value = NewValue;
             ReplicatedEntries.Add(NewPair);
+        }
+    }
+};
+
+
+
+// ============================================================================
+// DATA-DRIVEN SYSTEM MAPPING TYPES
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FTagTagPair
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag KeyTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag ValueTag;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicTagToTagMapWrapper
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FTagTagPair> ReplicatedEntries;
+
+    TMap<FGameplayTag, FGameplayTag> LocalLookupMap;
+
+    void SyncMapFromChangesArray()
+    {
+        LocalLookupMap.Empty(ReplicatedEntries.Num());
+        for (const FTagTagPair& Pair : ReplicatedEntries)
+        {
+            LocalLookupMap.Add(Pair.KeyTag, Pair.ValueTag);
         }
     }
 };
@@ -1563,6 +1603,237 @@ struct FBuildingSocketDef
 };
 
 // ============================================================================
+// SENSORY & STIMULUS DEFINITIONS (NEW)
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicStimulusDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Senses")
+    FGameplayTag StimulusTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Senses")
+    float BaseMagnitude = 100.0f;
+
+    // Defines how attributes (like Object.Weight) scale the magnitude of this stimulus (e.g. heavier = louder footsteps)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Senses")
+    FDynamicTagFloatMapWrapper AttributeMagnitudeScalars;
+};
+
+// ============================================================================
+// SENSORY RESPONSE RULES
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FSensoryResponseRule
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag TriggeringStimulusTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FName PrerequisiteConditionTree;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag ResultingBehaviorTag;
+};
+
+// ============================================================================
+// ABILITY STAGE CONFIGURATION
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FAbilityStageConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Ability")
+    TSoftObjectPtr<UAnimMontage> PresentationMontage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Ability")
+    float PlayRate = 1.0f;
+};
+
+// ============================================================================
+// LAW & ORDER CONFIGURATION (UPDATED)
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FLawAndOrderSystemConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag DefaultJurisdictionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag EnterPropertyActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag ExitPropertyActionTag;
+};
+
+USTRUCT(BlueprintType)
+struct FCrimeSeverityOverride
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsIllegal = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float SeverityOverride = 10.0f; 
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicJurisdictionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag JurisdictionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag GoverningFactionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FName PropertyAccessConditionTree;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FDynamicTagToTagMapWrapper ActionToCrimeMap;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    TMap<FGameplayTag, FCrimeSeverityOverride> LocalLaws;
+
+    // Condition Trees that define legal authority/exemptions per crime (e.g. Guard authorized lethal force or search warrants)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    TMap<FGameplayTag, FName> LegalExemptionTrees;
+};
+
+// ============================================================================
+// AI & GROUP DYNAMICS
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FGroupDynamicsDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag GroupArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bFormsPacks = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    int32 MaxGroupSize = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float CohesionRadius = 1000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bDefendsPackMembers = false;
+};
+
+// ============================================================================
+// MASTER AI AGENT TEMPLATE
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicAIAgentDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag AIAgentTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FSoftClassPath AIControllerClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGroupDynamicsDef GroupDynamics;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    TArray<FGameplayTag> DietaryTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bHuntsForFood = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float FleeHealthThreshold = 0.2f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    TArray<FGameplayTag> AbilityUsageRules;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    TArray<FGameplayTag> IdleTasks;
+
+    // Baseline physiological reactions (e.g., standard humanoids flee loud noises)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI|Senses")
+    TArray<FSensoryResponseRule> SensoryResponses;
+};
+
+// ============================================================================
+// PROFESSION DEFINITION
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicProfessionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag ProfessionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FDynamicTagFloatMapWrapper PrioritizedItemWeights;
+
+    // Additional behaviors granted specifically by having this profession
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession|AI")
+    TArray<FGameplayTag> GrantedBehaviors;
+
+    // Profession-specific sensory reactions (e.g., guards investigate instead of fleeing)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession|AI")
+    TArray<FSensoryResponseRule> SensoryResponses;
+};
+
+// ============================================================================
+// LAW & ORDER: JURISDICTIONS & CRIMES
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicCrimeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag CrimeTag; 
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseSeverity = 10.0f; 
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bRequiresProofOfOwnership = false; 
+
+    // Maps the sensory event to base distances (e.g. "Sense.Vision.Peripheral" -> 2000.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDynamicTagFloatMapWrapper SensorySignatures;
+
+    // Evaluated when the action is mapped to this crime. (Source = Victim, Target = Perpetrator)
+    // If true, the action is legally permitted (e.g., Self Defense, Allowed Guest) and the crime is voided.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName ExemptionConditionTree = NAME_None;
+
+    // Evaluated by the witness AFTER the crime occurs to interpret the scene contextually
+    // (e.g., Deducing that someone doing CPR isn't the murderer).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName WitnessInterpretationTree = NAME_None;
+
+    // Direct integration with the AIBehaviorMasterRegistry
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FGameplayTag> AssociatedWitnessBehaviors;
+};
+
+// ============================================================================
 // BUILDING & STRUCTURAL INTEGRITY CONFIGURATION
 // ============================================================================
 
@@ -1757,7 +2028,176 @@ struct FStructureInstanceItem : public FFastArraySerializerItem
     void PostReplicatedChange(const struct FFastStructureInstanceArray& InArrayOwner);
 };
 
+// ============================================================================
+// DATA-DRIVEN SENSORY & SYSTEM CONFIGURATIONS
+// ============================================================================
 
+USTRUCT(BlueprintType)
+struct FSenseDefinition
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag SenseTag; // e.g., "Sense.Vision.Peripheral" or "Sense.Hearing"
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag RangeAttributeTag; // Multiplies the base event radius
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag FOVAttributeTag; // If empty, assumes 360-degree omnidirectional
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag EnvironmentalInterferenceMetricTag; // e.g., "Environment.Metric.Illumination"
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bRequiresLineOfSight = false; // Prevents seeing through walls
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bCanIdentifyTarget = true; // Audio typically cannot identify a perpetrator
+};
+
+USTRUCT(BlueprintType)
+struct FSensoryProfileDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FSenseDefinition> Senses;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag IdentificationAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaseIdentificationConfidenceThreshold = 0.35f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float IdentificationBlurScalar = 20.0f;
+
+    // Dynamically tracks which morphological sliders, colors, and equipment slots this character can perceive
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FGameplayTag> TrackedNumericFeatures;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FGameplayTag> TrackedColorFeatures;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FGameplayTag> TrackedEquipmentSlots;
+};
+
+// ============================================================================
+// WITNESS MEMORY & SUSPECT IDENTIFICATION
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FSuspectDescription
+{
+    GENERATED_BODY()
+
+    UPROPERTY() FGameplayTag CharacterTemplateTag;
+    UPROPERTY() ECharacterGender Gender = ECharacterGender::Neutral;
+    
+    // Fuzzy matching: dynamically mapped sliders, colors, and equipment
+    UPROPERTY() TMap<FGameplayTag, float> NumericFeatures; 
+    UPROPERTY() TMap<FGameplayTag, FLinearColor> ColorFeatures;
+    UPROPERTY() TMap<FGameplayTag, FGameplayTag> EquippedItems;
+};
+
+USTRUCT(BlueprintType)
+struct FCrimeMemoryItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY() FGuid MemoryID;
+    UPROPERTY() FGameplayTag CrimeTag;
+    
+    UPROPERTY() bool bPerpetratorKnown = false;
+    UPROPERTY() FGuid PerpetratorGuid; 
+    UPROPERTY() FSuspectDescription PerpetratorDescription; 
+    
+    UPROPERTY() FGuid VictimGuid;      
+    UPROPERTY() FGuid AssociatedItemGuid; 
+
+    // Tracks multiple actors involved (e.g., entire bandit party, shadow org sponsor)
+    UPROPERTY() TArray<FGuid> CoConspiratorGuids; 
+    
+    UPROPERTY() double Timestamp = 0.0;
+    UPROPERTY() float IdentificationConfidence = 1.0f; 
+    UPROPERTY() bool bHasBeenReportedToAuthority = false; 
+
+    void PreReplicatedRemove(const struct FFastCrimeMemoryArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastCrimeMemoryArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastCrimeMemoryArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastCrimeMemoryArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FCrimeMemoryItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FCrimeMemoryItem, FFastCrimeMemoryArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastCrimeMemoryArray> : public TStructOpsTypeTraitsBase2<FFastCrimeMemoryArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// ============================================================================
+// WITNESS REACTION RULES
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FWitnessReactionRule
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag ReactionBehaviorTag; // e.g., "Behavior.Flee", "Behavior.Combat.DefendVictim"
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName PrerequisiteConditionTree = NAME_None; // Evaluates Courage, Morality, Relationship
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float SelectionWeight = 1.0f;
+};
+
+// ============================================================================
+// LAW & ORDER: JURISDICTIONAL BOUNTIES & CONVICTIONS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicBountyRecord
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGuid PerpetratorGuid;
+
+    // The total combined severity/bounty of all confirmed crimes
+    UPROPERTY()
+    float TotalBountyAmount = 0.0f;
+
+    UPROPERTY()
+    TArray<FGameplayTag> ConfirmedCrimes;
+
+    // Crimes that have been reported but require physical proof (e.g., finding the stolen item)
+    UPROPERTY()
+    TArray<FGameplayTag> SuspectedCrimes;
+
+    // E.g., Shoot on sight vs Attempt Arrest
+    UPROPERTY()
+    bool bLethalForceAuthorized = false;
+};
 
 // ============================================================================
 // DYNAMIC ROOM CLASSIFICATION & ENVIRONMENT INTEGRATION
@@ -1827,6 +2267,7 @@ struct FDynamicPropertyInstance
     UPROPERTY() FGuid OwnerGuid; // Deduced by majority ownership of the rooms
     UPROPERTY() TArray<FGuid> EncompassedRoomIDs;
     UPROPERTY() FBox PropertyBounds = FBox(ForceInit);
+    UPROPERTY() FGameplayTag JurisdictionTag; // Associates a house/town with a set of laws
 };
 
 // ============================================================================
@@ -2519,9 +2960,39 @@ struct FDynamicImpactReactionRule
 };
 
 // ============================================================================
+// CLOUD AI & DISTRIBUTED MINER CONFIGURATION
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FCloudAISystemConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Config")
+    ECloudAIExecutionBackend ExecutionBackend = ECloudAIExecutionBackend::RemoteCloudMiner;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Config")
+    FString DefaultModelName = TEXT("llama3.2:latest");
+
+    // Attribute granted to Primary and Validator miners upon reaching consensus
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Rewards")
+    FGameplayTag MiningRewardAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Rewards")
+    float MiningRewardGrantAmount = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Security")
+    int32 MaxConsensusUtteranceLengthDelta = 20;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Security")
+    float MinimumMinerTrustScore = 0.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Security")
+    float HighPriorityMaxPingMs = 150.0f;
+};
+
+// ============================================================================
 // SKELETAL TOPOLOGY & PHYSICS MOTOR CONFIG
 // ============================================================================
-
 USTRUCT(BlueprintType)
 struct FPhysicsCalculationSettings
 {
@@ -2532,6 +3003,18 @@ struct FPhysicsCalculationSettings
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FGameplayTag PrimaryDamageTargetAttributeTag;
+
+    // Data-driven tag used to query item/equipment weight (e.g., "Attribute.Object.Weight")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag ObjectWeightAttributeTag;
+
+    // Baseline naked body mass in kg used for climbing load and impact ratios
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BaselineCharacterMassKg = 80.0f;
+
+    // Sphere overlap radius around the character to account for dragged/tethered physics objects
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float CarriedMassProximityRadius = 300.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float MinImpulseThreshold = 350.0f;
@@ -2694,58 +3177,55 @@ struct FDynamicEquipmentRequirementDef
     TSoftObjectPtr<UAnimMontage> UnequipAnimMontage;
 };
 
+// ============================================================================
+// PHYSICS ACTOR DEFINITION
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicPhysicsActorDef
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    FDynamicLocalizationProfile Localization;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    FGameplayTag ArchetypeTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    TSoftObjectPtr<UObject> MeshAsset;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    TSoftObjectPtr<UStaticMesh> StaticMeshAsset;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    TSoftObjectPtr<UObject> PresentationAsset;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    float MassOverride = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    float BaseMaxHealth = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FName CollisionProfileName = TEXT("PhysicsActor");
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    bool bSimulatePhysicsOnSpawn = true;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    bool bSimulatePhysicsByDefault = true;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    bool bUsePhysicsControl = true;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    bool bCanBeCarried = true;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    float MassOverride = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    FDynamicTagFloatMapWrapper DefaultGlobalAttributes;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    TArray<FPhysicsLimbConfig> CustomLimbs;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    FGameplayTagContainer InitialInteractableStateTags;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    TArray<FInteractionTargetPoint> KinematicTargetPoints;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|PhysicsActor")
-    TArray<FGameplayTag> GrantedAbilities;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Item")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FDynamicItemDef ItemConfig;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Container")
-    TArray<FDynamicContainerDef> Containers;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Crafting")
-    TArray<FDynamicRecipeDef> CraftingRecipes;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FDynamicEquipmentRequirementDef EquipmentRequirement;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    FDynamicTagFloatMapWrapper DefaultGlobalAttributes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    TArray<FPhysicsLimbConfig> CustomLimbs;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    TArray<FDynamicRecipeDef> CraftingRecipes;
 };
 
 USTRUCT(BlueprintType)
@@ -2794,6 +3274,33 @@ template<>
 struct TStructOpsTypeTraits<FFastEquipmentSlotArray> : public TStructOpsTypeTraitsBase2<FFastEquipmentSlotArray>
 {
     enum { WithNetDeltaSerializer = true };
+};
+
+// ============================================================================
+// DYNAMIC NPC WORK ORDERS & DELEGATION
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FDynamicNpcWorkOrderRequest
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quests")
+    FGuid RequesterGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quests")
+    FGameplayTag DesiredItemArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quests")
+    FGameplayTag RequiredProfessionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quests")
+    int32 Quantity = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quests")
+    float OfferedRewardGold = 50.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Quests")
+    float MaxDeliveryDistance = 50000.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -3234,6 +3741,9 @@ struct FCharacterTemplateDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     FDynamicTagFloatMapWrapper AlleleDominanceOverrides;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) 
+    FSensoryProfileDef SensoryProfile;
 };
 
 USTRUCT(BlueprintType)
@@ -3455,92 +3965,6 @@ struct TStructOpsTypeTraits<FFastRelationshipEdgeArray> : public TStructOpsTypeT
     enum { WithNetDeltaSerializer = true };
 };
 
-// ============================================================================
-// SOCIAL FAST ARRAYS (RELATIONSHIPS, NEEDS, KNOWN PLACES)
-// ============================================================================
-
-USTRUCT(BlueprintType)
-struct FDynamicRelationshipItem : public FFastArraySerializerItem
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    FGuid TargetPersistentGuid;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    FGameplayTag RelationshipTypeTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    FDynamicTagFloatMapWrapper Metrics;
-
-    void PreReplicatedRemove(const struct FDynamicRelationshipFastArray& InArrayOwner);
-    void PostReplicatedAdd(const struct FDynamicRelationshipFastArray& InArrayOwner);
-    void PostReplicatedChange(const struct FDynamicRelationshipFastArray& InArrayOwner);
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicRelationshipFastArray : public FFastArraySerializer
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    TArray<FDynamicRelationshipItem> Items;
-
-    UPROPERTY(NotReplicated)
-    UDynamicSocialComponent* OwningSocialComp = nullptr;
-
-    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
-    {
-        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicRelationshipItem, FDynamicRelationshipFastArray>(Items, DeltaParms, *this);
-    }
-};
-
-template<>
-struct TStructOpsTypeTraits<FDynamicRelationshipFastArray> : public TStructOpsTypeTraitsBase2<FDynamicRelationshipFastArray>
-{
-    enum { WithNetDeltaSerializer = true };
-};
-
-
-USTRUCT(BlueprintType)
-struct FDynamicNeedAndMoodItem : public FFastArraySerializerItem
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    FGameplayTag NeedOrMoodTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
-    float CurrentValue = 0.0f;
-
-    void PreReplicatedRemove(const struct FDynamicNeedAndMoodFastArray& InArrayOwner);
-    void PostReplicatedAdd(const struct FDynamicNeedAndMoodFastArray& InArrayOwner);
-    void PostReplicatedChange(const struct FDynamicNeedAndMoodFastArray& InArrayOwner);
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicNeedAndMoodFastArray : public FFastArraySerializer
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    TArray<FDynamicNeedAndMoodItem> Items;
-
-    UPROPERTY(NotReplicated)
-    UDynamicSocialComponent* OwningSocialComp = nullptr;
-
-    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
-    {
-        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicNeedAndMoodItem, FDynamicNeedAndMoodFastArray>(Items, DeltaParms, *this);
-    }
-};
-
-template<>
-struct TStructOpsTypeTraits<FDynamicNeedAndMoodFastArray> : public TStructOpsTypeTraitsBase2<FDynamicNeedAndMoodFastArray>
-{
-    enum { WithNetDeltaSerializer = true };
-};
-
 USTRUCT(BlueprintType)
 struct FDynamicKnownPlaceItem : public FFastArraySerializerItem
 {
@@ -3653,30 +4077,6 @@ struct FDynamicStatPriorityRule
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicProfessionDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FGameplayTag ProfessionTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FDynamicLocalizationProfile Localization;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    TArray<FDynamicTaskPriorityRule> ExpectedTasks;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FDynamicTagFloatMapWrapper PrioritizedItemWeights;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    TArray<FDynamicStatPriorityRule> StatPriorities;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    TArray<FDynamicScheduleBlockDef> DefaultDailySchedule;
-};
-
-USTRUCT(BlueprintType)
 struct FDynamicAssignedProfessionItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
@@ -3718,30 +4118,32 @@ struct TStructOpsTypeTraits<FFastAssignedProfessionArray> : public TStructOpsTyp
     enum { WithNetDeltaSerializer = true };
 };
 
+// ============================================================================
+// SOCIAL NEEDS & MOOD STATE ITEM
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicNeedStateItem : public FFastArraySerializerItem
 {
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    FGameplayTag NeedOrMoodTag;
-
-    // Quantized 1-byte representation [0..100 -> 0..255]
-    UPROPERTY()
-    uint8 PackedCurrentValue = 255;
-
-    UPROPERTY(NotReplicated)
-    float LocalExactValue = 100.0f;
+    FGameplayTag NeedTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    float ShiftRatePerHour = -2.0f;
+    float CurrentValue = 100.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    double LastEvaluatedWorldTime = 0.0;
+    float ShiftRatePerHour = 0.0f;
 
-    void PreReplicatedRemove(const struct FFastNeedStateArray& InArrayOwner);
-    void PostReplicatedAdd(const struct FFastNeedStateArray& InArrayOwner);
-    void PostReplicatedChange(const struct FFastNeedStateArray& InArrayOwner);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    float UrgentThreshold = 25.0f;
+
+    // Optional quantized representation available for tightly packed networking
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    uint8 QuantizedCurrentValue = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    FGameplayTag SatisfyBehaviorTag;
 };
 
 USTRUCT(BlueprintType)
@@ -3811,36 +4213,6 @@ struct FDynamicAIGroupDynamics
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
     bool bDefendsPackMembers = true;
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicAIAgentDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    FGameplayTag AIAgentTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    TSoftClassPtr<AAIController> AIControllerClass;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    FDynamicAIGroupDynamics GroupDynamics;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    FGameplayTagContainer DietaryTags;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    bool bHuntsForFood = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    TArray<FDynamicAIAbilityRule> AbilityUsageRules;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    TArray<FDynamicTaskPriorityRule> IdleTasks;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    float FleeHealthThreshold = 0.15f;
 };
 
 // ============================================================================
@@ -4898,6 +5270,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
     TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
     TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
+    TMap<FGameplayTag, FDynamicStimulusDef> MasterStimulusRegistry;
     TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
     TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
     TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
@@ -4918,7 +5291,10 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
     TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
     TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
-    
+    TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
+    TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
+    TMap<FGameplayTag, TArray<FWitnessReactionRule>> WitnessReactionRegistry;
+
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;
 
@@ -4936,6 +5312,12 @@ struct FMasterRegistryStagingData
 
     bool bHasAbilityScoreConfig = false;
     FAbilityScoreConfigData AbilityScoreConfig;
+
+    bool bHasLawAndOrderConfig = false;
+    FLawAndOrderSystemConfig LawAndOrderConfig;
+
+    bool bHasCloudAIConfig = false;
+    FCloudAISystemConfig CloudAIConfig;
 };
 
 USTRUCT()

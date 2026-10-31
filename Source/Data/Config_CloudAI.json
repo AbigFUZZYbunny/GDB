@@ -1,0 +1,12 @@
+﻿{
+  "_comment": "Externalized Cloud AI & Distributed Coin-Miner Configuration",
+  "CloudAIConfig": {
+    "ExecutionBackend": "RemoteCloudMiner",
+    "DefaultModelName": "llama3.2:latest",
+    "MiningRewardAttributeTag": "Attribute.Resource.MiningXP",
+    "MiningRewardGrantAmount": 1.0,
+    "MaxConsensusUtteranceLengthDelta": 20,
+    "MinimumMinerTrustScore": 0.5,
+    "HighPriorityMaxPingMs": 150.0
+  }
+}

@@ -8,12 +8,102 @@
 #include "DynamicPhysicsActor.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicSocialComponent.h"
+#include "DynamicCharacter.h"
 #include "EngineUtils.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 
 void UDynamicBuildingSubsystem::Initialize(FSubsystemCollectionBase& Collection) { Super::Initialize(Collection); }
 void UDynamicBuildingSubsystem::Deinitialize() { ActiveBuildingChunks.Empty(); Super::Deinitialize(); }
-void UDynamicBuildingSubsystem::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
+void UDynamicBuildingSubsystem::Tick(float DeltaTime)
+{
+    Super::Tick(DeltaTime);
+    if (GetWorld() && GetWorld()->GetNetMode() != NM_Client)
+    {
+        StreamingTimer += DeltaTime;
+        if (StreamingTimer >= 2.0f)
+        {
+            StreamingTimer = 0.0f;
+            ProcessBuildingStreaming();
+        }
+
+        TransitionTimer += DeltaTime;
+        if (TransitionTimer >= 0.5f)
+        {
+            TransitionTimer = 0.0f;
+            ProcessCharacterRoomTransitions();
+        }
+    }
+}
+
+void UDynamicBuildingSubsystem::ProcessCharacterRoomTransitions()
+{
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS || ActiveProperties.Num() == 0) return;
+
+    const FGameplayTag EnterActionTag = GS->LawAndOrderConfig.EnterPropertyActionTag.IsValid()
+        ? GS->LawAndOrderConfig.EnterPropertyActionTag
+        : FGameplayTag::RequestGameplayTag(TEXT("Action.Movement.EnterProperty"), false);
+
+    const FGameplayTag ExitActionTag = GS->LawAndOrderConfig.ExitPropertyActionTag;
+
+    // Iterate over registered active characters and resolve owners in O(1) via ActiveCharacterByGuidMap
+    for (const auto& CharPair : GS->GetActiveCharacterByGuidMap())
+    {
+        ADynamicCharacter* Char = CharPair.Value.Get();
+        if (!IsValid(Char) || Char->IsPendingKillPending()) continue;
+
+        UDynamicSocialComponent* Social = Char->FindComponentByClass<UDynamicSocialComponent>();
+        if (!Social) continue;
+
+        FGuid NewPropertyID;
+        FGuid NewOwnerGuid;
+
+        const FVector CharLoc = Char->GetActorLocation();
+        for (const FDynamicPropertyInstance& Prop : ActiveProperties)
+        {
+            if (Prop.PropertyBounds.IsInsideOrOn(CharLoc))
+            {
+                NewPropertyID = Prop.PropertyID;
+                NewOwnerGuid = Prop.OwnerGuid;
+                break;
+            }
+        }
+
+        if (Social->CurrentPropertyID != NewPropertyID)
+        {
+            const FGuid OldPropertyID = Social->CurrentPropertyID;
+            Social->CurrentPropertyID = NewPropertyID;
+
+            if (NewPropertyID.IsValid() && NewOwnerGuid.IsValid() && NewOwnerGuid != Social->CharacterPersistentGuid)
+            {
+                // O(1) Owner lookup via GameState GUID registry
+                AActor* OwnerActor = GS->FindCharacterByGuid(NewOwnerGuid);
+
+                if (EnterActionTag.IsValid())
+                {
+                    Social->ServerEvaluateAndBroadcastAction(
+                        EnterActionTag,
+                        Char,       // Perpetrator (Entrant)
+                        OwnerActor, // Victim (Property Owner)
+                        FGuid(),
+                        TArray<FGuid>()
+                    );
+                }
+            }
+            else if (OldPropertyID.IsValid() && ExitActionTag.IsValid())
+            {
+                Social->ServerEvaluateAndBroadcastAction(
+                    ExitActionTag,
+                    Char,
+                    nullptr,
+                    FGuid(),
+                    TArray<FGuid>()
+                );
+            }
+        }
+    }
+}
 
 ADynamicBuildingChunkActor* UDynamicBuildingSubsystem::GetOrCreateChunkAtLocation(const FVector& WorldLocation)
 {
@@ -259,12 +349,41 @@ void UDynamicBuildingSubsystem::ProcessBuildingStreaming()
 
 void UDynamicBuildingSubsystem::SerializeWorldBuildingState(FWorldPersistenceSnapshot& OutSnapshot)
 {
-    // Map ActiveBuildingChunks to OutSnapshot.ModifiedBuildingChunks
+    OutSnapshot.ModifiedBuildingChunks.Empty(ActiveBuildingChunks.Num());
+    for (const auto& Pair : ActiveBuildingChunks)
+    {
+        if (ADynamicBuildingChunkActor* Chunk = Pair.Value)
+        {
+            if (Chunk->ReplicatedStructures.Items.Num() > 0)
+            {
+                FBuildingChunkSnapshot ChunkSnap;
+                ChunkSnap.ChunkCoord = Pair.Key;
+                ChunkSnap.SavedStructures = Chunk->ReplicatedStructures.Items;
+                OutSnapshot.ModifiedBuildingChunks.Add(ChunkSnap);
+            }
+        }
+    }
+    OutSnapshot.ActiveProperties = ActiveProperties;
 }
 
 void UDynamicBuildingSubsystem::RestoreWorldBuildingState(const FWorldPersistenceSnapshot& InSnapshot)
 {
-    // Map InSnapshot.ModifiedBuildingChunks back to chunks via GetOrCreateChunkAtLocation
+    for (const FBuildingChunkSnapshot& ChunkSnap : InSnapshot.ModifiedBuildingChunks)
+    {
+        const FVector ChunkWorldLoc(
+            ChunkSnap.ChunkCoord.X * ADynamicBuildingChunkActor::CHUNK_SIZE_UNITS,
+            ChunkSnap.ChunkCoord.Y * ADynamicBuildingChunkActor::CHUNK_SIZE_UNITS,
+            0.0f
+        );
+        if (ADynamicBuildingChunkActor* Chunk = GetOrCreateChunkAtLocation(ChunkWorldLoc))
+        {
+            Chunk->ReplicatedStructures.Items = ChunkSnap.SavedStructures;
+            Chunk->ReplicatedStructures.MarkArrayDirty();
+            Chunk->UpdateInstancedMeshes();
+        }
+    }
+    ActiveProperties = InSnapshot.ActiveProperties;
+    RequestAsynchronousRoomEvaluation();
 }
 
 void UDynamicBuildingSubsystem::RequestAsynchronousRoomEvaluation()
@@ -412,14 +531,30 @@ FGameplayTag UDynamicBuildingSubsystem::ClassifyRoomByContents(const FBox& RoomB
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
     if (!World || !GS) return FGameplayTag::EmptyTag;
 
-    // 1. Gather all dynamic items/furniture inside the room AABB
+    // 1. Spatial box overlap replaces global TActorIterator<ADynamicPhysicsActor>
     TMap<FGameplayTag, int32> ContentCounts;
-    for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
+    TArray<FOverlapResult> Overlaps;
+    FCollisionObjectQueryParams ObjParams;
+    ObjParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+    ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+    if (World->OverlapMultiByObjectType(Overlaps, RoomBounds.GetCenter(), FQuat::Identity, ObjParams, FCollisionShape::MakeBox(RoomBounds.GetExtent())))
     {
-        if (RoomBounds.IsInsideOrOn(It->GetActorLocation()))
+        TSet<const ADynamicPhysicsActor*> CountedActors;
+        for (const FOverlapResult& Overlap : Overlaps)
         {
-            FGameplayTag Archetype = It->GetActorArchetypeTag();
-            ContentCounts.FindOrAdd(Archetype)++;
+            if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Overlap.GetActor()))
+            {
+                if (!CountedActors.Contains(PhysActor) && RoomBounds.IsInsideOrOn(PhysActor->GetActorLocation()))
+                {
+                    CountedActors.Add(PhysActor);
+                    const FGameplayTag Archetype = PhysActor->GetActorArchetypeTag();
+                    if (Archetype.IsValid())
+                    {
+                        ContentCounts.FindOrAdd(Archetype)++;
+                    }
+                }
+            }
         }
     }
 
@@ -430,13 +565,12 @@ FGameplayTag UDynamicBuildingSubsystem::ClassifyRoomByContents(const FBox& RoomB
     for (const auto& Pair : GS->RoomTypeRegistry)
     {
         const FDynamicRoomTypeDef& RoomDef = Pair.Value;
-
         if (RoomVolume < RoomDef.MinimumVolume) continue;
 
         bool bMeetsRequirements = true;
         for (const FDynamicRoomRequirement& Req : RoomDef.ContentRequirements)
         {
-            int32 FoundCount = ContentCounts.Contains(Req.RequiredContentTag) ? ContentCounts[Req.RequiredContentTag] : 0;
+            const int32 FoundCount = ContentCounts.FindRef(Req.RequiredContentTag);
             if (FoundCount < Req.MinimumCount)
             {
                 bMeetsRequirements = false;
@@ -462,12 +596,11 @@ UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInR
     const FDynamicRoomInstance* TargetRoom = nullptr;
     float BestDistSq = MAX_flt;
 
-    // AI prefers rooms they explicitly own if provided
     for (const FDynamicRoomInstance& Room : ActiveRooms)
     {
         if (Room.ClassifiedRoomTypeTag == RoomTypeTag && (!OptionalOwnerGuid.IsValid() || Room.OwnerGuid == OptionalOwnerGuid))
         {
-            float DistSq = FVector::DistSquared(SearchOrigin, Room.WorldBounds.GetCenter());
+            const float DistSq = FVector::DistSquared(SearchOrigin, Room.WorldBounds.GetCenter());
             if (DistSq < BestDistSq)
             {
                 BestDistSq = DistSq;
@@ -478,30 +611,38 @@ UDynamicContainerComponent* UDynamicBuildingSubsystem::FindOptimalAIContainerInR
 
     if (!TargetRoom) return nullptr;
 
-    UDynamicContainerComponent* BestContainer = nullptr;
-    for (TActorIterator<ADynamicPhysicsActor> It(World); It; ++It)
-    {
-        if (TargetRoom->WorldBounds.IsInsideOrOn(It->GetActorLocation()))
-        {
-            // Verify AI owns this specific chest, or it's unowned
-            if (OptionalOwnerGuid.IsValid() && It->GetItemOwnerGuid().IsValid() && It->GetItemOwnerGuid() != OptionalOwnerGuid)
-            {
-                continue; // It's someone else's locked chest
-            }
+    TArray<FOverlapResult> Overlaps;
+    FCollisionObjectQueryParams ObjParams;
+    ObjParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+    ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
 
-            if (UDynamicContainerComponent* Container = It->GetContainerComponent())
+    if (World->OverlapMultiByObjectType(Overlaps, TargetRoom->WorldBounds.GetCenter(), FQuat::Identity, ObjParams, FCollisionShape::MakeBox(TargetRoom->WorldBounds.GetExtent())))
+    {
+        for (const FOverlapResult& Overlap : Overlaps)
+        {
+            if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Overlap.GetActor()))
             {
-                int32 IgnoredX, IgnoredY; bool bRot;
-                if (Container->FindSpaceForItem(ItemArchetypeToStore, IgnoredX, IgnoredY, bRot))
+                if (!TargetRoom->WorldBounds.IsInsideOrOn(PhysActor->GetActorLocation())) continue;
+
+                if (OptionalOwnerGuid.IsValid() && PhysActor->GetItemOwnerGuid().IsValid() && PhysActor->GetItemOwnerGuid() != OptionalOwnerGuid)
                 {
-                    BestContainer = Container;
-                    break;
+                    continue;
+                }
+
+                if (UDynamicContainerComponent* Container = PhysActor->GetContainerComponent())
+                {
+                    int32 IgnoredX = 0, IgnoredY = 0;
+                    bool bRot = false;
+                    if (Container->FindSpaceForItem(ItemArchetypeToStore, IgnoredX, IgnoredY, bRot))
+                    {
+                        return Container;
+                    }
                 }
             }
         }
     }
 
-    return BestContainer;
+    return nullptr;
 }
 
 bool UDynamicBuildingSubsystem::GetRoomOwnedByCharacter(FGuid CharacterGuid, FGameplayTag RoomTypeTag, FDynamicRoomInstance& OutRoom) const

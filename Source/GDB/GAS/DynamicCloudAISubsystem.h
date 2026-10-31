@@ -11,7 +11,6 @@ class ADynamicCharacter;
 class UDynamicAILinkComponent;
 class FJsonObject;
 
-// 1. Declare Delegates Globally to avoid USTRUCT macro scope resolution failures
 DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
 DECLARE_DELEGATE_OneParam(FOnCloudAITokenStream, const FString&);
 DECLARE_DELEGATE_OneParam(FOnCloudAITaskAssigned, float /*EstimatedLatency*/);
@@ -49,6 +48,7 @@ struct GDB_API FCloudAIQueuedTask
     GENERATED_BODY()
 
     UPROPERTY() FGuid TaskId;
+    UPROPERTY() TWeakObjectPtr<APawn> RequestingAgentPawn;
     UPROPERTY() ECloudAITaskPriority Priority = ECloudAITaskPriority::Medium;
     UPROPERTY() FString ContextPrompt;
     UPROPERTY() double TimeQueued = 0.0;
@@ -62,12 +62,10 @@ struct GDB_API FCloudAIQueuedTask
 
     UPROPERTY() bool bPrimaryFinished = false;
     UPROPERTY() bool bValidatorFinished = false;
-
     UPROPERTY() bool bStartedStreamingUtterance = false;
     UPROPERTY() int32 UtteranceStartIndex = 0;
     UPROPERTY() int32 LastBroadcastedLength = 0;
 
-    // Use the globally declared delegates
     FOnCloudAIResponseDirectCallback FinalCompletionDelegate;
     FOnCloudAITokenStream TokenStreamDelegate;
     FOnCloudAITaskAssigned TaskAssignedDelegate;
@@ -84,14 +82,15 @@ public:
     virtual void Tick(float DeltaTime) override;
     virtual TStatId GetStatId() const override { return TStatId(); }
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
-    FString EndpointUrl = TEXT("http://127.0.0.1:8000/v1/chat/completions");
+    // Server-only fallback endpoint & private API key (strictly server-side, never sent to client miners)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Server Fallback")
+    FString ServerFallbackEndpointUrl = TEXT("http://127.0.0.1:8000/v1/chat/completions");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Server Fallback")
+    FString ServerFallbackApiKey = TEXT("");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
-    FString ApiKey = TEXT("");
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Configuration")
-    FString ModelName = TEXT("default-model");
+    FString ModelName = TEXT("llama3.2:latest");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Rewards")
     FGameplayTag MiningRewardAttributeTag;
@@ -127,5 +126,4 @@ private:
 
     void ProcessTaskQueue();
     void EvaluateConsensusAndReward(FCloudAIQueuedTask& Task);
-    //FString ParseSseDeltaToJsonString(const FString& SsePayload);
 };

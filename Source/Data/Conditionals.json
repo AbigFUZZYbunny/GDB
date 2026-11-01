@@ -7,6 +7,18 @@
       "ComparisonOperator": "GreaterThan",
       "ComparisonValue": 30.0
     },
+    "Condition.Force.HighPerceivedBounty": {
+      "ConditionType": "PerceivedBountyCheck",
+      "UserDefinedKey": "Jurisdiction.HighKingCity",
+      "bCheckSource": true,
+      "ComparisonOperator": "GreaterThanOrEqual",
+      "ComparisonValue": 500.0
+    },
+    "Condition.Force.SelfDefense": {
+      "ConditionType": "TagExists",
+      "UserDefinedKey": "State.Combat.AttackingMe",
+      "bCheckSource": false
+    },
     "Condition.Ability.CanDodgeRoll": {
       "FlatNodes": [
         {

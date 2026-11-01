@@ -10,6 +10,7 @@
 #include "DynamicSocialComponent.h"
 #include "DynamicCharacter.h"
 #include "EngineUtils.h"
+#include "Engine/OverlapResult.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 
 void UDynamicBuildingSubsystem::Initialize(FSubsystemCollectionBase& Collection) { Super::Initialize(Collection); }

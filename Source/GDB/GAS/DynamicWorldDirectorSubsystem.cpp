@@ -264,11 +264,10 @@ void UDynamicWorldDirectorSubsystem::PerformCatchUpSimulation(ADynamicCharacter*
     {
         if (Need.NeedTag.IsValid() && Need.ShiftRatePerHour != 0.0f)
         {
-            // Degradation is governed strictly by the JSON-defined ShiftRatePerHour configured per template/need
             const float CurrentVal = AttrSet->GetDynamicAttributeValue(Need.NeedTag, 0);
             const float DeltaShift = Need.ShiftRatePerHour * OfflineHours;
             const float NewVal = FMath::Max(0.0f, CurrentVal + DeltaShift);
-            
+
             AttrSet->SetDynamicAttributeValue(Need.NeedTag, NewVal, 0);
         }
     }

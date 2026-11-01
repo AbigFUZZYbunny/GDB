@@ -31,7 +31,7 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic Configuration")
     FDynamicAbilityDef AbilityConfig;
 
-    UPROPERTY(ReplicatedUsing = OnRep_ActiveAbilityRegistryTag, BlueprintReadOnly, Category = "Dynamic Configuration")
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Ability")
     FGameplayTag ActiveAbilityRegistryTag;
 
     UFUNCTION()
@@ -67,11 +67,13 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Delivery|Validation")
     bool IsValidTargetForSpatialDelivery(const FDynamicSpatialDeliveryDef& Delivery, const AActor* TargetActor) const;
+    
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Ability")
+    void PlayStagePresentation(const FAbilityStagePresentation& StageConfig);
 
 protected:
     bool EvaluateDynamicRule(const FGameplayTag& RuleTag, const FGameplayAbilityActorInfo* ActorInfo) const;
     UDynamicInteractableComponent* FindBestNearbyInteractable(const FGameplayAbilityActorInfo* ActorInfo) const;
-    void PlayStagePresentation(const FAbilityStagePresentation& StageVisual) const;
     void GrantSourcePassBack(EPassBackTriggerEvent EventType, float Scalar = 1.0f) const;
     void RefreshOpenComboWindows(float CurrentPhaseElapsed, float CurrentPhaseAlpha);
     bool TransitionIntoComboAbilityInternal(FGameplayTag NextComboAbilityTag);

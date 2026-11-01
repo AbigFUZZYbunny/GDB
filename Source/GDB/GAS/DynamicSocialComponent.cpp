@@ -5,13 +5,11 @@
 #include "DynamicAttributeSet.h"
 #include "DynamicBuildingSubsystem.h"
 #include "AbilitySystemComponent.h"
-#include "DynamicEquipmentComponent.h"
+#include "DynamicQuestComponent.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicGASManagerComponent.h"
-#include "DynamicCustomizationComponent.h"
 #include "DynamicLogicEvaluator.h"
 #include "TimerManager.h"
-#include "Engine/OverlapResult.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
 #include "Async/Async.h"
@@ -171,7 +169,7 @@ void UDynamicSocialComponent::RebuildNeedCache()
         {
             Item.LocalExactValue = DynamicQuantization::DequantizeScale100(Item.PackedCurrentValue);
         }
-        CachedNeeds.Add(Item.NeedOrMoodTag, Item.LocalExactValue);
+        CachedNeeds.Add(Item.NeedTag, Item.LocalExactValue);
     }
 }
 
@@ -193,7 +191,7 @@ bool UDynamicSocialComponent::GetNeedValue(const FGameplayTag& NeedTag, float& O
     }
     for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
-        if (Item.NeedOrMoodTag == NeedTag)
+        if (Item.NeedTag == NeedTag)
         {
             OutValue = Item.LocalExactValue;
             return true;
@@ -323,7 +321,7 @@ void UDynamicSocialComponent::ServerSetNeedValue(const FGameplayTag& NeedTag, fl
 
     for (FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
-        if (Item.NeedOrMoodTag == NeedTag)
+        if (Item.NeedTag == NeedTag)
         {
             Item.LocalExactValue = ClampedVal;
             Item.PackedCurrentValue = Packed;
@@ -335,7 +333,7 @@ void UDynamicSocialComponent::ServerSetNeedValue(const FGameplayTag& NeedTag, fl
     }
 
     FDynamicNeedStateItem NewItem;
-    NewItem.NeedOrMoodTag = NeedTag;
+    NewItem.NeedTag = NeedTag;
     NewItem.LocalExactValue = ClampedVal;
     NewItem.PackedCurrentValue = Packed;
     NewItem.LastEvaluatedWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -449,7 +447,7 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
 
         if (!ContextFilterConfig.bFilterUrgentNeedsOnly || bIsUrgent || bHasChanged)
         {
-            NeedsObj->SetNumberField(Item.NeedOrMoodTag.ToString(), Item.LocalExactValue);
+            NeedsObj->SetNumberField(TEXT("PackedCurrentValue"), Item.PackedCurrentValue);
         }
     }
     RootObj->SetObjectField(TEXT("Needs"), NeedsObj);
@@ -555,7 +553,7 @@ bool UDynamicSocialComponent::SelectBestUtterance(
     FGameplayTagContainer SpeakerMoodTags;
     for (const FDynamicNeedStateItem& MoodItem : ReplicatedNeedsAndMoods.Items)
     {
-        SpeakerMoodTags.AddTag(MoodItem.NeedOrMoodTag);
+        SpeakerMoodTags.AddTag(MoodItem.NeedTag);
     }
 
     FGameplayTagContainer TargetMoodTags;
@@ -563,7 +561,7 @@ bool UDynamicSocialComponent::SelectBestUtterance(
     {
         for (const FDynamicNeedStateItem& MoodItem : TargetSocial->ReplicatedNeedsAndMoods.Items)
         {
-            TargetMoodTags.AddTag(MoodItem.NeedOrMoodTag);
+            TargetMoodTags.AddTag(MoodItem.NeedTag);
         }
     }
 
@@ -801,7 +799,7 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
     FGameplayTagContainer CurrentMoodTags;
     for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
-        CurrentMoodTags.AddTag(Item.NeedOrMoodTag);
+        CurrentMoodTags.AddTag(Item.NeedTag);
     }
 
     TArray<const FFastPathDialogueEntry*> ValidEntries;
@@ -1066,285 +1064,112 @@ void UDynamicSocialComponent::ServerProcessCrimeSensoryEvent(
     const TArray<FGuid>& CoConspirators,
     const TMap<FGameplayTag, float>& SensorySignatures)
 {
-    if (!GetOwner()->HasAuthority() || !CrimeTag.IsValid() || !Perpetrator) return;
-    UWorld* World = GetWorld();
-    if (!World || World->GetNetMode() == NM_Client || !Perpetrator || !CrimeTag.IsValid() || SensorySignatures.Num() == 0) return;
+    if (!GetOwner()->HasAuthority() || !Perpetrator) return;
 
-    ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
 
-    const FVector EventLocation = Perpetrator->GetActorLocation();
-    static const FGameplayTag DefaultLightTag = FGameplayTag::RequestGameplayTag(TEXT("Environment.Metric.Illumination"), false);
-    const float DefaultLightLevel = GS->GetEnvironmentMetricAtLocation(EventLocation, DefaultLightTag);
-    const float DefaultIlluminationFactor = (DefaultLightLevel > 0.0f) ? FMath::Clamp(DefaultLightLevel / 100.0f, 0.1f, 1.0f) : 1.0f;
+    ADynamicCharacter* OwnerChar = Cast<ADynamicCharacter>(GetOwner());
+    if (!OwnerChar) return;
 
-    float MaxSearchRadius = 0.0f;
-    for (const auto& Sig : SensorySignatures) MaxSearchRadius = FMath::Max(MaxSearchRadius, Sig.Value);
+    // 1. Snapshot thread-safe parameters on the GameThread to prevent concurrent GC crashes
+    FGameplayTagContainer SourceTags, TargetTags;
+    if (UAbilitySystemComponent* ASC = OwnerChar->GetAbilitySystemComponent())
+    {
+        ASC->GetOwnedGameplayTags(SourceTags);
+    }
+    if (UAbilitySystemComponent* PerpASC = Perpetrator->FindComponentByClass<UAbilitySystemComponent>())
+    {
+        PerpASC->GetOwnedGameplayTags(TargetTags);
+    }
+
+    TArray<FDynamicAssignedProfessionItem> SafeProfessions = ReplicatedProfessions.Items;
+    FGameplayTag SafeDefaultMovementState = OwnerChar->DefaultMovementStateTag;
+    FGameplayTag SafeActiveMovementState = OwnerChar->ActiveMovementStateTag;
     
-    TArray<FOverlapResult> Overlaps;
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(CrimeSensorySweep), false, Perpetrator);
-    if (Victim) Params.AddIgnoredActor(Victim);
+    TWeakObjectPtr<ADynamicCharacter> WeakOwner(OwnerChar);
+    TWeakObjectPtr<UAbilitySystemComponent> WeakSourceASC(OwnerChar->GetAbilitySystemComponent());
+    TWeakObjectPtr<UAbilitySystemComponent> WeakTargetASC(Perpetrator->FindComponentByClass<UAbilitySystemComponent>());
 
-    World->OverlapMultiByChannel(Overlaps, EventLocation, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(MaxSearchRadius), Params);
+    // 2. Offload heavily iterative logic and data-driven condition tree processing to the ThreadPool
+    Async(EAsyncExecution::ThreadPool, [GS, SafeProfessions, SafeDefaultMovementState, SafeActiveMovementState, SensorySignatures, SourceTags, TargetTags, WeakOwner, WeakSourceASC, WeakTargetASC]() 
+    {
+        FGameplayTag TriggeredBehaviorTag;
 
-    TWeakObjectPtr<UDynamicSocialComponent> WeakThis(this);
-    TWeakObjectPtr<AActor> WeakPerp(Perpetrator);
-    TWeakObjectPtr<AActor> WeakVictim(Victim);
-    
-    Async(EAsyncExecution::ThreadPool, [WeakThis, Overlaps, EventLocation, CrimeTag, WeakPerp, WeakVictim, OptionalStolenItemGuid, CoConspirators, SensorySignatures, DefaultIlluminationFactor]() mutable {
-        
-        struct FCandidateWitness {
-            TWeakObjectPtr<UDynamicSocialComponent> WitnessComp;
-            float DistSq;
-            float ForwardDotProduct;
-            float BaseInterferenceFactor;
-        };
-        TArray<FCandidateWitness> Candidates;
-
-        for (const FOverlapResult& Overlap : Overlaps)
+        for (const auto& SigPair : SensorySignatures)
         {
-            AActor* WitnessActor = Overlap.GetActor();
-            if (!WitnessActor) continue;
+            const FGameplayTag StimulusTag = SigPair.Key;
             
-            UDynamicSocialComponent* WitnessSocial = WitnessActor->FindComponentByClass<UDynamicSocialComponent>();
-            if (!WitnessSocial) continue;
+            // Priority A: Check profession-specific sensory responses (e.g. Guard reacts to stealth footsteps)
+            for (const FDynamicAssignedProfessionItem& ProfItem : SafeProfessions)
+            {
+                if (const FDynamicProfessionDef* ProfDef = GS->ProfessionMasterRegistry.Find(ProfItem.ProfessionTag))
+                {
+                    for (const FSensoryResponseRule& Rule : ProfDef->SensoryResponses)
+                    {
+                        if (Rule.TriggeringStimulusTag == StimulusTag)
+                        {
+                            bool bPassesCondition = true;
+                            if (!Rule.PrerequisiteConditionTree.IsNone())
+                            {
+                                if (const FDynamicConditionTreeContainer* Tree = GS->SharedConditionTrees.Find(Rule.PrerequisiteConditionTree))
+                                {
+                                    bPassesCondition = UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, WeakSourceASC.Get(), WeakTargetASC.Get(), SourceTags, TargetTags);
+                                }
+                                else
+                                {
+                                    bPassesCondition = false;
+                                }
+                            }
+                            
+                            if (bPassesCondition)
+                            {
+                                TriggeredBehaviorTag = Rule.ResultingBehaviorTag;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (TriggeredBehaviorTag.IsValid()) break;
+            }
 
-            const FVector WitnessLoc = WitnessActor->GetActorLocation();
-            const float DistSq = FVector::DistSquared(EventLocation, WitnessLoc);
-            const FVector DirToEvent = (EventLocation - WitnessLoc).GetSafeNormal();
-            const float DotP = FVector::DotProduct(WitnessActor->GetActorForwardVector(), DirToEvent);
+            // Priority B: Fall back to foundational AI Agent Template responses (e.g. Civilian flees from explosion)
+            if (!TriggeredBehaviorTag.IsValid())
+            {
+                if (const FDynamicAIAgentDef* AgentDef = GS->MasterAIAgentRegistry.Find(SafeDefaultMovementState))
+                {
+                    for (const FSensoryResponseRule& Rule : AgentDef->SensoryResponses)
+                    {
+                        if (Rule.TriggeringStimulusTag == StimulusTag)
+                        {
+                            TriggeredBehaviorTag = Rule.ResultingBehaviorTag;
+                            break;
+                        }
+                    }
+                }
+            }
 
-            Candidates.Add({WitnessSocial, DistSq, DotP, DefaultIlluminationFactor});
+            if (TriggeredBehaviorTag.IsValid()) break;
         }
 
-        Async(EAsyncExecution::TaskGraphMainThread, [Candidates = MoveTemp(Candidates), WeakPerp, WeakVictim, EventLocation, CrimeTag, OptionalStolenItemGuid, CoConspirators, SensorySignatures]() mutable {
-            
-            AActor* SafePerpetrator = WeakPerp.Get();
-            AActor* SafeVictim = WeakVictim.Get();
-            UWorld* SafeWorld = SafePerpetrator ? SafePerpetrator->GetWorld() : nullptr;
-            ADynamicGameState* SafeGS = SafeWorld ? SafeWorld->GetGameState<ADynamicGameState>() : nullptr;
-            if (!SafeWorld || !SafeGS || !SafePerpetrator) return;
-
-            const FDynamicCrimeDef* CrimeDef = SafeGS->CrimeMasterRegistry.Find(CrimeTag);
-            const FLawAndOrderSystemConfig& LawConfig = SafeGS->LawAndOrderConfig;
-            
-            FGuid PerpGuid;
-            UDynamicCustomizationComponent* PerpCust = SafePerpetrator->FindComponentByClass<UDynamicCustomizationComponent>();
-            UDynamicEquipmentComponent* PerpEquip = SafePerpetrator->FindComponentByClass<UDynamicEquipmentComponent>();
-            if (UDynamicSocialComponent* PerpSocial = SafePerpetrator->FindComponentByClass<UDynamicSocialComponent>())
+        // 3. Dispatch the resolved behavior securely back to the GameThread for execution
+        if (TriggeredBehaviorTag.IsValid())
+        {
+            Async(EAsyncExecution::TaskGraphMainThread, [WeakOwner, TriggeredBehaviorTag, SafeActiveMovementState]() 
             {
-                PerpGuid = PerpSocial->CharacterPersistentGuid;
-            }
-
-            FGuid VictimPersistentGuid;
-            if (SafeVictim)
-            {
-                if (UDynamicSocialComponent* VicSocial = SafeVictim->FindComponentByClass<UDynamicSocialComponent>())
+                if (ADynamicCharacter* StrongOwner = WeakOwner.Get())
                 {
-                    VictimPersistentGuid = VicSocial->CharacterPersistentGuid;
-                }
-            }
-
-            for (const FCandidateWitness& Candidate : Candidates)
-            {
-                UDynamicSocialComponent* WitnessComp = Candidate.WitnessComp.Get();
-                if (!WitnessComp) continue;
-
-                ADynamicCharacter* Char = Cast<ADynamicCharacter>(WitnessComp->GetOwner());
-                const UDynamicAttributeSet* WitnessAttr = Char ? Char->GetDynamicAttributeSet() : nullptr;
-                if (!WitnessAttr) continue;
-
-                FSensoryProfileDef SensoryProfile;
-                if (UDynamicCustomizationComponent* Cust = Char->GetCustomizationComponent())
-                {
-                    FCharacterTemplateDef TempDef;
-                    if (SafeGS->GetCharacterTemplate(Cust->ActiveCharacterTemplateTag, TempDef))
+                    if (UDynamicQuestComponent* QuestComp = StrongOwner->FindComponentByClass<UDynamicQuestComponent>())
                     {
-                        SensoryProfile = TempDef.SensoryProfile;
+                        // Suspend current long-term work/travel goal to handle the urgent stimuli
+                        QuestComp->PushUrgentGoalBehavior(SafeActiveMovementState);
                     }
+                    
+                    StrongOwner->ServerSetMovementState(TriggeredBehaviorTag);
                 }
-
-                bool bPerceivedEvent = false;
-                float FinalConfidence = 0.0f;
-                bool bRequiresLoS = false;
-                bool bCanIdentify = false;
-
-                // Data-driven evaluation of the witness's Senses array
-                if (SensoryProfile.Senses.Num() > 0)
-                {
-                    for (const FSenseDefinition& SenseDef : SensoryProfile.Senses)
-                    {
-                        if (const float* BaseRadius = SensorySignatures.Find(SenseDef.SenseTag))
-                        {
-                            const float AttrMult = SenseDef.RangeAttributeTag.IsValid()
-                                ? FMath::Max(0.1f, WitnessAttr->GetDynamicAttributeValue(SenseDef.RangeAttributeTag, 0))
-                                : 1.0f;
-                            const float EffectiveRadius = (*BaseRadius) * AttrMult;
-
-                            if (Candidate.DistSq <= FMath::Square(EffectiveRadius))
-                            {
-                                // Check FOV cone if FOVAttributeTag is specified; otherwise 360-degree omnidirectional
-                                float FOVDegrees = 360.0f;
-                                if (SenseDef.FOVAttributeTag.IsValid())
-                                {
-                                    const float AttrFOV = WitnessAttr->GetDynamicAttributeValue(SenseDef.FOVAttributeTag, 0);
-                                    FOVDegrees = (AttrFOV > 0.0f) ? AttrFOV : WitnessComp->SightFieldOfViewDegrees;
-                                }
-                                const float FOVCos = (FOVDegrees < 360.0f) ? FMath::Cos(FMath::DegreesToRadians(FOVDegrees * 0.5f)) : -1.0f;
-
-                                if (Candidate.ForwardDotProduct >= FOVCos)
-                                {
-                                    float InterferenceScalar = Candidate.BaseInterferenceFactor;
-                                    if (SenseDef.EnvironmentalInterferenceMetricTag.IsValid())
-                                    {
-                                        const float EnvVal = SafeGS->GetEnvironmentMetricAtLocation(EventLocation, SenseDef.EnvironmentalInterferenceMetricTag);
-                                        InterferenceScalar = FMath::Clamp(EnvVal / 100.0f, 0.1f, 1.0f);
-                                    }
-
-                                    const float DistFactor = 1.0f - (FMath::Sqrt(Candidate.DistSq) / FMath::Max(1.0f, EffectiveRadius));
-                                    const float SenseConf = DistFactor * InterferenceScalar;
-
-                                    bPerceivedEvent = true;
-                                    if (SenseDef.bCanIdentifyTarget)
-                                    {
-                                        bCanIdentify = true;
-                                        FinalConfidence = FMath::Max(FinalConfidence, SenseConf);
-                                    }
-                                    if (SenseDef.bRequiresLineOfSight)
-                                    {
-                                        bRequiresLoS = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Fallback when a template has not defined custom Senses yet: match any signature within radius
-                    for (const auto& Sig : SensorySignatures)
-                    {
-                        if (Candidate.DistSq <= FMath::Square(Sig.Value))
-                        {
-                            bPerceivedEvent = true;
-                            const float FOVCos = FMath::Cos(FMath::DegreesToRadians(WitnessComp->SightFieldOfViewDegrees * 0.5f));
-                            if (Candidate.ForwardDotProduct >= FOVCos)
-                            {
-                                bCanIdentify = true;
-                                bRequiresLoS = true;
-                                const float DistFactor = 1.0f - (FMath::Sqrt(Candidate.DistSq) / FMath::Max(1.0f, Sig.Value));
-                                FinalConfidence = FMath::Max(FinalConfidence, DistFactor * Candidate.BaseInterferenceFactor);
-                            }
-                        }
-                    }
-                }
-
-                if (!bPerceivedEvent) continue;
-
-                if (bRequiresLoS)
-                {
-                    FHitResult LoSHit;
-                    FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(WitnessLoS), false, WitnessComp->GetOwner());
-                    if (SafeWorld->LineTraceSingleByChannel(LoSHit, WitnessComp->GetOwner()->GetActorLocation(), EventLocation, ECC_Visibility, TraceParams))
-                    {
-                        if (LoSHit.GetActor() != SafePerpetrator)
-                        {
-                            bCanIdentify = false;
-                            FinalConfidence = 0.0f;
-                        }
-                    }
-                }
-
-                if (bCanIdentify && CrimeDef && !CrimeDef->WitnessInterpretationTree.IsNone())
-                {
-                    if (const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(WitnessComp->GetOwner(), CrimeDef->WitnessInterpretationTree))
-                    {
-                        UAbilitySystemComponent* SourceASC = WitnessComp->GetOwner()->FindComponentByClass<UAbilitySystemComponent>();
-                        UAbilitySystemComponent* TargetASC = SafePerpetrator->FindComponentByClass<UAbilitySystemComponent>();
-                        FGameplayTagContainer STags, TTags;
-                        if (SourceASC) SourceASC->GetOwnedGameplayTags(STags);
-                        if (TargetASC) TargetASC->GetOwnedGameplayTags(TTags);
-
-                        if (!UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, SourceASC, TargetASC, STags, TTags))
-                        {
-                            bCanIdentify = false;
-                            FinalConfidence = 0.0f;
-                        }
-                    }
-                }
-
-                if (!bCanIdentify && FinalConfidence <= 0.01f)
-                {
-                    // Audio-only perception: trigger investigation behavior tag if configured
-                    if (LawConfig.InvestigateSoundBehaviorTag.IsValid())
-                    {
-                        if (UAbilitySystemComponent* ASC = WitnessComp->GetOwner()->FindComponentByClass<UAbilitySystemComponent>())
-                        {
-                            ASC->AddLooseGameplayTags(FGameplayTagContainer(LawConfig.InvestigateSoundBehaviorTag));
-                        }
-                    }
-                    continue;
-                }
-
-                FCrimeMemoryItem Mem;
-                Mem.MemoryID = FGuid::NewGuid();
-                Mem.CrimeTag = CrimeTag;
-                Mem.VictimGuid = VictimPersistentGuid;
-                Mem.AssociatedItemGuid = OptionalStolenItemGuid;
-                Mem.CoConspiratorGuids = CoConspirators;
-                Mem.Timestamp = SafeWorld->GetTimeSeconds();
-                Mem.IdentificationConfidence = FinalConfidence;
-
-                if (bCanIdentify && FinalConfidence > SensoryProfile.BaseIdentificationConfidenceThreshold)
-                {
-                    // FIX: Use TargetEntityGuid from FDynamicRelationshipEdgeItem
-                    const bool bIsKnown = (WitnessComp->FindRelationshipByGuid(PerpGuid) != nullptr);
-
-                    if (bIsKnown)
-                    {
-                        Mem.bPerpetratorKnown = true;
-                        Mem.PerpetratorGuid = PerpGuid;
-                    }
-                    else
-                    {
-                        Mem.bPerpetratorKnown = false;
-                        const float IdAttrValue = SensoryProfile.IdentificationAttributeTag.IsValid()
-                            ? FMath::Max(1.0f, WitnessAttr->GetDynamicAttributeValue(SensoryProfile.IdentificationAttributeTag, 0))
-                            : 10.0f;
-                        const float BlurFactor = FMath::Clamp(1.0f - (FinalConfidence * (IdAttrValue / FMath::Max(1.0f, SensoryProfile.IdentificationBlurScalar))), 0.0f, 1.0f);
-                        
-                        if (PerpCust)
-                        {
-                            Mem.PerpetratorDescription.CharacterTemplateTag = PerpCust->ActiveCharacterTemplateTag;
-                            Mem.PerpetratorDescription.Gender = PerpCust->ActiveGender;
-
-                            for (const FGameplayTag& NumFeat : SensoryProfile.TrackedNumericFeatures)
-                            {
-                                const float Val = PerpCust->GetMorphSliderValue(NumFeat) * FMath::RandRange(1.0f - (0.2f * BlurFactor), 1.0f + (0.2f * BlurFactor));
-                                Mem.PerpetratorDescription.NumericFeatures.Add(NumFeat, Val);
-                            }
-                            for (const FGameplayTag& ColFeat : SensoryProfile.TrackedColorFeatures)
-                            {
-                                if (ColFeat.ToString().Contains(TEXT("Skin"))) Mem.PerpetratorDescription.ColorFeatures.Add(ColFeat, PerpCust->SkinColor.PrimaryColor);
-                                else if (ColFeat.ToString().Contains(TEXT("Hair"))) Mem.PerpetratorDescription.ColorFeatures.Add(ColFeat, PerpCust->HairColor.PrimaryColor);
-                            }
-                        }
-                        if (PerpEquip)
-                        {
-                            for (const FGameplayTag& EquipSlot : SensoryProfile.TrackedEquipmentSlots)
-                            {
-                                Mem.PerpetratorDescription.EquippedItems.Add(EquipSlot, PerpEquip->GetEquippedItemInSlot(EquipSlot));
-                            }
-                        }
-                    }
-                }
-
-                FCrimeMemoryItem& Added = WitnessComp->ReplicatedCrimeMemories.Items.Add_GetRef(Mem);
-                WitnessComp->ReplicatedCrimeMemories.MarkItemDirty(Added);
-
-                WitnessComp->ExecuteDynamicWitnessReaction(Mem, SafePerpetrator, SafeVictim);
-            }
-        });
+            });
+        }
     });
 }
 
@@ -1445,17 +1270,12 @@ bool UDynamicSocialComponent::ServerSearchTargetForContraband(ADynamicCharacter*
     if (!GetOwner()->HasAuthority() || !Suspect || !AssignedJurisdictionTag.IsValid()) return false;
 
     UDynamicSocialComponent* SuspectSocial = Suspect->FindComponentByClass<UDynamicSocialComponent>();
-    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!SuspectSocial || !GS) return false;
+    if (!SuspectSocial) return false;
 
-    FDynamicBountyRecord CurrentRecord;
-    if (!GS->IsCharacterWantedInJurisdiction(AssignedJurisdictionTag, SuspectSocial->CharacterPersistentGuid, CurrentRecord))
-    {
-        return false;
-    }
-
-    if (CurrentRecord.SuspectedCrimes.Num() == 0) return false;
-
+    // Search is conducted based on whether THIS guard perceives them as suspicious/wanted, not the global ledger
+    const float PerceivedBounty = GetPerceivedBounty(SuspectSocial->CharacterPersistentGuid, AssignedJurisdictionTag);
+    
+    // We can also allow random searches if the guard has the "RandomSearch" behavior active, but primarily:
     bool bFoundStolenGoods = false;
 
     auto CheckOwnerGuid = [&](const FGuid& ItemOwner) {
@@ -1479,30 +1299,18 @@ bool UDynamicSocialComponent::ServerSearchTargetForContraband(ADynamicCharacter*
 
     if (bFoundStolenGoods)
     {
-        TMap<FGuid, FDynamicBountyRecord>& LocalLedger = GS->JurisdictionBounties.FindOrAdd(AssignedJurisdictionTag);
-        FDynamicBountyRecord& RecordToUpdate = LocalLedger.FindOrAdd(SuspectSocial->CharacterPersistentGuid);
-        
-        const FDynamicJurisdictionDef* JurDef = GS->JurisdictionMasterRegistry.Find(AssignedJurisdictionTag);
+        // Guard generates a new memory of the theft, rather than instantly updating the global ledger
+        FCrimeMemoryItem NewMemory;
+        NewMemory.MemoryID = FGuid::NewGuid();
+        NewMemory.CrimeTag = FGameplayTag::RequestGameplayTag(TEXT("Crime.Type.Theft"), false);
+        NewMemory.PerpetratorGuid = SuspectSocial->CharacterPersistentGuid;
+        NewMemory.bPerpetratorKnown = true;
+        NewMemory.Timestamp = GetWorld()->GetTimeSeconds();
+        NewMemory.IdentificationConfidence = 1.0f;
+        NewMemory.bHasBeenReportedToAuthority = false;
 
-        for (const FGameplayTag& SuspectedCrime : RecordToUpdate.SuspectedCrimes)
-        {
-            if (JurDef)
-            {
-                if (const FCrimeSeverityOverride* Law = JurDef->LocalLaws.Find(SuspectedCrime))
-                {
-                    RecordToUpdate.TotalBountyAmount += Law->SeverityOverride;
-                }
-            }
-            RecordToUpdate.ConfirmedCrimes.AddUnique(SuspectedCrime);
-        }
-        
-        RecordToUpdate.SuspectedCrimes.Empty();
-        
-        if (RecordToUpdate.TotalBountyAmount >= GS->LawAndOrderConfig.LethalForceBountyThreshold)
-        {
-            RecordToUpdate.bLethalForceAuthorized = true;
-        }
-
+        FCrimeMemoryItem& Added = ReplicatedCrimeMemories.Items.Add_GetRef(NewMemory);
+        ReplicatedCrimeMemories.MarkItemDirty(Added);
         return true;
     }
 
@@ -1568,42 +1376,73 @@ bool UDynamicSocialComponent::ServerInterrogateSuspect(ADynamicCharacter* Suspec
 {
     if (!GetOwner()->HasAuthority() || !Suspect) return false;
 
-    UDynamicSocialComponent* SuspectSocial = Suspect->FindComponentByClass<UDynamicSocialComponent>();
-    if (!SuspectSocial) return false;
+    const FGameplayTag AuthorizedForce = GetAuthorizedForceLevel(Suspect, AssignedJurisdictionTag);
+    static const FGameplayTag LethalForceTag = FGameplayTag::RequestGameplayTag(TEXT("ForceLevel.Lethal"), false);
 
-    if (!InterrogationConditionTree.IsNone())
+    return AuthorizedForce.MatchesTag(LethalForceTag);
+}
+
+float UDynamicSocialComponent::GetPerceivedBounty(const FGuid& SuspectGuid, FGameplayTag JurisdictionTag) const
+{
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return 0.0f;
+
+    const FDynamicJurisdictionDef* JurDef = GS->JurisdictionMasterRegistry.Find(JurisdictionTag);
+    if (!JurDef) return 0.0f;
+
+    float TotalBounty = 0.0f;
+    for (const FCrimeMemoryItem& Memory : ReplicatedCrimeMemories.Items)
     {
-        if (const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(GetOwner(), InterrogationConditionTree))
+        if (Memory.PerpetratorGuid == SuspectGuid)
         {
-            UAbilitySystemComponent* SourceASC = GetOwner()->FindComponentByClass<UAbilitySystemComponent>();
-            UAbilitySystemComponent* TargetASC = Suspect->FindComponentByClass<UAbilitySystemComponent>();
-            FGameplayTagContainer STags, TTags;
-            if (SourceASC) SourceASC->GetOwnedGameplayTags(STags);
-            if (TargetASC) TargetASC->GetOwnedGameplayTags(TTags);
-
-            if (UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, SourceASC, TargetASC, STags, TTags))
+            if (const FCrimeSeverityOverride* Law = JurDef->LocalLaws.Find(Memory.CrimeTag))
             {
-                bool bExtractedInfo = false;
-                for (const FCrimeMemoryItem& Memory : SuspectSocial->ReplicatedCrimeMemories.Items)
-                {
-                    if (Memory.CoConspiratorGuids.Num() > 0)
-                    {
-                        for (const FGuid& Conspirator : Memory.CoConspiratorGuids)
-                        {
-                            FCrimeMemoryItem SnitchedMemory = Memory;
-                            SnitchedMemory.MemoryID = FGuid::NewGuid();
-                            SnitchedMemory.PerpetratorGuid = Conspirator;
-                            SnitchedMemory.bPerpetratorKnown = true;
-                            
-                            FCrimeMemoryItem& Added = ReplicatedCrimeMemories.Items.Add_GetRef(SnitchedMemory);
-                            ReplicatedCrimeMemories.MarkItemDirty(Added);
-                            bExtractedInfo = true;
-                        }
-                    }
-                }
-                return bExtractedInfo; 
+                if (Law->bIsIllegal) TotalBounty += Law->SeverityOverride;
+            }
+            else if (const FDynamicCrimeDef* BaseCrime = GS->CrimeMasterRegistry.Find(Memory.CrimeTag))
+            {
+                TotalBounty += BaseCrime->BaseSeverity;
             }
         }
     }
-    return false;
+    return TotalBounty;
+}
+
+FGameplayTag UDynamicSocialComponent::GetAuthorizedForceLevel(ADynamicCharacter* Suspect, FGameplayTag JurisdictionTag) const
+{
+    if (!Suspect) return FGameplayTag::EmptyTag;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return FGameplayTag::EmptyTag;
+
+    const FDynamicJurisdictionDef* JurDef = GS->JurisdictionMasterRegistry.Find(JurisdictionTag);
+    if (!JurDef) return FGameplayTag::EmptyTag;
+
+    FGameplayTag BestForceLevel = FGameplayTag::RequestGameplayTag(TEXT("ForceLevel.None"), false);
+    float HighestPriority = -MAX_flt;
+
+    UAbilitySystemComponent* SourceASC = GetOwner()->FindComponentByClass<UAbilitySystemComponent>();
+    UAbilitySystemComponent* TargetASC = Suspect->GetAbilitySystemComponent();
+    
+    FGameplayTagContainer SourceTags, TargetTags;
+    if (SourceASC) SourceASC->GetOwnedGameplayTags(SourceTags);
+    if (TargetASC) TargetASC->GetOwnedGameplayTags(TargetTags);
+
+    for (const FEscalationOfForceRule& Rule : JurDef->EscalationOfForceRules)
+    {
+        if (Rule.Priority > HighestPriority)
+        {
+            if (!Rule.EvaluationConditionTree.IsNone())
+            {
+                const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(GetOwner(), Rule.EvaluationConditionTree);
+                if (Tree && UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, SourceASC, TargetASC, SourceTags, TargetTags))
+                {
+                    HighestPriority = Rule.Priority;
+                    BestForceLevel = Rule.AuthorizedForceLevel;
+                }
+            }
+        }
+    }
+
+    return BestForceLevel;
 }

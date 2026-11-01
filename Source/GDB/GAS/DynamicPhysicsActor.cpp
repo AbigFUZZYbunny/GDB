@@ -181,7 +181,18 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
 
     if (InteractableComponent)
     {
-        InteractableComponent->KinematicTargetPoints = Def->KinematicTargetPoints;
+        InteractableComponent->KinematicTargetPoints.Empty(Def->KinematicTargetPoints.Num());
+        for (const auto& Pair : Def->KinematicTargetPoints)
+        {
+            FInteractionTargetPoint Point;
+            Point.TargetPointTag = Pair.Key;
+            Point.LocalOffset = Pair.Value;
+            Point.ComponentName = (SkeletalMeshComponent && !SkeletalMeshComponent->bHiddenInGame) 
+                ? SkeletalMeshComponent->GetFName() 
+                : StaticMeshComponent->GetFName();
+            InteractableComponent->KinematicTargetPoints.Add(Point);
+        }
+
         InteractableComponent->InvalidateAllKinematicCaches();
         for (const FGameplayTag& StateTag : Def->InitialInteractableStateTags)
         {

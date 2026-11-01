@@ -160,6 +160,12 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social|AI")
     bool GetOwnedRoomLocation(FGameplayTag RoomTypeTag, FVector& OutLocation) const;
+    
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Law")
+    float GetPerceivedBounty(const FGuid& SuspectGuid, FGameplayTag JurisdictionTag) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Law")
+    FGameplayTag GetAuthorizedForceLevel(ADynamicCharacter* Suspect, FGameplayTag JurisdictionTag) const;
 
 private:
     void HandleCalloutIgnored();

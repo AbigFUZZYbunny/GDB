@@ -234,11 +234,11 @@ bool UDynamicGameplayAbility::EvaluateDynamicRule(const FGameplayTag& RuleTag, c
     return UDynamicLogicEvaluator::EvaluateConditionTree(*ValidationTree, ASC, ASC, SourceTags, TargetTags);
 }
 
-void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStageConfig& StageConfig)
+void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentation& StageConfig)
 {
-    if (StageConfig.PresentationMontage.IsNull()) return;
+    if (StageConfig.StageMontage.IsNull()) return; // Removed semicolon after if()
 
-    const FSoftObjectPath MontagePath = StageConfig.PresentationMontage.ToSoftObjectPath();
+    const FSoftObjectPath MontagePath = StageConfig.StageMontage.ToSoftObjectPath();
     TWeakObjectPtr<UDynamicGameplayAbility> WeakThis(this);
     const float PlayRate = StageConfig.PlayRate;
 

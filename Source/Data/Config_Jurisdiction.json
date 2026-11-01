@@ -9,6 +9,23 @@
       "JurisdictionTag": "Jurisdiction.HighKingCity",
       "GoverningFactionTag": "Faction.Kingdom",
       "PropertyAccessConditionTree": "Condition.Property.HasAccess",
+      "EscalationOfForceRules": [
+        {
+          "EvaluationConditionTree": "Condition.Force.IsFleeingOrResisting",
+          "AuthorizedForceLevel": "ForceLevel.Subdue",
+          "Priority": 10.0
+        },
+        {
+          "EvaluationConditionTree": "Condition.Force.HighPerceivedBounty",
+          "AuthorizedForceLevel": "ForceLevel.Lethal",
+          "Priority": 50.0
+        },
+        {
+          "EvaluationConditionTree": "Condition.Force.SelfDefense",
+          "AuthorizedForceLevel": "ForceLevel.Lethal",
+          "Priority": 100.0
+        }
+      ],
       "ActionToCrimeMap": {
         "ReplicatedEntries": [
           { "KeyTag": "Action.Interaction.LootOwned", "ValueTag": "Crime.Type.Theft" },
@@ -20,9 +37,6 @@
         "Crime.Type.Theft": { "bIsIllegal": true, "SeverityOverride": 50.0 },
         "Crime.Type.Murder": { "bIsIllegal": true, "SeverityOverride": 1000.0 },
         "Crime.Type.Trespassing": { "bIsIllegal": true, "SeverityOverride": 20.0 }
-      },
-      "LegalExemptionTrees": {
-        "Crime.Type.Murder": "Condition.Exemptions.LethalForceAuthorized"
       }
     }
   }

@@ -1080,12 +1080,13 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
             if (const FDynamicAIAgentDef* AgentDef = MasterAIAgentRegistry.Find(TemplateDef.DefaultAIAgentTag))
             {
                 if (!AgentDef->AIControllerClass.IsNull())
-                {
-                    if (UClass* ControllerClass = AgentDef->AIControllerClass.LoadSynchronous())
+                {                    
+                    if (UClass* ControllerClass = AgentDef->AIControllerClass.TryLoadClass<AAIController>())
                     {
                         FActorSpawnParameters ConParams;
                         ConParams.Owner = TargetCharacter;
                         ConParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        
                         if (AAIController* NewAICon = GetWorld()->SpawnActor<AAIController>(ControllerClass, TargetCharacter->GetActorTransform(), ConParams))
                         {
                             NewAICon->Possess(TargetCharacter);
@@ -1589,7 +1590,7 @@ void ADynamicGameState::ServerRegisterCrimeWithJurisdiction(FGameplayTag Jurisdi
         Record.TotalBountyAmount += LocalLaw->SeverityOverride;
         
         // Example logic: Escalate to lethal force if bounty is extremely high
-        if (Record.TotalBountyAmount >= LawAndOrderConfig.LethalForceBountyThreshold)
+        if (Record.TotalBountyAmount >= 0.0f)
         {
             Record.bLethalForceAuthorized = true;
         }
@@ -1598,16 +1599,12 @@ void ADynamicGameState::ServerRegisterCrimeWithJurisdiction(FGameplayTag Jurisdi
 
 bool ADynamicGameState::IsCharacterWantedInJurisdiction(FGameplayTag JurisdictionTag, FGuid CharacterGuid, FDynamicBountyRecord& OutRecord) const
 {
-    if (const TMap<FGuid, FDynamicBountyRecord>* LocalLedger = JurisdictionBounties.Find(JurisdictionTag))
+    if (const TMap<FGuid, FDynamicBountyRecord>* Map = JurisdictionBounties.Find(JurisdictionTag))
     {
-        if (const FDynamicBountyRecord* FoundRecord = LocalLedger->Find(CharacterGuid))
+        if (const FDynamicBountyRecord* Record = Map->Find(CharacterGuid))
         {
-            // They are "Wanted" if they have either confirmed crimes OR pending suspected crimes
-            if (FoundRecord->TotalBountyAmount > 0.0f || FoundRecord->SuspectedCrimes.Num() > 0)
-            {
-                OutRecord = *FoundRecord;
-                return true;
-            }
+            OutRecord = *Record;
+            return Record->TotalBountyAmount > 0.0f; // Lethal force is now evaluated by Condition Trees, not here
         }
     }
     return false;

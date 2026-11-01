@@ -61,7 +61,6 @@ bool UDynamicLogicEvaluator::EvaluateLeafNode(
         const FGameplayTag LooseTag = FGameplayTag::RequestGameplayTag(Node.UserDefinedKey, false);
         return LooseTag.IsValid() && (Node.bCheckSource ? STags.HasTag(LooseTag) : TTags.HasTag(LooseTag));
     }
-
     if (Node.ConditionType == EConditionType::AttributeValue)
     {
         const UAbilitySystemComponent* ChosenASC = Node.bCheckSource ? SourceASC : TargetASC;
@@ -70,7 +69,6 @@ bool UDynamicLogicEvaluator::EvaluateLeafNode(
         if (!DynSet || !AttributeTag.IsValid()) return false;
         return ExecuteMathComparison(DynSet->GetDynamicAttributeValue(AttributeTag), Node.ComparisonValue, Node.ComparisonOperator);
     }
-
     if (Node.ConditionType == EConditionType::AttributeComparedToWorldTime)
     {
         const UAbilitySystemComponent* ChosenASC = Node.bCheckSource ? SourceASC : TargetASC;
@@ -81,7 +79,6 @@ bool UDynamicLogicEvaluator::EvaluateLeafNode(
         const float CurrentTime = World ? World->GetTimeSeconds() : 0.0f;
         return ExecuteMathComparison(DynSet->GetDynamicAttributeValue(AttributeTag), CurrentTime + Node.ComparisonValue, Node.ComparisonOperator);
     }
-
     if (Node.ConditionType == EConditionType::RelationshipMetricCheck)
     {
         const AActor* SourceActor = SourceASC ? SourceASC->GetOwner() : nullptr;
@@ -104,7 +101,6 @@ bool UDynamicLogicEvaluator::EvaluateLeafNode(
         const float MetricVal = SourceSocial->GetDecayedRelationshipMetric(TargetSocial->CharacterPersistentGuid, MetricTag);
         return ExecuteMathComparison(MetricVal, Node.ComparisonValue, Node.ComparisonOperator);
     }
-
     if (Node.ConditionType == EConditionType::NeedValue)
     {
         const UAbilitySystemComponent* ChosenASC = Node.bCheckSource ? SourceASC : TargetASC;
@@ -116,6 +112,23 @@ bool UDynamicLogicEvaluator::EvaluateLeafNode(
         float NeedVal = 0.0f;
         SocialComp->GetNeedValue(NeedTag, NeedVal);
         return ExecuteMathComparison(NeedVal, Node.ComparisonValue, Node.ComparisonOperator);
+    }
+    if (Node.ConditionType == EConditionType::PerceivedBountyCheck)
+    {
+        const AActor* SourceActor = SourceASC ? SourceASC->GetOwner() : nullptr;
+        const AActor* TargetActor = TargetASC ? TargetASC->GetOwner() : nullptr;
+        if (!SourceActor || !TargetActor) return false;
+
+        const UDynamicSocialComponent* SourceSocial = SourceActor->FindComponentByClass<UDynamicSocialComponent>();
+        const UDynamicSocialComponent* TargetSocial = TargetActor->FindComponentByClass<UDynamicSocialComponent>();
+        if (!SourceSocial || !TargetSocial) return false;
+
+        // UserDefinedKey dictates which Jurisdiction to evaluate against (e.g., "Jurisdiction.HighKingCity")
+        FGameplayTag JurisdictionTag = FGameplayTag::RequestGameplayTag(Node.UserDefinedKey, false);
+        if (!JurisdictionTag.IsValid()) return false;
+
+        const float PerceivedBounty = SourceSocial->GetPerceivedBounty(TargetSocial->CharacterPersistentGuid, JurisdictionTag);
+        return ExecuteMathComparison(PerceivedBounty, Node.ComparisonValue, Node.ComparisonOperator);
     }
 
     return false;

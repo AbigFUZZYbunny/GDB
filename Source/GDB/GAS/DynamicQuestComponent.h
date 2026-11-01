@@ -61,6 +61,16 @@ public:
 
     void ClearQuestsForPooling();
 
+    // Temporarily suspends normal questing / macro-travel to react to urgent sensory events
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest|AI")
+    void PushUrgentGoalBehavior(FGameplayTag PreviousMovementStateTag);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Quest|AI")
+    bool PopUrgentGoalBehavior(FGameplayTag& OutPreviousMovementStateTag);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Quest|AI")
+    bool HasUrgentGoal() const { return bHasUrgentGoalSuspension; }
+
     const FFastActiveQuestArray& GetActiveQuests() const { return ReplicatedActiveQuests; }
     FFastActiveQuestArray& GetMutableActiveQuests() { return ReplicatedActiveQuests; }
     const FFastActiveQuestObjectiveArray& GetActiveObjectives() const { return ReplicatedActiveObjectives; }
@@ -72,4 +82,7 @@ private:
     void ApplyRewardConsequences(const FQuestRewardConsequence& Consequences, const FGuid& QuestGiverGuid);
     void InitializeStepObjectives(const FGuid& QuestGuid, const FQuestStepDef& StepDef);
     void CleanUpObjectivesForQuest(const FGuid& QuestGuid);
+
+    bool bHasUrgentGoalSuspension = false;
+    FGameplayTag SuspendedMovementStateTag;
 };

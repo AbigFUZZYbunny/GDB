@@ -78,10 +78,31 @@ void UDynamicCustomizationComponent::BeginPlay()
 
 void UDynamicCustomizationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    // 1. Remove active time-sliced ticker delegate from CoreTicker
+    if (FlushTickerHandle.IsValid())
+    {
+        FTSTicker::GetCoreTicker().RemoveTicker(FlushTickerHandle);
+        FlushTickerHandle.Reset();
+    }
+
+    // 2. Clear timer handles and unregister from Significance Manager
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(TimerHandle_SignificancePoll);
+
+        if (World->GetNetMode() != NM_DedicatedServer)
+        {
+            if (USignificanceManager* SigMan = USignificanceManager::Get(World))
+            {
+                if (AActor* OwnerActor = GetOwner())
+                {
+                    SigMan->UnregisterObject(OwnerActor);
+                }
+            }
+        }
     }
+
+    DeferredMorphSliders.Empty();
     Super::EndPlay(EndPlayReason);
 }
 
@@ -175,14 +196,13 @@ void UDynamicCustomizationComponent::FlushDeferredMorphs()
 
     TWeakObjectPtr<UDynamicCustomizationComponent> WeakThis(this);
 
-    // TIME-SLICED OPTIMIZATION: Spreads hundreds of bone scaling and morph ops over multiple frames based on 0.5ms time budget
     FlushTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis](float DeltaTime) -> bool
     {
         if (!WeakThis.IsValid()) return false;
         
         UDynamicCustomizationComponent* StrongThis = WeakThis.Get();
         const double StartTime = FPlatformTime::Seconds();
-        constexpr double MaxBudgetPerFrameSeconds = 0.0005; 
+        constexpr double MaxBudgetPerFrameSeconds = 0.0005; // 0.5 ms cap
 
         while (StrongThis->DeferredMorphSliders.Num() > 0 && (FPlatformTime::Seconds() - StartTime < MaxBudgetPerFrameSeconds))
         {
@@ -214,7 +234,7 @@ void UDynamicCustomizationComponent::HandleSingleMorphReplicated(const FDynamicC
     }
     else
     {
-        DeferredMorphSliders.Add(MorphItem.SliderTag);
+        DeferredMorphSliders.AddUnique(MorphItem.SliderTag);
     }
 }
 

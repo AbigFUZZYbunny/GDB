@@ -176,6 +176,8 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities")
     UDynamicGASManagerComponent* DynamicGASManager;
+    
+    void ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag, float BaseMagnitudeOverride);
 
 private:
     void InitializeAbilitySystem();

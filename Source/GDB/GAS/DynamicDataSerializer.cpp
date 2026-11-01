@@ -2,7 +2,6 @@
 #include "DynamicDataSerializer.h"
 #include "DynamicCharacter.h"
 #include "DynamicPhysicsActor.h"
-#include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicBuildingSubsystem.h"
@@ -13,11 +12,12 @@
 #include "DynamicSocialComponent.h"
 #include "DynamicLanguageComponent.h"
 #include "DynamicQuestComponent.h"
-#include "Serialization/JsonSerializer.h"
-#include "JsonObjectConverter.h"
 #include "DynamicGameState.h"
 #include "DynamicVoxelSubsystem.h"
+#include "Engine/OverlapResult.h"
 #include "Async/Async.h"
+#include "Serialization/JsonSerializer.h"
+#include "JsonObjectConverter.h"
 
 void UDynamicDataSerializer::DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper)
 {
@@ -1100,10 +1100,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         TSharedPtr<FJsonObject> LawConfigObj = RootObject->GetObjectField(TEXT("LawAndOrderConfig"));
         FLawAndOrderSystemConfig LawConfig;
         LawConfig.DefaultJurisdictionTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("DefaultJurisdictionTag"))), false);
-        if (LawConfigObj->HasField(TEXT("InvestigateSoundBehaviorTag")))
-        {
-            LawConfig.InvestigateSoundBehaviorTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("InvestigateSoundBehaviorTag"))), false);
-        }
+        
         if (LawConfigObj->HasField(TEXT("EnterPropertyActionTag")))
         {
             LawConfig.EnterPropertyActionTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("EnterPropertyActionTag"))), false);
@@ -1112,10 +1109,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         {
             LawConfig.ExitPropertyActionTag = FGameplayTag::RequestGameplayTag(FName(*LawConfigObj->GetStringField(TEXT("ExitPropertyActionTag"))), false);
         }
-        if (LawConfigObj->HasField(TEXT("LethalForceBountyThreshold")))
-        {
-            LawConfig.LethalForceBountyThreshold = static_cast<float>(LawConfigObj->GetNumberField(TEXT("LethalForceBountyThreshold")));
-        }
+
         OutStaging.bHasLawAndOrderConfig = true;
         OutStaging.LawAndOrderConfig = LawConfig;
     }
@@ -1185,6 +1179,23 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                     }
                 }
             }
+
+            // NEW: Parse Escalation of Force Rules
+            if (JurObj->HasField(TEXT("EscalationOfForceRules")))
+            {
+                for (const auto& RuleVal : JurObj->GetArrayField(TEXT("EscalationOfForceRules")))
+                {
+                    TSharedPtr<FJsonObject> RuleObj = RuleVal->AsObject();
+                    if (!RuleObj.IsValid()) continue;
+                    
+                    FEscalationOfForceRule ForceRule;
+                    ForceRule.EvaluationConditionTree = FName(*RuleObj->GetStringField(TEXT("EvaluationConditionTree")));
+                    ForceRule.AuthorizedForceLevel = FGameplayTag::RequestGameplayTag(FName(*RuleObj->GetStringField(TEXT("AuthorizedForceLevel"))), false);
+                    ForceRule.Priority = static_cast<float>(RuleObj->GetNumberField(TEXT("Priority")));
+                    Def.EscalationOfForceRules.Add(ForceRule);
+                }
+            }
+
             OutStaging.JurisdictionMasterRegistry.Add(KeyTag, Def);
         }
     }

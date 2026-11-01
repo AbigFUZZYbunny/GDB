@@ -1257,22 +1257,41 @@ void ADynamicCharacter::ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag,
 
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS) return;
+    if (!World || !GS) return;
 
-    // Hypothetical MasterStimulusRegistry access (ensure it's added to ADynamicGameState)
-    // const FDynamicStimulusDef* StimDef = GS->MasterStimulusRegistry.Find(StimulusTag);
-    // if (!StimDef) return;
+    float FinalMagnitude = BaseMagnitudeOverride;
+    if (FinalMagnitude <= 0.0f)
+    {
+        FinalMagnitude = 500.0f; // Default fallback
+    }
 
-    float FinalMagnitude = BaseMagnitudeOverride; // Typically fallback to StimDef->BaseMagnitude
-    
-    // Scale the stimulus using dynamic attributes (e.g. Mass/Weight affecting Footstep noise)
-    // for (const FTagFloatPair& Scalar : StimDef->AttributeMagnitudeScalars.ReplicatedEntries)
-    // {
-    //     if (AttributeSet)
-    //     {
-    //         FinalMagnitude += AttributeSet->GetDynamicAttributeValue(Scalar.KeyTag, 0) * Scalar.Value;
-    //     }
-    // }
+    const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
+    FinalMagnitude *= FMath::Max(0.5f, TotalMass / 80.0f);
 
-    // Broadcast `FinalMagnitude` and `StimulusTag` to your AI Perception or sensory grid...
+    TMap<FGameplayTag, float> Signatures;
+    Signatures.Add(StimulusTag, FinalMagnitude);
+
+    const FVector Loc = GetActorLocation();
+    const float RangeSq = FMath::Square(FinalMagnitude);
+
+    for (const auto& Pair : GS->GetActiveCharacterByGuidMap())
+    {
+        if (ADynamicCharacter* OtherChar = Pair.Value.Get())
+        {
+            if (OtherChar != this && FVector::DistSquared(Loc, OtherChar->GetActorLocation()) <= RangeSq)
+            {
+                if (UDynamicSocialComponent* OtherSocial = OtherChar->FindComponentByClass<UDynamicSocialComponent>())
+                {
+                    OtherSocial->ServerProcessCrimeSensoryEvent(
+                        FGameplayTag(),
+                        this,
+                        nullptr,
+                        FGuid(),
+                        TArray<FGuid>(),
+                        Signatures
+                    );
+                }
+            }
+        }
+    }
 }

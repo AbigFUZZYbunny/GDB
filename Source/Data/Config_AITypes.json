@@ -9,7 +9,24 @@
       "bHuntsForFood": false,
       "FleeHealthThreshold": 0.40,
       "AbilityUsageRules": [],
-      "IdleTasks": [ "Behavior.Idle.Wander", "Behavior.Idle.Converse" ],
+      "IdleTasks": [
+        {
+          "TaskTag": "Behavior.Idle.Wander",
+          "BasePriorityWeight": 50.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "None"
+        },
+        {
+          "TaskTag": "Behavior.Idle.Converse",
+          "BasePriorityWeight": 60.0,
+          "LinkedAbilityOrRecipeTag": "None",
+          "RequiredItemTags": [],
+          "ProducedOutputTags": [],
+          "TaskConditionTreeName": "None"
+        }
+      ],
       "SensoryResponses": [
         {
           "TriggeringStimulusTag": "Stimulus.Sound.Explosion",

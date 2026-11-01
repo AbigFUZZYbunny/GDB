@@ -371,4 +371,25 @@ void UDynamicQuestComponent::ClearQuestsForPooling()
     ReplicatedActiveObjectives.Items.Empty();
     ReplicatedActiveObjectives.MarkArrayDirty();
     CompletedQuestTags.Reset();
+
+    bHasUrgentGoalSuspension = false;
+    SuspendedMovementStateTag = FGameplayTag::EmptyTag;
+}
+
+void UDynamicQuestComponent::PushUrgentGoalBehavior(FGameplayTag PreviousMovementStateTag)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    SuspendedMovementStateTag = PreviousMovementStateTag;
+    bHasUrgentGoalSuspension = true;
+}
+
+bool UDynamicQuestComponent::PopUrgentGoalBehavior(FGameplayTag& OutPreviousMovementStateTag)
+{
+    if (!bHasUrgentGoalSuspension) return false;
+
+    OutPreviousMovementStateTag = SuspendedMovementStateTag;
+    SuspendedMovementStateTag = FGameplayTag::EmptyTag;
+    bHasUrgentGoalSuspension = false;
+    return true;
 }

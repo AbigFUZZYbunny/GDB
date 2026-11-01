@@ -96,7 +96,7 @@ private:
     void UpdateSignificanceEvaluation();
 
     TMap<FGameplayTag, float> LocalMorphCache;
-    TArray<FGameplayTag> DeferredMorphSliders; // Replaced TSet with TArray for iterative slicing
+    TArray<FGameplayTag> DeferredMorphSliders;
     bool bIsSignificantlyVisible = true;
     
     FTimerHandle TimerHandle_SignificancePoll;

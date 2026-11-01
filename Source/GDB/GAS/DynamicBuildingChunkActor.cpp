@@ -146,7 +146,6 @@ bool ADynamicBuildingChunkActor::ServerProvideMaterialToGhost(const FGuid& Insta
     if (!EquipComp || !InvComp) return false;
 
     // Advanced builders pull from vicinity automatically
-    // FIX: UDynamicAttributeSet is a UAttributeSet (UObject), not a UActorComponent. Query via ASC or ADynamicCharacter.
     bool bAllowProximityPull = false;
     const UDynamicAttributeSet* AttrSet = nullptr;
     if (ADynamicCharacter* DynChar = Cast<ADynamicCharacter>(WorkerActor))
@@ -168,27 +167,65 @@ bool ADynamicBuildingChunkActor::ServerProvideMaterialToGhost(const FGuid& Insta
 
     for (int32 i = 0; i < PieceDef->RequiredMaterials.Num(); ++i)
     {
-        if ((Item.ProvidedMaterialsMask & (1 << i)) != 0) continue;
+        // Guard against shifting beyond 64-bit integer width
+        if (i >= 64) break;
+
+        if ((Item.ProvidedMaterialsMask & (1ULL << i)) != 0) continue;
 
         const FGameplayTag ReqTag = PieceDef->RequiredMaterials[i].MaterialArchetypeTag;
         int32 NeededQty = PieceDef->RequiredMaterials[i].RequiredQuantity;
 
+        // 1. Consume from active left hand slot and cleanly recycle the actor into the pool
         static const FGameplayTag LeftHandTag = FGameplayTag::RequestGameplayTag(TEXT("Slot.Equipment.Hand.Left"), false);
         if (EquipComp->GetEquippedItemInSlot(LeftHandTag) == ReqTag)
         {
-            EquipComp->ServerUnequipSlot(LeftHandTag, FTransform::Identity); 
-            NeededQty -= 1;
+            if (ADynamicPhysicsActor* UnequippedActor = EquipComp->ServerUnequipSlot(LeftHandTag, WorkerActor->GetActorTransform()))
+            {
+                UnequippedActor->DeactivateAndReturnToPool();
+                NeededQty -= 1;
+            }
         }
 
-        if (NeededQty > 0 && bAllowProximityPull)
+        // 2. Consume remaining quantity from container inventory, strictly verifying the return value
+        if (NeededQty > 0)
         {
-            InvComp->ServerRemoveStoredActorByTag(ReqTag, NeededQty);
-            NeededQty = 0;
+            if (InvComp->GetTotalCountOfArchetype(ReqTag) >= NeededQty)
+            {
+                if (InvComp->ServerRemoveStoredActorByTag(ReqTag, NeededQty))
+                {
+                    NeededQty = 0;
+                }
+            }
+            else if (bAllowProximityPull)
+            {
+                // Master builders can search nearby room containers
+                if (UDynamicBuildingSubsystem* BuildSub = GetWorld()->GetSubsystem<UDynamicBuildingSubsystem>())
+                {
+                    static const FGameplayTag StorageRoomTag = FGameplayTag::RequestGameplayTag(TEXT("Room.Type.Storage"), false);
+                    FGuid WorkerGuid;
+                    if (UDynamicSocialComponent* Social = WorkerActor->FindComponentByClass<UDynamicSocialComponent>())
+                    {
+                        WorkerGuid = Social->CharacterPersistentGuid;
+                    }
+
+                    if (UDynamicContainerComponent* NearbyContainer = BuildSub->FindOptimalAIContainerInRoomType(WorkerActor->GetActorLocation(), StorageRoomTag, ReqTag, WorkerGuid))
+                    {
+                        if (NearbyContainer->GetTotalCountOfArchetype(ReqTag) >= NeededQty)
+                        {
+                            if (NearbyContainer->ServerRemoveStoredActorByTag(ReqTag, NeededQty))
+                            {
+                                NeededQty = 0;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
+        // If the entire required quantity for this material step was satisfied, mark the bitmask
         if (NeededQty <= 0)
         {
-            Item.ProvidedMaterialsMask |= (1 << i);
+            Item.ProvidedMaterialsMask |= (1ULL << i);
             bProvidedAny = true;
         }
     }

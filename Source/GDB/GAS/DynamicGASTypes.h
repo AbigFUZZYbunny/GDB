@@ -120,7 +120,8 @@ enum class EConditionType : uint8
     AttributeValue,
     AttributeComparedToWorldTime,
     RelationshipMetricCheck,
-    NeedValue
+    NeedValue,
+    PerceivedBountyCheck // NEW: Evaluates the target's bounty based strictly on the observer's memory
 };
 
 UENUM(BlueprintType)
@@ -1685,6 +1686,24 @@ struct FCrimeSeverityOverride
 };
 
 USTRUCT(BlueprintType)
+struct FEscalationOfForceRule
+{
+    GENERATED_BODY()
+
+    // The condition tree evaluating the suspect (checks perceived bounty, attacking states, hostage states, etc.)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FName EvaluationConditionTree = NAME_None;
+
+    // The maximum authorized force level if this rule is met (e.g. "ForceLevel.Subdue", "ForceLevel.Lethal")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    FGameplayTag AuthorizedForceLevel;
+
+    // Priority of this rule (higher priority overrides lower if multiple pass)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    float Priority = 0.0f;
+};
+
+USTRUCT(BlueprintType)
 struct FDynamicJurisdictionDef
 {
     GENERATED_BODY()
@@ -1696,7 +1715,7 @@ struct FDynamicJurisdictionDef
     FGameplayTag GoverningFactionTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
-    FName PropertyAccessConditionTree;
+    FName PropertyAccessConditionTree = NAME_None;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
     FDynamicTagToTagMapWrapper ActionToCrimeMap;
@@ -1704,9 +1723,12 @@ struct FDynamicJurisdictionDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
     TMap<FGameplayTag, FCrimeSeverityOverride> LocalLaws;
 
-    // Condition Trees that define legal authority/exemptions per crime (e.g. Guard authorized lethal force or search warrants)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
     TMap<FGameplayTag, FName> LegalExemptionTrees;
+
+    // NEW: Rules defining what force is authorized under what circumstances
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Law")
+    TArray<FEscalationOfForceRule> EscalationOfForceRules;
 };
 
 // ============================================================================
@@ -1731,6 +1753,78 @@ struct FGroupDynamicsDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
     bool bDefendsPackMembers = false;
+};
+
+
+
+// ============================================================================
+// AI AGENTS & DYNAMICS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicAIAbilityRule
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag AbilityTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FName RequiredConditionTreeName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float PriorityWeight = 50.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float MinRange = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float MaxRange = 1500.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicAIGroupDynamics
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    FGameplayTag GroupArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bFormsPacks = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    int32 MaxGroupSize = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    float CohesionRadius = 2000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
+    bool bDefendsPackMembers = true;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicTaskPriorityRule
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag TaskTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    float BasePriorityWeight = 50.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTag LinkedAbilityOrRecipeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTagContainer RequiredItemTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FGameplayTagContainer ProducedOutputTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
+    FName TaskConditionTreeName = NAME_None;
 };
 
 // ============================================================================
@@ -1760,10 +1854,10 @@ struct FDynamicAIAgentDef
     float FleeHealthThreshold = 0.2f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    TArray<FGameplayTag> AbilityUsageRules;
+    TArray<FDynamicAIAbilityRule> AbilityUsageRules;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    TArray<FGameplayTag> IdleTasks;
+    TArray<FDynamicTaskPriorityRule> IdleTasks;
 
     // Baseline physiological reactions (e.g., standard humanoids flee loud noises)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI|Senses")
@@ -3178,7 +3272,7 @@ struct FDynamicEquipmentRequirementDef
 };
 
 // ============================================================================
-// PHYSICS ACTOR DEFINITION
+// PHYSICS ACTOR DEFINITION (RESTORED ORIGINAL MEMBERS)
 // ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicPhysicsActorDef
@@ -3208,6 +3302,15 @@ struct FDynamicPhysicsActorDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     bool bCanBeCarried = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    FGameplayTagContainer InitialInteractableStateTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    TMap<FGameplayTag, FTransform> KinematicTargetPoints;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    TArray<FDynamicContainerDef> Containers;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FDynamicItemDef ItemConfig;
@@ -4038,30 +4141,6 @@ struct FDynamicScheduleBlockDef
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicTaskPriorityRule
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FGameplayTag TaskTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    float BasePriorityWeight = 50.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FGameplayTag LinkedAbilityOrRecipeTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FGameplayTagContainer RequiredItemTags;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FGameplayTagContainer ProducedOutputTags;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
-    FName TaskConditionTreeName = NAME_None;
-};
-
-USTRUCT(BlueprintType)
 struct FDynamicStatPriorityRule
 {
     GENERATED_BODY()
@@ -4130,7 +4209,10 @@ struct FDynamicNeedStateItem : public FFastArraySerializerItem
     FGameplayTag NeedTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    float CurrentValue = 100.0f;
+    float LocalExactValue = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
+    uint8 PackedCurrentValue = 100;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float ShiftRatePerHour = 0.0f;
@@ -4138,12 +4220,15 @@ struct FDynamicNeedStateItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float UrgentThreshold = 25.0f;
 
-    // Optional quantized representation available for tightly packed networking
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    uint8 QuantizedCurrentValue = 100;
+    double LastEvaluatedWorldTime = 0.0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     FGameplayTag SatisfyBehaviorTag;
+
+    void PreReplicatedRemove(const struct FFastNeedStateArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastNeedStateArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastNeedStateArray& InArrayOwner);
 };
 
 USTRUCT(BlueprintType)
@@ -4167,52 +4252,6 @@ template<>
 struct TStructOpsTypeTraits<FFastNeedStateArray> : public TStructOpsTypeTraitsBase2<FFastNeedStateArray>
 {
     enum { WithNetDeltaSerializer = true };
-};
-
-// ============================================================================
-// AI AGENTS & DYNAMICS
-// ============================================================================
-
-USTRUCT(BlueprintType)
-struct FDynamicAIAbilityRule
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    FGameplayTag AbilityTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    FName RequiredConditionTreeName = NAME_None;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    float PriorityWeight = 50.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    float MinRange = 0.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    float MaxRange = 1500.0f;
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicAIGroupDynamics
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    FGameplayTag GroupArchetypeTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    bool bFormsPacks = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    int32 MaxGroupSize = 1;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    float CohesionRadius = 2000.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI")
-    bool bDefendsPackMembers = true;
 };
 
 // ============================================================================

@@ -221,35 +221,58 @@ ADynamicCharacter* UDynamicWorldDirectorSubsystem::InstantiateNPC(const FGuid& N
 
 void UDynamicWorldDirectorSubsystem::SimulateVirtualNPCs(float DeltaTime)
 {
-    for (auto& Pair : VirtualNPCRegistry)
+    if (VirtualNPCRegistry.Num() == 0) return;
+
+    TWeakObjectPtr<UDynamicWorldDirectorSubsystem> WeakThis(this);
+    TSharedRef<TArray<FGuid>> KeysToProcess = MakeShared<TArray<FGuid>>();
+    VirtualNPCRegistry.GenerateKeyArray(KeysToProcess.Get());
+    TSharedRef<int32> CurrentIndex = MakeShared<int32>(0);
+
+    // OPTIMIZATION: Time-sliced iteration over multiple frames (2ms budget per frame)
+    FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, KeysToProcess, CurrentIndex, DeltaTime](float TickDelta) -> bool 
     {
-        FVirtualNPCRecord& Record = Pair.Value;
+        if (!WeakThis.IsValid()) return false;
+        
+        UDynamicWorldDirectorSubsystem* StrongThis = WeakThis.Get();
+        const double StartTime = FPlatformTime::Seconds();
+        constexpr double MaxBudgetPerFrameSeconds = 0.002;
 
-        // 1. Process Virtual Travel
-        if (Record.bIsTraveling)
+        while (*CurrentIndex < KeysToProcess->Num() && (FPlatformTime::Seconds() - StartTime < MaxBudgetPerFrameSeconds))
         {
-            FVector Direction = Record.TravelDestination - Record.WorldLocation;
-            float DistanceToTarget = Direction.Size();
+            const FGuid& NpcKey = (*KeysToProcess)[*CurrentIndex];
+            if (FVirtualNPCRecord* Record = StrongThis->VirtualNPCRegistry.Find(NpcKey))
+            {
+                // 1. Process Virtual Travel
+                if (Record->bIsTraveling)
+                {
+                    FVector Direction = Record->TravelDestination - Record->WorldLocation;
+                    float DistanceToTarget = Direction.Size();
 
-            if (DistanceToTarget <= (Record.TravelSpeed * DeltaTime))
-            {
-                Record.WorldLocation = Record.TravelDestination;
-                Record.bIsTraveling = false;
+                    if (DistanceToTarget <= (Record->TravelSpeed * DeltaTime))
+                    {
+                        Record->WorldLocation = Record->TravelDestination;
+                        Record->bIsTraveling = false;
+                    }
+                    else
+                    {
+                        Direction.Normalize();
+                        Record->WorldLocation += Direction * (Record->TravelSpeed * DeltaTime);
+                        Record->WorldRotation = Direction.Rotation();
+                    }
+                }
+
+                // 2. High-Level Needs / AI Directives (Local Co-Op macro simulation loop)
+                if (StrongThis->bIsLocalCoopMode)
+                {
+                    // Execute simplified daily routine math natively here
+                }
             }
-            else
-            {
-                Direction.Normalize();
-                Record.WorldLocation += Direction * (Record.TravelSpeed * DeltaTime);
-                Record.WorldRotation = Direction.Rotation();
-            }
+            (*CurrentIndex)++;
         }
 
-        // 2. High-Level Needs / AI Directives (Local Co-Op macro simulation loop)
-        if (bIsLocalCoopMode)
-        {
-            // Execute simplified daily routine math natively here
-        }
-    }
+        // Keep ticking if there are more NPCs to process
+        return *CurrentIndex < KeysToProcess->Num();
+    }));
 }
 
 void UDynamicWorldDirectorSubsystem::PerformCatchUpSimulation(ADynamicCharacter* NPC, float OfflineHours)

@@ -56,21 +56,22 @@ void FDynamicContainerSlotItem::PostReplicatedChange(const FFastContainerSlotArr
 
 void UDynamicContainerComponent::HandleSingleSlotReplicated(const FDynamicContainerSlotItem& Item, bool bWasRemoved)
 {
-    RebuildLocalSlotCache();
+    // OPTIMIZATION: Removed RebuildLocalSlotCache() to prevent O(N^2) rebuilds during bulk network syncs
     const bool bIsEmpty = bWasRemoved || !Item.StoredActorArchetypeTag.IsValid() || Item.StackCount <= 0;
     OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, bIsEmpty ? 0 : Item.StackCount);
 }
 
 void UDynamicContainerComponent::OnRep_ReplicatedSlots()
 {
+    // Rebuild the lookup cache exactly once per network update bunch
     RebuildLocalSlotCache();
+    
     for (const FDynamicContainerSlotItem& Item : ReplicatedSlots.Items)
     {
         const int32 DisplayCount = (!Item.StoredActorArchetypeTag.IsValid() || Item.StackCount <= 0) ? 0 : Item.StackCount;
         OnContainerSlotChanged.Broadcast(Item.GridX, Item.GridY, Item.StoredActorArchetypeTag, DisplayCount);
     }
 
-    // Fully flush and reconstruct UI slot widget layouts on array compression / net sync
     OnContainerFullRebuild.Broadcast();
 }
 

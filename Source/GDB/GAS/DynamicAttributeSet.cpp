@@ -69,11 +69,15 @@ void UDynamicAttributeSet::HandleSingleAttributeReplicated(const FDynamicAttribu
 void UDynamicAttributeSet::OnRep_FastAttributes()
 {
     FastCompositeLookupMap.Empty(FastAttributes.Items.Num());
+    FastAttributeIndexMap.Empty(FastAttributes.Items.Num());
     DirectChildrenTagCache.Empty();
     AllDescendantsTagCache.Empty();
 
-    for (const FDynamicAttributeItem& Item : FastAttributes.Items)
+    for (int32 i = 0; i < FastAttributes.Items.Num(); ++i)
     {
+        const FDynamicAttributeItem& Item = FastAttributes.Items[i];
+        const uint64 Key = MakeCompositeKey(Item.LimbId, Item.AttributeTag);
+        FastAttributeIndexMap.Add(Key, i);
         HandleSingleAttributeReplicated(Item);
     }
 }
@@ -152,11 +156,7 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
     const uint64 CompositeKey = MakeCompositeKey(LimbId, AttributeTag);
 
     FScopedAttributeEvaluationGuard CycleGuard(InOutEvaluationStack, CompositeKey);
-    if (CycleGuard.IsCycleDetected())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("DynamicAttributeSet: Aborted recursive cycle on Tag %s (Limb %d)"), *AttributeTag.ToString(), LimbId);
-        return;
-    }
+    if (CycleGuard.IsCycleDetected()) return;
 
     AActor* OwningActor = GetOwningActor();
     const bool bHasAuthority = OwningActor ? OwningActor->HasAuthority() : false;
@@ -167,7 +167,7 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
     const float OldVal = FastCompositeLookupMap.FindRef(CompositeKey);
     float Delta = NewVal - OldVal;
 
-    // 1. Threshold rules modifier check (Authority only)
+    // Threshold Check (Authority)
     if (bHasAuthority && GS && !FMath::IsNearlyZero(Delta))
     {
         if (FDynamicThresholdContainer* Container = GS->MasterThresholdRegistry.Find(AttributeTag))
@@ -177,13 +177,10 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
                 if (Rule.MonitoredAttributeTag == AttributeTag)
                 {
                     if (Delta > 0.0f && Rule.GainModifierAttributeTag.IsValid())
-                    {
                         Delta *= (1.0f + GetDynamicAttributeValue(Rule.GainModifierAttributeTag, LimbId));
-                    }
                     else if (Delta < 0.0f && Rule.LossModifierAttributeTag.IsValid())
-                    {
                         Delta *= (1.0f + GetDynamicAttributeValue(Rule.LossModifierAttributeTag, LimbId));
-                    }
+                    
                     NewVal = OldVal + Delta;
                     break;
                 }
@@ -193,26 +190,24 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
 
     if (FMath::IsNearlyEqual(OldVal, NewVal) && !bIsNewAttribute) return;
 
-    // Update local O(1) map representation
+    // Fast Cache Maps
     FastCompositeLookupMap.Add(CompositeKey, NewVal);
     if (bIsNewAttribute)
     {
         IndexAttributeTagIntoHierarchyCache(AttributeTag);
     }
 
-    // Update FastArray storage
-    int32 FoundIdx = FastAttributes.Items.IndexOfByPredicate([LimbId, AttributeTag](const FDynamicAttributeItem& Element) {
-        return Element.LimbId == LimbId && Element.AttributeTag == AttributeTag;
-    });
+    // O(1) FastArray Update
+    int32 FoundIdx = INDEX_NONE;
+    if (const int32* IdxPtr = FastAttributeIndexMap.Find(CompositeKey))
+    {
+        FoundIdx = *IdxPtr;
+    }
 
-    if (FoundIdx != INDEX_NONE)
+    if (FoundIdx != INDEX_NONE && FastAttributes.Items.IsValidIndex(FoundIdx))
     {
         FastAttributes.Items[FoundIdx].Value = NewVal;
-        // Only authority marks FastArray dirty to replicate down to network proxies
-        if (bHasAuthority)
-        {
-            FastAttributes.MarkItemDirty(FastAttributes.Items[FoundIdx]);
-        }
+        if (bHasAuthority) FastAttributes.MarkItemDirty(FastAttributes.Items[FoundIdx]);
     }
     else
     {
@@ -220,18 +215,16 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
         NewItem.LimbId = LimbId;
         NewItem.AttributeTag = AttributeTag;
         NewItem.Value = NewVal;
-        FastAttributes.Items.Add(NewItem);
-        if (bHasAuthority)
-        {
-            FastAttributes.MarkArrayDirty();
-        }
+        
+        FDynamicAttributeItem& AddedRef = FastAttributes.Items.Add_GetRef(NewItem);
+        FoundIdx = FastAttributes.Items.Num() - 1;
+        FastAttributeIndexMap.Add(CompositeKey, FoundIdx);
+        
+        if (bHasAuthority) FastAttributes.MarkItemDirty(AddedRef);
     }
 
-    // Broadcast UI updates immediately (runs for both server authority and local prediction)
-    if (LimbId == 0)
-    {
-        OnDynamicAttributeChanged.Broadcast(AttributeTag, NewVal);
-    }
+    // UI & Motor Broadcasts
+    if (LimbId == 0) OnDynamicAttributeChanged.Broadcast(AttributeTag, NewVal);
     OnDynamicLimbAttributeChanged.Broadcast(LimbId, AttributeTag, NewVal);
 
     if (LimbId > 0)
@@ -242,13 +235,9 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
         }
     }
 
-    // Predictive client mutations exit here to keep progressions server-authoritative
-    if (!bHasAuthority)
-    {
-        return;
-    }
+    if (!bHasAuthority) return;
 
-    // 2. High-Performance Milestone Evaluation
+    // Milestone & Escalation Evaluation
     if (OwningActor && GS && GS->MasterMilestoneRegistry.Contains(AttributeTag))
     {
         const int32 OldInt = FMath::FloorToInt(OldVal);
@@ -259,7 +248,6 @@ void UDynamicAttributeSet::SetDynamicAttributeValueInternal(FGameplayTag Attribu
         }
     }
 
-    // 3. Threshold Progression Escalation (Level-up wrap-around)
     if (GS)
     {
         if (FDynamicThresholdContainer* Container = GS->MasterThresholdRegistry.Find(AttributeTag))

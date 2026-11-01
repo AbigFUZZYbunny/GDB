@@ -102,14 +102,26 @@ void ADynamicBuildingChunkActor::UpdateInstancedMeshes()
     
     InstanceHitMap.Empty();
 
+    struct FBulkInstancePayload
+    {
+        TArray<FTransform> Transforms;
+        TArray<FGuid> InstanceIDs;
+        TArray<float> StressNormals;
+        TArray<float> HologramMasks;
+    };
+
+    TMap<UHierarchicalInstancedStaticMeshComponent*, FBulkInstancePayload> BulkAddMap;
+
+    // 1. Sort structure data into respective component buckets without triggering updates
     for (const FStructureInstanceItem& Item : ReplicatedStructures.Items)
     {
         if (Item.CurrentHP <= 0.0f) continue;
 
         if (UHierarchicalInstancedStaticMeshComponent* HISM = GetOrCreateHISM(Item.PieceTag, Item.MaterialTag))
         {
-            const int32 InstIdx = HISM->AddInstance(Item.WorldTransform);
-            InstanceHitMap.FindOrAdd(HISM).Add(InstIdx, Item.InstanceID);
+            FBulkInstancePayload& Payload = BulkAddMap.FindOrAdd(HISM);
+            Payload.Transforms.Add(Item.WorldTransform);
+            Payload.InstanceIDs.Add(Item.InstanceID);
 
             float MaxSupport = 100.0f;
             if (const FDynamicStructureMaterialDef* MatDef = GS->StructureMaterialRegistry.Find(Item.MaterialTag))
@@ -117,11 +129,32 @@ void ADynamicBuildingChunkActor::UpdateInstancedMeshes()
                 MaxSupport = MatDef->SupportStrength;
             }
             
-            const float StressNormalized = FMath::Clamp(Item.SupportValue / MaxSupport, 0.0f, 1.0f);
-            
-            HISM->SetCustomDataValue(InstIdx, 0, StressNormalized);
-            HISM->SetCustomDataValue(InstIdx, 1, Item.bIsGhost ? 0.0f : 1.0f); // Feeds hologram material shader
+            Payload.StressNormals.Add(FMath::Clamp(Item.SupportValue / MaxSupport, 0.0f, 1.0f));
+            Payload.HologramMasks.Add(Item.bIsGhost ? 0.0f : 1.0f);
         }
+    }
+
+    // 2. Execute bulk updates precisely once per mesh component
+    for (auto& Pair : BulkAddMap)
+    {
+        UHierarchicalInstancedStaticMeshComponent* HISM = Pair.Key;
+        const FBulkInstancePayload& Payload = Pair.Value;
+
+        // bReturnLocalBounds = false prevents calculating bounding boxes until the batch completes
+        TArray<int32> AssignedIndices = HISM->AddInstances(Payload.Transforms, false, true);
+        TMap<int32, FGuid>& LocalHitMap = InstanceHitMap.FindOrAdd(HISM);
+
+        for (int32 i = 0; i < AssignedIndices.Num() && i < Payload.InstanceIDs.Num(); ++i)
+        {
+            const int32 InstIdx = AssignedIndices[i];
+            LocalHitMap.Add(InstIdx, Payload.InstanceIDs[i]);
+            HISM->SetCustomDataValue(InstIdx, 0, Payload.StressNormals[i], false); // bMarkRenderStateDirty = false
+            HISM->SetCustomDataValue(InstIdx, 1, Payload.HologramMasks[i], false);
+        }
+        
+        // Single final bounds update for rendering & navmesh
+        HISM->BuildTreeIfOutdated(true, false);
+        HISM->MarkRenderStateDirty();
     }
 }
 
@@ -361,11 +394,9 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
         return;
     }
 
-    // Capture configs for thread safety
     TMap<FGameplayTag, FDynamicStructurePieceDef> Pieces = GS->StructurePieceRegistry;
     TMap<FGameplayTag, FDynamicStructureMaterialDef> Materials = GS->StructureMaterialRegistry;
 
-    // Check grounding synchronously before threading
     TArray<bool> GroundedStates;
     GroundedStates.SetNum(StateCapture.Num());
     for (int32 i = 0; i < StateCapture.Num(); ++i)
@@ -379,14 +410,13 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
         TMap<FGuid, float> ResolvedSupport;
         TQueue<FGuid> EvaluationQueue;
 
-        // 1. Build Adjacency Graph via Spatial Math (O(N^2) localized to chunk)
+        // OPTIMIZATION: 3D Spatial Hash Grid (O(N) initialization)
+        const float GridSize = 250.0f; // Slightly larger than max OverlapConnectionRadius
+        TMap<FIntVector, TArray<int32>> SpatialHash;
+        
         for (int32 i = 0; i < StateCapture.Num(); ++i)
         {
             FStructureInstanceItem& Node = StateCapture[i];
-            const FDynamicStructurePieceDef* Def = Pieces.Find(Node.PieceTag);
-            const float Reach = Def ? Def->OverlapConnectionRadius : 150.0f;
-            const FVector LocA = Node.WorldTransform.GetLocation();
-
             Node.bIsGrounded = GroundedStates[i];
 
             if (Node.bIsGrounded)
@@ -397,12 +427,42 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
                 EvaluationQueue.Enqueue(Node.InstanceID);
             }
 
-            for (int32 j = i + 1; j < StateCapture.Num(); ++j)
-            {
-                if (FVector::DistSquared(LocA, StateCapture[j].WorldTransform.GetLocation()) <= FMath::Square(Reach))
-                {
-                    LocalGraph.FindOrAdd(Node.InstanceID).Add(StateCapture[j].InstanceID);
-                    LocalGraph.FindOrAdd(StateCapture[j].InstanceID).Add(Node.InstanceID);
+            const FVector Loc = Node.WorldTransform.GetLocation();
+            FIntVector Cell(FMath::FloorToInt(Loc.X / GridSize), FMath::FloorToInt(Loc.Y / GridSize), FMath::FloorToInt(Loc.Z / GridSize));
+            SpatialHash.FindOrAdd(Cell).Add(i);
+        }
+
+        // 1. Build Adjacency Graph via Spatial Hash (O(N) resolution)
+        for (int32 i = 0; i < StateCapture.Num(); ++i)
+        {
+            const FStructureInstanceItem& NodeA = StateCapture[i];
+            const FDynamicStructurePieceDef* Def = Pieces.Find(NodeA.PieceTag);
+            const float Reach = Def ? Def->OverlapConnectionRadius : 150.0f;
+            const float ReachSq = FMath::Square(Reach);
+            const FVector LocA = NodeA.WorldTransform.GetLocation();
+
+            FIntVector CenterCell(FMath::FloorToInt(LocA.X / GridSize), FMath::FloorToInt(LocA.Y / GridSize), FMath::FloorToInt(LocA.Z / GridSize));
+
+            // Check adjacent 3x3x3 grid cells
+            for (int32 Z = -1; Z <= 1; ++Z) {
+                for (int32 Y = -1; Y <= 1; ++Y) {
+                    for (int32 X = -1; X <= 1; ++X) {
+                        FIntVector NeighborCell = CenterCell + FIntVector(X, Y, Z);
+                        if (TArray<int32>* Bucket = SpatialHash.Find(NeighborCell))
+                        {
+                            for (int32 j : *Bucket)
+                            {
+                                if (i < j) // Prevent duplicate bidirectional checks and self-checks
+                                {
+                                    if (FVector::DistSquared(LocA, StateCapture[j].WorldTransform.GetLocation()) <= ReachSq)
+                                    {
+                                        LocalGraph.FindOrAdd(NodeA.InstanceID).Add(StateCapture[j].InstanceID);
+                                        LocalGraph.FindOrAdd(StateCapture[j].InstanceID).Add(NodeA.InstanceID);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -465,7 +525,6 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
                         RealItem.SupportValue = CalcItem->SupportValue;
                         RealItem.bIsGrounded = CalcItem->bIsGrounded;
                         
-                        // Physics Breakage
                         if (RealItem.SupportValue < 0.0f)
                         {
                             RealItem.CurrentHP = 0.0f; 
@@ -477,12 +536,10 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
 
                 if (bModified)
                 {
-                    // Cleanup broken pieces
                     StrongThis->ReplicatedStructures.Items.RemoveAll([](const FStructureInstanceItem& I) { return I.CurrentHP <= 0.0f; });
                     StrongThis->ReplicatedStructures.MarkArrayDirty();
                     StrongThis->UpdateInstancedMeshes();
 
-                    // FIX: Retrieve UWorld safely from StrongThis inside the lambda scope
                     if (UWorld* LocalWorld = StrongThis->GetWorld())
                     {
                         if (UDynamicBuildingSubsystem* BuildSub = LocalWorld->GetSubsystem<UDynamicBuildingSubsystem>())

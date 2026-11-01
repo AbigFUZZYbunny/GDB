@@ -292,37 +292,48 @@ void UDynamicVoxelSubsystem::ProcessChunkStreamingAndLODs()
 
 void UDynamicVoxelSubsystem::ProcessTemporalGenerativeUpdates(double CurrentWorldTime)
 {
-    // Evaluates virtual chunks and updates them organically (erosion, flora spread) based on distance
-    const double HourInSeconds = 3600.0;
+    if (VirtualChunkRegistry.Num() == 0) return;
     
     // Time-slice quota to prevent server hitches
-    int32 ProcessedCount = 0;
     const int32 MaxGenerativeUpdatesPerTick = 10;
+    int32 ProcessedCount = 0;
+    int32 CheckedCount = 0;
 
-    for (auto& Pair : VirtualChunkRegistry)
+    // OPTIMIZATION: Extract keys to array to allow cyclical, persistent iteration
+    TArray<FIntPoint> Keys;
+    VirtualChunkRegistry.GenerateKeyArray(Keys);
+
+    if (GenerativeUpdateIndex >= Keys.Num())
     {
-        FVoxelChunkPersistentData& ChunkData = Pair.Value;
+        GenerativeUpdateIndex = 0;
+    }
+
+    while (CheckedCount < Keys.Num() && ProcessedCount < MaxGenerativeUpdatesPerTick)
+    {
+        FIntPoint Coord = Keys[GenerativeUpdateIndex];
+        FVoxelChunkPersistentData* ChunkData = VirtualChunkRegistry.Find(Coord);
         
-        // Active chunks are updated via localized active systems; skip background generation
-        if (ChunkData.bIsSpawnedAsActor) continue;
-
-        double RequiredInterval = 0.0;
-        switch (ChunkData.CurrentLODState)
+        if (ChunkData && !ChunkData->bIsSpawnedAsActor)
         {
-            case EVoxelLODState::VirtualNearby:   RequiredInterval = HourInSeconds * 1.0; break;
-            case EVoxelLODState::VirtualDistant:  RequiredInterval = HourInSeconds * 6.0; break;
-            case EVoxelLODState::VirtualHorizon:  RequiredInterval = HourInSeconds * 24.0; break;
-            default: continue;
+            double RequiredInterval = 0.0;
+            switch (ChunkData->CurrentLODState)
+            {
+            case EVoxelLODState::VirtualNearby:   RequiredInterval = 3600.0 * 1.0; break;
+            case EVoxelLODState::VirtualDistant:  RequiredInterval = 3600.0 * 6.0; break;
+            case EVoxelLODState::VirtualHorizon:  RequiredInterval = 3600.0 * 24.0; break;
+            default: break;
+            }
+
+            if (RequiredInterval > 0.0 && (CurrentWorldTime - ChunkData->LastGenerativeUpdateWorldTime) >= RequiredInterval)
+            {
+                ChunkData->LastGenerativeUpdateWorldTime = CurrentWorldTime;
+                ExecuteGenerativePassAsync(Coord, ChunkData->CurrentLODState);
+                ProcessedCount++;
+            }
         }
 
-        if ((CurrentWorldTime - ChunkData.LastGenerativeUpdateWorldTime) >= RequiredInterval)
-        {
-            ChunkData.LastGenerativeUpdateWorldTime = CurrentWorldTime;
-            ExecuteGenerativePassAsync(ChunkData.ChunkCoord, ChunkData.CurrentLODState);
-            
-            ProcessedCount++;
-            if (ProcessedCount >= MaxGenerativeUpdatesPerTick) break;
-        }
+        GenerativeUpdateIndex = (GenerativeUpdateIndex + 1) % Keys.Num();
+        CheckedCount++;
     }
 }
 

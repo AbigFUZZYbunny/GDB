@@ -39,8 +39,18 @@ ADynamicPhysicsActor::ADynamicPhysicsActor(const FObjectInitializer& ObjectIniti
 
     DynamicGASManager = CreateDefaultSubobject<UDynamicGASManagerComponent>(TEXT("DynamicGASManager"));
     AttributeSet = CreateDefaultSubobject<UDynamicAttributeSet>(TEXT("DynamicAttributeSet"));
+    
     InteractableComponent = CreateDefaultSubobject<UDynamicInteractableComponent>(TEXT("InteractableComponent"));
     ContainerComponent = CreateDefaultSubobject<UDynamicContainerComponent>(TEXT("ContainerComponent"));
+
+    // Pre-allocate auxiliary containers to prevent GC hitches from runtime instancing
+    for (int32 i = 0; i < 4; ++i)
+    {
+        FName CompName = FName(*FString::Printf(TEXT("SupplementalContainer_%d"), i));
+        UDynamicContainerComponent* SuppComp = CreateDefaultSubobject<UDynamicContainerComponent>(CompName);
+        SuppComp->SetIsReplicated(false); // Only enable when needed
+        SupplementalContainers.Add(SuppComp);
+    }
 }
 
 UAbilitySystemComponent* ADynamicPhysicsActor::GetAbilitySystemComponent() const
@@ -118,13 +128,14 @@ UDynamicContainerComponent* ADynamicPhysicsActor::GetContainerComponent(FGamepla
 {
     if (!ContainerIdentifierTag.IsValid()) return ContainerComponent;
 
-    TArray<UActorComponent*> Comps;
-    GetComponents(UDynamicContainerComponent::StaticClass(), Comps);
-    for (UActorComponent* Comp : Comps)
+    if (ContainerComponent->ContainerConfig.ContainerIdentifierTag == ContainerIdentifierTag)
+        return ContainerComponent;
+
+    for (UDynamicContainerComponent* SuppComp : SupplementalContainers)
     {
-        if (UDynamicContainerComponent* Container = Cast<UDynamicContainerComponent>(Comp))
+        if (SuppComp->GetIsReplicated() && SuppComp->ContainerConfig.ContainerIdentifierTag == ContainerIdentifierTag)
         {
-            if (Container->ContainerConfig.ContainerIdentifierTag == ContainerIdentifierTag) return Container;
+            return SuppComp;
         }
     }
     return ContainerComponent;
@@ -141,7 +152,6 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
     const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(ActorArchetypeTag);
     if (!Def) return;
 
-    // Fast-register into GameState's spatial index
     if (HasAuthority())
     {
         FGameplayTagContainer RoleTags;
@@ -170,9 +180,7 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
                 for (const FTagFloatPair& AttrPair : Pair.Value->DefaultLimbAttributes.ReplicatedEntries)
                 {
                     if (AttrPair.KeyTag.IsValid())
-                    {
                         AttributeSet->SetDynamicAttributeValue(AttrPair.KeyTag, AttrPair.Value, Pair.Key);
-                    }
                 }
             }
         }
@@ -200,23 +208,18 @@ void ADynamicPhysicsActor::InitializeFromArchetype(FGameplayTag InArchetypeTag)
         }
     }
 
-    bool bFirstContainer = true;
-    for (const FDynamicContainerDef& ContainerDef : Def->Containers)
+    // Activate pre-allocated containers instead of creating NewObjects
+    int32 RequiredSupplementalContainers = FMath::Max(0, Def->Containers.Num() - 1);
+    if (Def->Containers.Num() > 0)
     {
-        UDynamicContainerComponent* TargetContainer = nullptr;
-        if (bFirstContainer && ContainerComponent)
-        {
-            TargetContainer = ContainerComponent;
-            bFirstContainer = false;
-        }
-        else
-        {
-            TargetContainer = NewObject<UDynamicContainerComponent>(this);
-            TargetContainer->SetIsReplicated(true);
-            TargetContainer->RegisterComponent();
-            AddInstanceComponent(TargetContainer);
-        }
-        TargetContainer->InitializeContainerFromDef(ContainerDef);
+        ContainerComponent->InitializeContainerFromDef(Def->Containers[0]);
+        ContainerComponent->SetIsReplicated(true);
+    }
+
+    for (int32 i = 0; i < RequiredSupplementalContainers && i < SupplementalContainers.Num(); ++i)
+    {
+        SupplementalContainers[i]->SetIsReplicated(true);
+        SupplementalContainers[i]->InitializeContainerFromDef(Def->Containers[i + 1]);
     }
 }
 
@@ -347,22 +350,20 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
     if (ContainerComponent)
     {
         ContainerComponent->ClearContainerForPooling();
+        ContainerComponent->SetIsReplicated(false);
     }
 
-    TArray<UActorComponent*> InstanceComps = GetInstanceComponents();
-    for (UActorComponent* Comp : InstanceComps)
+    // Scrub supplemental containers without deleting them
+    for (UDynamicContainerComponent* SuppComp : SupplementalContainers)
     {
-        if (UDynamicContainerComponent* ExtraContainer = Cast<UDynamicContainerComponent>(Comp))
+        if (SuppComp->GetIsReplicated())
         {
-            RemoveInstanceComponent(ExtraContainer);
-            ExtraContainer->DestroyComponent();
+            SuppComp->ClearContainerForPooling();
+            SuppComp->SetIsReplicated(false);
         }
     }
 
-    if (InteractableComponent)
-    {
-        InteractableComponent->ResetForPooling();
-    }
+    if (InteractableComponent) InteractableComponent->ResetForPooling();
 
     bAttributesInitializedOnServer = false;
     LocalLimbLookupMap.Empty();

@@ -160,30 +160,34 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
     {
         if (CapsuleComponent)
         {
-            const double CurrentTime = GetWorld()->GetTimeSeconds();
-            FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[HistoryBufferWriteIndex];
-            Snapshot.ServerTimestamp = CurrentTime;
-            Snapshot.CapsuleLocation = CapsuleComponent->GetComponentLocation();
-            Snapshot.CapsuleRotation = CapsuleComponent->GetComponentQuat();
-            Snapshot.ActiveMovementState = ActiveMovementStateTag;
-            
-            if (APlayerController* PC = Cast<APlayerController>(GetController()))
+            HistorySaveAccumulator += DeltaSeconds;
+            if (HistorySaveAccumulator >= HistorySaveInterval)
             {
-                Snapshot.ViewPitch = PC->GetControlRotation().Pitch;
+                HistorySaveAccumulator = 0.0f;
+                
+                const double CurrentTime = GetWorld()->GetTimeSeconds();
+                FCharacterTransformHistorySnapshot& Snapshot = TransformHistoryBuffer[HistoryBufferWriteIndex];
+                Snapshot.ServerTimestamp = CurrentTime;
+                Snapshot.CapsuleLocation = CapsuleComponent->GetComponentLocation();
+                Snapshot.CapsuleRotation = CapsuleComponent->GetComponentQuat();
+                Snapshot.ActiveMovementState = ActiveMovementStateTag;
+                
+                if (APlayerController* PC = Cast<APlayerController>(GetController()))
+                {
+                    Snapshot.ViewPitch = PC->GetControlRotation().Pitch;
+                }
+                else
+                {
+                    Snapshot.ViewPitch = GetActorRotation().Pitch;
+                }
+                
+                HistoryBufferWriteIndex = (HistoryBufferWriteIndex + 1) % HistoryRingBufferSize;
+                HistoryBufferCount = FMath::Min(HistoryBufferCount + 1, HistoryRingBufferSize);
             }
-            else
-            {
-                Snapshot.ViewPitch = GetActorRotation().Pitch;
-            }
-            
-            HistoryBufferWriteIndex = (HistoryBufferWriteIndex + 1) % HistoryRingBufferSize;
-            HistoryBufferCount = FMath::Min(HistoryBufferCount + 1, HistoryRingBufferSize);
         }
     }
 
-    // DYNAMIC GATING: We only evaluate complex climbing overlaps if the character actively possesses the climbing capability
     static const FGameplayTag CapabilityClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Movement.Climb"), false);
-    
     if (AbilitySystemComponent && AbilitySystemComponent->HasMatchingGameplayTag(CapabilityClimbTag))
     {
         static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
@@ -1262,7 +1266,7 @@ void ADynamicCharacter::ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag,
     float FinalMagnitude = BaseMagnitudeOverride;
     if (FinalMagnitude <= 0.0f)
     {
-        FinalMagnitude = 500.0f; // Default fallback
+        FinalMagnitude = 500.0f; 
     }
 
     const float TotalMass = CalculateTotalInventoryAndEquipmentMass();
@@ -1272,13 +1276,17 @@ void ADynamicCharacter::ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag,
     Signatures.Add(StimulusTag, FinalMagnitude);
 
     const FVector Loc = GetActorLocation();
-    const float RangeSq = FMath::Square(FinalMagnitude);
 
-    for (const auto& Pair : GS->GetActiveCharacterByGuidMap())
+    // OPTIMIZATION: Replaced global character map iteration with PhysX BVH spatial query
+    TArray<FOverlapResult> Overlaps;
+    FCollisionShape SphereShape = FCollisionShape::MakeSphere(FinalMagnitude);
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(SensoryBroadcast), false, this);
+
+    if (World->OverlapMultiByChannel(Overlaps, Loc, FQuat::Identity, ECC_Pawn, SphereShape, QueryParams))
     {
-        if (ADynamicCharacter* OtherChar = Pair.Value.Get())
+        for (const FOverlapResult& Overlap : Overlaps)
         {
-            if (OtherChar != this && FVector::DistSquared(Loc, OtherChar->GetActorLocation()) <= RangeSq)
+            if (ADynamicCharacter* OtherChar = Cast<ADynamicCharacter>(Overlap.GetActor()))
             {
                 if (UDynamicSocialComponent* OtherSocial = OtherChar->FindComponentByClass<UDynamicSocialComponent>())
                 {

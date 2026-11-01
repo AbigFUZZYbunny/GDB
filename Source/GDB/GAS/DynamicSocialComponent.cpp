@@ -975,50 +975,25 @@ void UDynamicSocialComponent::ClearActiveCallout()
 }
 
 // --- Fast Array Lifecycle Implementations ---
-void FDynamicRelationshipEdgeItem::PostReplicatedAdd(const FFastRelationshipEdgeArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
-}
-void FDynamicRelationshipEdgeItem::PostReplicatedChange(const FFastRelationshipEdgeArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildRelationshipCache();
-}
+void FDynamicRelationshipEdgeItem::PreReplicatedRemove(const FFastRelationshipEdgeArray& InArrayOwner) {}
+void FDynamicRelationshipEdgeItem::PostReplicatedAdd(const FFastRelationshipEdgeArray& InArrayOwner) {}
+void FDynamicRelationshipEdgeItem::PostReplicatedChange(const FFastRelationshipEdgeArray& InArrayOwner) {}
 
 void FDynamicNeedStateItem::PreReplicatedRemove(const FFastNeedStateArray& InArrayOwner) {}
-void FDynamicNeedStateItem::PostReplicatedAdd(const FFastNeedStateArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
-}
-void FDynamicNeedStateItem::PostReplicatedChange(const FFastNeedStateArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildNeedCache();
-}
+void FDynamicNeedStateItem::PostReplicatedAdd(const FFastNeedStateArray& InArrayOwner) {}
+void FDynamicNeedStateItem::PostReplicatedChange(const FFastNeedStateArray& InArrayOwner) {}
 
-void FDynamicKnownPlaceItem::PostReplicatedAdd(const FFastKnownPlaceArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildPlaceCache();
-}
-void FDynamicKnownPlaceItem::PostReplicatedChange(const FFastKnownPlaceArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildPlaceCache();
-}
+void FDynamicKnownPlaceItem::PreReplicatedRemove(const FFastKnownPlaceArray& InArrayOwner) {}
+void FDynamicKnownPlaceItem::PostReplicatedAdd(const FFastKnownPlaceArray& InArrayOwner) {}
+void FDynamicKnownPlaceItem::PostReplicatedChange(const FFastKnownPlaceArray& InArrayOwner) {}
 
 void FDynamicAssignedProfessionItem::PreReplicatedRemove(const FFastAssignedProfessionArray& InArrayOwner) {}
 void FDynamicAssignedProfessionItem::PostReplicatedAdd(const FFastAssignedProfessionArray& InArrayOwner) {}
 void FDynamicAssignedProfessionItem::PostReplicatedChange(const FFastAssignedProfessionArray& InArrayOwner) {}
 
-void FCrimeMemoryItem::PreReplicatedRemove(const FFastCrimeMemoryArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->HandleSingleCrimeMemoryReplicated(*this);
-}
-void FCrimeMemoryItem::PostReplicatedAdd(const FFastCrimeMemoryArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->HandleSingleCrimeMemoryReplicated(*this);
-}
-void FCrimeMemoryItem::PostReplicatedChange(const FFastCrimeMemoryArray& InArrayOwner)
-{
-    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->HandleSingleCrimeMemoryReplicated(*this);
-}
+void FCrimeMemoryItem::PreReplicatedRemove(const FFastCrimeMemoryArray& InArrayOwner) {}
+void FCrimeMemoryItem::PostReplicatedAdd(const FFastCrimeMemoryArray& InArrayOwner) {}
+void FCrimeMemoryItem::PostReplicatedChange(const FFastCrimeMemoryArray& InArrayOwner) {}
 
 bool UDynamicSocialComponent::GetOwnedPropertyLocation(FVector& OutLocation) const
 {

@@ -296,21 +296,30 @@ float UDynamicBuildingSubsystem::EvaluateShelterInsulationAtLocation(const FVect
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
     if (!World || !GS) return 0.0f;
 
+    // 1. O(1) Short-Circuit: Provide instant full insulation if standing within a designated indoor room bounds
+    for (const FDynamicRoomInstance& Room : ActiveRooms)
+    {
+        if (Room.WorldBounds.IsInsideOrOn(WorldLocation))
+        {
+            return Room.StructuralInsulationValue;
+        }
+    }
+
+    // 2. Perform lowered-resolution check only if caught outdoors under cover
     float TotalInsulation = 0.0f;
     int32 ValidHits = 0;
-
-    const int32 NumRays = 16;
+    const int32 NumRays = 8; // Dropped from 16 for outdoor canopy checks
     FCollisionQueryParams Params(SCENE_QUERY_STAT(ShelterEvaluation), false);
     
     for (int32 i = 0; i < NumRays; ++i)
     {
-        float Z = FMath::RandRange(0.1f, 1.0f);
+        float Z = FMath::RandRange(0.2f, 1.0f);
         float Phi = FMath::RandRange(0.0f, PI * 2.0f);
         float R = FMath::Sqrt(1.0f - Z*Z);
         FVector Dir(R * FMath::Cos(Phi), R * FMath::Sin(Phi), Z);
         
         FHitResult Hit;
-        if (World->LineTraceSingleByChannel(Hit, WorldLocation, WorldLocation + (Dir * 1000.0f), ECC_Visibility, Params))
+        if (World->LineTraceSingleByChannel(Hit, WorldLocation, WorldLocation + (Dir * 1500.0f), ECC_Visibility, Params))
         {
             if (UHierarchicalInstancedStaticMeshComponent* HitHISM = Cast<UHierarchicalInstancedStaticMeshComponent>(Hit.GetComponent()))
             {
@@ -343,47 +352,172 @@ float UDynamicBuildingSubsystem::EvaluateShelterInsulationAtLocation(const FVect
 
 void UDynamicBuildingSubsystem::ProcessBuildingStreaming()
 {
-    // Streams building chunks similarly to voxel chunks, dropping actors that have no players within 400m
-    // and storing their FastArray state in a virtualized hash map if needed.
-    // (Implementation skipped for brevity, follows exact logic of Voxel streaming virtualization)
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    TArray<FVector> PlayerLocations;
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APawn* P = It->Get()->GetPawn())
+        {
+            PlayerLocations.Add(P->GetActorLocation());
+        }
+    }
+
+    if (PlayerLocations.Num() == 0) return;
+
+    const float ChunkSize = ADynamicBuildingChunkActor::CHUNK_SIZE_UNITS;
+    const float LoadRadiusSq = FMath::Square(LoadRadius);
+    const float UnloadRadiusSq = FMath::Square(UnloadRadius);
+
+    TSet<FIntPoint> RequiredChunks;
+
+    // 1. Calculate which spatial chunks are in range of any active player
+    for (const FVector& PLoc : PlayerLocations)
+    {
+        const int32 RadiusInChunks = FMath::CeilToInt(LoadRadius / ChunkSize);
+        const FIntPoint CenterCoord(
+            FMath::FloorToInt(PLoc.X / ChunkSize),
+            FMath::FloorToInt(PLoc.Y / ChunkSize)
+        );
+
+        for (int32 Y = -RadiusInChunks; Y <= RadiusInChunks; ++Y)
+        {
+            for (int32 X = -RadiusInChunks; X <= RadiusInChunks; ++X)
+            {
+                const FIntPoint EvalCoord = CenterCoord + FIntPoint(X, Y);
+                const FVector ChunkCenter(
+                    (EvalCoord.X * ChunkSize) + (ChunkSize * 0.5f),
+                    (EvalCoord.Y * ChunkSize) + (ChunkSize * 0.5f),
+                    PLoc.Z
+                );
+
+                if (FVector::DistSquared(PLoc, ChunkCenter) <= LoadRadiusSq)
+                {
+                    RequiredChunks.Add(EvalCoord);
+                }
+            }
+        }
+    }
+
+    // 2. Safely unload chunks beyond the Hysteresis bounds
+    TArray<FIntPoint> ChunksToUnload;
+    for (const auto& Pair : ActiveBuildingChunks)
+    {
+        bool bKeepLoaded = false;
+        FVector ChunkCenter(
+            (Pair.Key.X * ChunkSize) + (ChunkSize * 0.5f),
+            (Pair.Key.Y * ChunkSize) + (ChunkSize * 0.5f),
+            0.0f
+        );
+
+        for (const FVector& PLoc : PlayerLocations)
+        {
+            // Flatten Z to prevent tall towers from despawning if a player flies over them
+            ChunkCenter.Z = PLoc.Z; 
+            if (FVector::DistSquared(PLoc, ChunkCenter) <= UnloadRadiusSq)
+            {
+                bKeepLoaded = true;
+                break;
+            }
+        }
+
+        if (!bKeepLoaded)
+        {
+            ChunksToUnload.Add(Pair.Key);
+        }
+    }
+
+    for (const FIntPoint& Coord : ChunksToUnload)
+    {
+        if (ADynamicBuildingChunkActor* Chunk = ActiveBuildingChunks[Coord])
+        {
+            if (Chunk->ReplicatedStructures.Items.Num() > 0)
+            {
+                FBuildingChunkSnapshot& Snap = VirtualizedBuildingChunks.FindOrAdd(Coord);
+                Snap.ChunkCoord = Coord;
+                Snap.SavedStructures = Chunk->ReplicatedStructures.Items;
+            }
+            else
+            {
+                VirtualizedBuildingChunks.Remove(Coord);
+            }
+            Chunk->Destroy();
+        }
+        ActiveBuildingChunks.Remove(Coord);
+    }
+
+    // 3. Spawn and Hydrate Required Chunks
+    for (const FIntPoint& Coord : RequiredChunks)
+    {
+        if (!ActiveBuildingChunks.Contains(Coord))
+        {
+            // Spawning empty chunks allows players to build in new coordinates
+            const FVector SpawnLoc(Coord.X * ChunkSize, Coord.Y * ChunkSize, 0.0f);
+            FActorSpawnParameters Params;
+            Params.Owner = World->GetGameState();
+            Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+            if (ADynamicBuildingChunkActor* NewChunk = World->SpawnActor<ADynamicBuildingChunkActor>(ADynamicBuildingChunkActor::StaticClass(), FTransform(SpawnLoc), Params))
+            {
+                NewChunk->InitializeChunk(Coord, ChunkSize);
+                
+                if (const FBuildingChunkSnapshot* Snap = VirtualizedBuildingChunks.Find(Coord))
+                {
+                    NewChunk->ReplicatedStructures.Items = Snap->SavedStructures;
+                    NewChunk->ReplicatedStructures.MarkArrayDirty();
+                }
+                
+                ActiveBuildingChunks.Add(Coord, NewChunk);
+                NewChunk->UpdateInstancedMeshes();
+            }
+        }
+    }
 }
 
 void UDynamicBuildingSubsystem::SerializeWorldBuildingState(FWorldPersistenceSnapshot& OutSnapshot)
 {
-    OutSnapshot.ModifiedBuildingChunks.Empty(ActiveBuildingChunks.Num());
+    // 1. Sync live spawned actors into the mathematical virtual cache before serializing to disk
     for (const auto& Pair : ActiveBuildingChunks)
     {
         if (ADynamicBuildingChunkActor* Chunk = Pair.Value)
         {
             if (Chunk->ReplicatedStructures.Items.Num() > 0)
             {
-                FBuildingChunkSnapshot ChunkSnap;
-                ChunkSnap.ChunkCoord = Pair.Key;
-                ChunkSnap.SavedStructures = Chunk->ReplicatedStructures.Items;
-                OutSnapshot.ModifiedBuildingChunks.Add(ChunkSnap);
+                FBuildingChunkSnapshot& Snap = VirtualizedBuildingChunks.FindOrAdd(Pair.Key);
+                Snap.ChunkCoord = Pair.Key;
+                Snap.SavedStructures = Chunk->ReplicatedStructures.Items;
+            }
+            else
+            {
+                VirtualizedBuildingChunks.Remove(Pair.Key);
             }
         }
     }
+
+    // 2. Export the complete virtualized data to the snapshot
+    OutSnapshot.ModifiedBuildingChunks.Empty(VirtualizedBuildingChunks.Num());
+    for (const auto& Pair : VirtualizedBuildingChunks)
+    {
+        OutSnapshot.ModifiedBuildingChunks.Add(Pair.Value);
+    }
+    
     OutSnapshot.ActiveProperties = ActiveProperties;
 }
 
 void UDynamicBuildingSubsystem::RestoreWorldBuildingState(const FWorldPersistenceSnapshot& InSnapshot)
 {
-    for (const FBuildingChunkSnapshot& ChunkSnap : InSnapshot.ModifiedBuildingChunks)
-    {
-        const FVector ChunkWorldLoc(
-            ChunkSnap.ChunkCoord.X * ADynamicBuildingChunkActor::CHUNK_SIZE_UNITS,
-            ChunkSnap.ChunkCoord.Y * ADynamicBuildingChunkActor::CHUNK_SIZE_UNITS,
-            0.0f
-        );
-        if (ADynamicBuildingChunkActor* Chunk = GetOrCreateChunkAtLocation(ChunkWorldLoc))
-        {
-            Chunk->ReplicatedStructures.Items = ChunkSnap.SavedStructures;
-            Chunk->ReplicatedStructures.MarkArrayDirty();
-            Chunk->UpdateInstancedMeshes();
-        }
-    }
+    VirtualizedBuildingChunks.Empty();
     ActiveProperties = InSnapshot.ActiveProperties;
+
+    // Load purely into mathematical virtual space
+    for (const FBuildingChunkSnapshot& Snap : InSnapshot.ModifiedBuildingChunks)
+    {
+        VirtualizedBuildingChunks.Add(Snap.ChunkCoord, Snap);
+    }
+
+    // Execute an immediate streaming tick so any players already spawned will instantly see surrounding buildings
+    ProcessBuildingStreaming();
     RequestAsynchronousRoomEvaluation();
 }
 
@@ -398,8 +532,6 @@ void UDynamicBuildingSubsystem::RequestAsynchronousRoomEvaluation()
         World->GetTimerManager().SetTimerForNextTick(this, &UDynamicBuildingSubsystem::ExecuteRoomFloodFillAsync);
     }
 }
-
-
 
 void UDynamicBuildingSubsystem::ExecuteRoomFloodFillAsync()
 {

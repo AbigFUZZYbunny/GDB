@@ -104,4 +104,9 @@ private:
 
     UPROPERTY(Replicated)
     bool bCachedInvertsHealingToDamage = false;
+    
+    struct FCachedMorphCurveNames { FName Scale; FName Length; FName Direct; };
+    TMap<FName, FCachedMorphCurveNames> CachedBoneCurveNames;
+    
+    void CacheBoneCurveNames();
 };

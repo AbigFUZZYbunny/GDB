@@ -4013,7 +4013,7 @@ struct FDynamicRelationshipEdgeItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     double LastInteractionWorldTime = 0.0;
 
-    void PreReplicatedRemove(const struct FFastRelationshipEdgeArray& InArrayOwner) {}
+    void PreReplicatedRemove(const struct FFastRelationshipEdgeArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastRelationshipEdgeArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastRelationshipEdgeArray& InArrayOwner);
 
@@ -4091,7 +4091,7 @@ struct FDynamicKnownPlaceItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|SpatialKnowledge")
     double LastVisitedWorldTime = 0.0;
 
-    void PreReplicatedRemove(const struct FFastKnownPlaceArray& InArrayOwner) {}
+    void PreReplicatedRemove(const struct FFastKnownPlaceArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastKnownPlaceArray& InArrayOwner);
     void PostReplicatedChange(const struct FFastKnownPlaceArray& InArrayOwner);
 };

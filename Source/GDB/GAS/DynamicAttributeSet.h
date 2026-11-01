@@ -77,6 +77,8 @@ private:
     }
 
     TMap<uint64, float> FastCompositeLookupMap;
+    TMap<uint64, int32> FastAttributeIndexMap; // NEW: O(1) array index resolution
+
     TMap<FGameplayTag, FGameplayTagContainer> DirectChildrenTagCache;
     TMap<FGameplayTag, FGameplayTagContainer> AllDescendantsTagCache;
 

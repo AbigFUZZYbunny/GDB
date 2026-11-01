@@ -300,6 +300,8 @@ void UDynamicCustomizationComponent::InitializeCustomization(FGameplayTag Templa
     ActiveCharacterTemplateTag = TemplateTag;
     ActiveGender = Gender;
 
+    CacheBoneCurveNames();
+
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return;
 
@@ -418,10 +420,8 @@ void UDynamicCustomizationComponent::ApplyCustomizationToMesh()
 void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value)
 {
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
-    if (!CharOwner) return;
-
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS) return;
+    if (!CharOwner || !GS) return;
 
     FCharacterTemplateDef TemplateDef;
     if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return;
@@ -442,32 +442,26 @@ void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag S
                 {
                     for (USkeletalMeshComponent* MeshComp : ModularMeshes)
                     {
-                        if (MeshComp)
-                        {
-                            MeshComp->SetMorphTarget(MorphName, Value);
-                        }
+                        if (MeshComp) MeshComp->SetMorphTarget(MorphName, Value);
                     }
                 }
             }
 
             for (const FBoneScaleConstraint& BoneConstraint : SliderDef.TargetBones)
             {
-                if (!BoneConstraint.BoneName.IsNone())
+                if (const FCachedMorphCurveNames* Names = CachedBoneCurveNames.Find(BoneConstraint.BoneName))
                 {
                     const float TargetScale = FMath::Lerp(BoneConstraint.MinScaleMultiplier, BoneConstraint.MaxScaleMultiplier, Value);
                     for (USkeletalMeshComponent* MeshComp : ModularMeshes)
                     {
-                        if (MeshComp && MeshComp->DoesSocketExist(BoneConstraint.BoneName))
+                        if (MeshComp && MeshComp->DoesSocketExist(Names->Direct))
                         {
-                            const FName DirectBoneCurve = BoneConstraint.BoneName;
-                            const FName ScaleCurveName = FName(*FString::Printf(TEXT("scale_%s"), *BoneConstraint.BoneName.ToString()));
-                            MeshComp->SetMorphTarget(ScaleCurveName, TargetScale);
-                            MeshComp->SetMorphTarget(DirectBoneCurve, TargetScale);
+                            MeshComp->SetMorphTarget(Names->Scale, TargetScale);
+                            MeshComp->SetMorphTarget(Names->Direct, TargetScale);
                             if (BoneConstraint.bAllowLengthAdjustment)
                             {
                                 const float TargetLength = FMath::Lerp(BoneConstraint.MinLengthOffset, BoneConstraint.MaxLengthOffset, Value);
-                                const FName LengthCurveName = FName(*FString::Printf(TEXT("length_%s"), *BoneConstraint.BoneName.ToString()));
-                                MeshComp->SetMorphTarget(LengthCurveName, TargetLength);
+                                MeshComp->SetMorphTarget(Names->Length, TargetLength);
                             }
                         }
                     }
@@ -677,4 +671,32 @@ bool UDynamicCustomizationComponent::ServerCheckAndTriggerEvolution(FGameplayTag
         }
     }
     return false;
+}
+
+void UDynamicCustomizationComponent::CacheBoneCurveNames()
+{
+    CachedBoneCurveNames.Empty();
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    FCharacterTemplateDef TemplateDef;
+    if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return;
+
+    const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag);
+    if (!SkelDef) return;
+
+    for (const FBodyslideSliderDef& SliderDef : SkelDef->BodyslideSliders)
+    {
+        for (const FBoneScaleConstraint& BoneConstraint : SliderDef.TargetBones)
+        {
+            if (!BoneConstraint.BoneName.IsNone() && !CachedBoneCurveNames.Contains(BoneConstraint.BoneName))
+            {
+                FCachedMorphCurveNames Names;
+                Names.Scale = FName(*FString::Printf(TEXT("scale_%s"), *BoneConstraint.BoneName.ToString()));
+                Names.Length = FName(*FString::Printf(TEXT("length_%s"), *BoneConstraint.BoneName.ToString()));
+                Names.Direct = BoneConstraint.BoneName;
+                CachedBoneCurveNames.Add(BoneConstraint.BoneName, Names);
+            }
+        }
+    }
 }

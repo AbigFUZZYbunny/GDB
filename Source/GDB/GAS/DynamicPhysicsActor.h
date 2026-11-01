@@ -105,6 +105,10 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Container")
     TObjectPtr<UDynamicContainerComponent> ContainerComponent;
+    
+    // Pre-allocated array of generic expansion containers (e.g. Potion straps, side pouches)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Container")
+    TArray<TObjectPtr<UDynamicContainerComponent>> SupplementalContainers;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_ActorArchetypeTag, Category = "Dynamic Configuration")
     FGameplayTag ActorArchetypeTag;

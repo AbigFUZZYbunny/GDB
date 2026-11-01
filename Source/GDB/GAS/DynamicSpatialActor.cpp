@@ -112,6 +112,7 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         QueryParams.AddIgnoredActor(GetInstigator());
     }
 
+    // OPTIMIZATION: OverlapMultiByChannel entirely bypasses the CCD Sweep solver overhead
     if (World->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity, ECC_Pawn, SphereShape, QueryParams))
     {
         ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
@@ -120,10 +121,8 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
             AActor* HitActor = Result.GetActor();
             if (!HitActor || ImpactedActors.Contains(HitActor)) continue;
 
-            // Enforce Target Liveness & Faction Tag Filters
             if (SourceASC.IsValid())
             {
-                // Fixed: Non-const UAbilitySystemComponent pointer for target application
                 UAbilitySystemComponent* TargetASC = HitActor->FindComponentByClass<UAbilitySystemComponent>();
                 if (!TargetASC) continue;
 
@@ -142,7 +141,9 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
                 ImpactedActors.Add(HitActor);
 
                 ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(HitActor);
-                const FName BoneName = FName("pelvis"); // Fixed: FOverlapResult does not expose MyBoneName
+                
+                // Fallback to pelvis if no specific bone hit is provided by overlap
+                const FName BoneName = FName("pelvis"); 
                 const FVector OutwardNormal = (GetActorLocation() - HitActor->GetActorLocation()).GetSafeNormal();
                 const float ScaledImpulse = DeliveryDef.KineticImpulseOnHit * PowerMultiplier;
 

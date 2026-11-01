@@ -88,4 +88,6 @@ private:
     bool LoadTextureDataToCache(TSoftObjectPtr<UTexture2D> TexturePtr, TArray<FColor>& OutData, int32& OutWidth, int32& OutHeight);
     
     FIntPoint GetChunkCoordFromLocation(const FVector& WorldLocation) const;
+    
+    int32 GenerativeUpdateIndex = 0;
 };

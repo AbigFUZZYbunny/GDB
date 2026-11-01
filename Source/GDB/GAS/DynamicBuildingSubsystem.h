@@ -50,6 +50,10 @@ private:
     UPROPERTY()
     TMap<FIntPoint, ADynamicBuildingChunkActor*> ActiveBuildingChunks;
 
+    // NEW: Off-world mathematical cache for chunks outside player streaming radii
+    UPROPERTY()
+    TMap<FIntPoint, FBuildingChunkSnapshot> VirtualizedBuildingChunks;
+
     UPROPERTY()
     TArray<FDynamicRoomInstance> ActiveRooms;
 
@@ -58,7 +62,11 @@ private:
 
     float StreamingTimer = 0.0f;
     float TransitionTimer = 0.0f;
-    float StreamingRadius = 40000.0f;
+
+    // Standardized load radii to align with dynamic voxel streaming
+    float LoadRadius = 40000.0f;   // 400m
+    float UnloadRadius = 45000.0f; // 450m (Hysteresis prevents border-thrashing hitches)
+    
     bool bRoomEvaluationPending = false;
 
     ADynamicBuildingChunkActor* GetOrCreateChunkAtLocation(const FVector& WorldLocation);

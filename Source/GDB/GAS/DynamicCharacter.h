@@ -214,4 +214,7 @@ private:
     FGameplayTagContainer GrantedMovementTags;
     FVector LastHoldSweepLocation = FVector::ZeroVector;
     float AccumulatedHoldSweepTime = 0.0;
+    
+    float HistorySaveAccumulator = 0.0f;
+    static constexpr float HistorySaveInterval = 1.0f / 20.0f; // 20 Hz Lag Compensation
 };

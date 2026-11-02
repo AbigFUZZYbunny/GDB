@@ -84,6 +84,10 @@ private:
 
     TMap<FGuid, FVirtualNPCRecord> VirtualNPCRegistry;
     TArray<TWeakObjectPtr<ADynamicCharacter>> ActiveNPCs;
+
+    // OPTIMIZATION: 2D Spatial Hash Grid to eliminate O(N*P) proximity distance checks
+    float VirtualSpatialGridSize = 10000.0f;
+    TMap<FIntPoint, TSet<FGuid>> VirtualNPCSpatialHash;
     
     float ProximityCheckAccumulator = 0.0f;
     float MacroSimulationAccumulator = 0.0f;

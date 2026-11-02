@@ -92,7 +92,12 @@ public:
 
 private:
     float ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const;
+    
+    // Overload 1: Bulk-optimized variant accepting pre-queried modular meshes
+    void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value, const TArray<USkeletalMeshComponent*>& ModularMeshes);
+    // Overload 2: Convenience single-call variant that resolves meshes once on demand
     void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value);
+    
     void UpdateSignificanceEvaluation();
 
     TMap<FGameplayTag, float> LocalMorphCache;

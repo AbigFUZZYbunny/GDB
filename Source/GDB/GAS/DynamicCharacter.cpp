@@ -222,6 +222,14 @@ float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
 
+    const double Now = World ? World->GetTimeSeconds() : 0.0;
+    
+    // OPTIMIZATION: Debounce the expensive spatial physics sweep to 2 Hz.
+    if ((Now - LastMassCalculateTime) < 0.5)
+    {
+        return CachedTotalMass;
+    }
+
     const float BaselineMass = GS ? FMath::Max(1.0f, GS->GetCalculationSettings().BaselineCharacterMassKg) : 80.0f;
     const float ProximityRadius = GS ? FMath::Max(50.0f, GS->GetCalculationSettings().CarriedMassProximityRadius) : 300.0f;
     const FGameplayTag WeightTag = (GS && GS->GetCalculationSettings().ObjectWeightAttributeTag.IsValid())
@@ -254,7 +262,6 @@ float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
 
     TSet<const ADynamicPhysicsActor*> ProcessedPhysicsActors;
 
-    // 1. Directly attached/carried physics actors (O(1) hierarchy query)
     TArray<AActor*> AttachedActors;
     GetAttachedActors(AttachedActors, true);
     for (AActor* Attached : AttachedActors)
@@ -272,7 +279,6 @@ float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
         }
     }
 
-    // 2. Localized spatial sphere overlap for dragged/tethered physics actors (replaces TActorIterator)
     if (World)
     {
         TArray<FOverlapResult> Overlaps;
@@ -300,7 +306,9 @@ float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
         }
     }
 
-    return TotalMassKg;
+    CachedTotalMass = TotalMassKg;
+    LastMassCalculateTime = Now;
+    return CachedTotalMass;
 }
 
 float ADynamicCharacter::GetEffectiveClimbingLoad() const

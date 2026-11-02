@@ -410,9 +410,16 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
         TMap<FGuid, float> ResolvedSupport;
         TQueue<FGuid> EvaluationQueue;
 
-        // OPTIMIZATION: 3D Spatial Hash Grid (O(N) initialization)
-        const float GridSize = 250.0f; // Slightly larger than max OverlapConnectionRadius
-        TMap<FIntVector, TArray<int32>> SpatialHash;
+        // OPTIMIZATION: Zero-Allocation 1D Spatial Hash Grid (DOD)
+        // Eliminates thousands of TArray heap allocations inside the ThreadPool task
+        const float GridSize = 250.0f; 
+        const int32 HashBuckets = 8191; // Prime number for hash modulo
+        
+        TArray<int32> Head; 
+        Head.Init(INDEX_NONE, HashBuckets);
+        
+        TArray<int32> Next; 
+        Next.Init(INDEX_NONE, StateCapture.Num());
         
         for (int32 i = 0; i < StateCapture.Num(); ++i)
         {
@@ -428,8 +435,12 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
             }
 
             const FVector Loc = Node.WorldTransform.GetLocation();
-            FIntVector Cell(FMath::FloorToInt(Loc.X / GridSize), FMath::FloorToInt(Loc.Y / GridSize), FMath::FloorToInt(Loc.Z / GridSize));
-            SpatialHash.FindOrAdd(Cell).Add(i);
+            const FIntVector Cell(FMath::FloorToInt(Loc.X / GridSize), FMath::FloorToInt(Loc.Y / GridSize), FMath::FloorToInt(Loc.Z / GridSize));
+            
+            // Hash coordinate to 1D bucket
+            const uint32 HashIndex = GetTypeHash(Cell) % HashBuckets;
+            Next[i] = Head[HashIndex];
+            Head[HashIndex] = i;
         }
 
         // 1. Build Adjacency Graph via Spatial Hash (O(N) resolution)
@@ -441,26 +452,27 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
             const float ReachSq = FMath::Square(Reach);
             const FVector LocA = NodeA.WorldTransform.GetLocation();
 
-            FIntVector CenterCell(FMath::FloorToInt(LocA.X / GridSize), FMath::FloorToInt(LocA.Y / GridSize), FMath::FloorToInt(LocA.Z / GridSize));
+            const FIntVector CenterCell(FMath::FloorToInt(LocA.X / GridSize), FMath::FloorToInt(LocA.Y / GridSize), FMath::FloorToInt(LocA.Z / GridSize));
 
-            // Check adjacent 3x3x3 grid cells
+            // Check adjacent 3x3x3 grid cells using the flattened linked list
             for (int32 Z = -1; Z <= 1; ++Z) {
                 for (int32 Y = -1; Y <= 1; ++Y) {
                     for (int32 X = -1; X <= 1; ++X) {
-                        FIntVector NeighborCell = CenterCell + FIntVector(X, Y, Z);
-                        if (TArray<int32>* Bucket = SpatialHash.Find(NeighborCell))
+                        const FIntVector NeighborCell = CenterCell + FIntVector(X, Y, Z);
+                        const uint32 NeighborHash = GetTypeHash(NeighborCell) % HashBuckets;
+                        
+                        int32 j = Head[NeighborHash];
+                        while (j != INDEX_NONE)
                         {
-                            for (int32 j : *Bucket)
+                            if (i < j) // Prevent duplicate bidirectional checks and self-checks
                             {
-                                if (i < j) // Prevent duplicate bidirectional checks and self-checks
+                                if (FVector::DistSquared(LocA, StateCapture[j].WorldTransform.GetLocation()) <= ReachSq)
                                 {
-                                    if (FVector::DistSquared(LocA, StateCapture[j].WorldTransform.GetLocation()) <= ReachSq)
-                                    {
-                                        LocalGraph.FindOrAdd(NodeA.InstanceID).Add(StateCapture[j].InstanceID);
-                                        LocalGraph.FindOrAdd(StateCapture[j].InstanceID).Add(NodeA.InstanceID);
-                                    }
+                                    LocalGraph.FindOrAdd(NodeA.InstanceID).Add(StateCapture[j].InstanceID);
+                                    LocalGraph.FindOrAdd(StateCapture[j].InstanceID).Add(NodeA.InstanceID);
                                 }
                             }
+                            j = Next[j];
                         }
                     }
                 }

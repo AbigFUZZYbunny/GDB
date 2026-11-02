@@ -58,6 +58,10 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Language")
     bool ServerForgetWord(FGameplayTag LanguageTag, const FString& Word);
+    
+    // Translates generated English text into the target native tongue (Used by LLM & Fallback AI)
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Language")
+    FString TranslateToNativeTongue(FGameplayTag LanguageTag, const FString& SourceText) const;
 
 private:
     // Server-only authoritative challenge cache: ChallengeGuid -> Correct Answer String

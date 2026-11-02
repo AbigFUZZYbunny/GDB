@@ -66,6 +66,9 @@ struct GDB_API FCloudAIQueuedTask
     UPROPERTY() int32 UtteranceStartIndex = 0;
     UPROPERTY() int32 LastBroadcastedLength = 0;
 
+    // NEW: Real-time translation buffer for LLM Token Streaming
+    UPROPERTY() FString StreamingWordBuffer; 
+
     FOnCloudAIResponseDirectCallback FinalCompletionDelegate;
     FOnCloudAITokenStream TokenStreamDelegate;
     FOnCloudAITaskAssigned TaskAssignedDelegate;

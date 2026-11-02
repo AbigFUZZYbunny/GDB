@@ -1512,47 +1512,64 @@ bool UDynamicDataSerializer::ApplySnapshotToPlayerCharacter(ADynamicCharacter* T
         Social->RebuildPlaceCache();
     }
 
-    // 9. Re-spawning & Re-hydrating Dragged Physics Actors
-    ADynamicGameState* GS = TargetCharacter->GetWorld() ? TargetCharacter->GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (GS)
+    // 9. Re-spawning & Re-hydrating Dragged Physics Actors (Time-Sliced)
+    if (Snapshot.DraggedPhysicsActors.Num() > 0)
     {
-        for (const FDraggedPhysicsActorSnapshot& ActorSnap : Snapshot.DraggedPhysicsActors)
+        TSharedRef<TArray<FDraggedPhysicsActorSnapshot>> PendingSpawns = MakeShared<TArray<FDraggedPhysicsActorSnapshot>>(Snapshot.DraggedPhysicsActors);
+        TWeakObjectPtr<ADynamicCharacter> WeakChar(TargetCharacter);
+        
+        FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([PendingSpawns, WeakChar](float DeltaTime) -> bool
         {
-            if (ActorSnap.ActorArchetypeTag.IsValid())
+            if (!WeakChar.IsValid() || PendingSpawns->Num() == 0) return false;
+            
+            ADynamicCharacter* TargetChar = WeakChar.Get();
+            ADynamicGameState* GS = TargetChar->GetWorld() ? TargetChar->GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+            if (!GS) return false;
+
+            // OPTIMIZATION: Process a maximum of 2 physical spawns per tick to guarantee stable server frame rates
+            int32 SpawnsProcessedThisFrame = 0;
+            while (PendingSpawns->Num() > 0 && SpawnsProcessedThisFrame < 2)
             {
-                ADynamicPhysicsActor* SpawnedActor = GS->AcquirePhysicsActor(ActorSnap.ActorArchetypeTag, ActorSnap.WorldTransform, TargetCharacter, TargetCharacter);
-                if (SpawnedActor)
+                FDraggedPhysicsActorSnapshot ActorSnap = PendingSpawns->Pop();
+                if (ActorSnap.ActorArchetypeTag.IsValid())
                 {
-                    if (UDynamicAttributeSet* AttrSet = SpawnedActor->GetDynamicAttributeSet())
+                    ADynamicPhysicsActor* SpawnedActor = GS->AcquirePhysicsActor(ActorSnap.ActorArchetypeTag, ActorSnap.WorldTransform, TargetChar, TargetChar);
+                    if (SpawnedActor)
                     {
-                        for (const FDynamicAttributeItem& Attr : ActorSnap.SavedAttributes)
+                        if (UDynamicAttributeSet* AttrSet = SpawnedActor->GetDynamicAttributeSet())
                         {
-                            if (Attr.AttributeTag.IsValid())
+                            for (const FDynamicAttributeItem& Attr : ActorSnap.SavedAttributes)
                             {
-                                AttrSet->SetDynamicAttributeValue(Attr.AttributeTag, Attr.Value, Attr.LimbId);
+                                if (Attr.AttributeTag.IsValid())
+                                {
+                                    AttrSet->SetDynamicAttributeValue(Attr.AttributeTag, Attr.Value, Attr.LimbId);
+                                }
                             }
                         }
-                    }
 
-                    if (UDynamicInteractableComponent* Interactable = SpawnedActor->GetInteractableComponent())
-                    {
-                        for (const FGameplayTag& SavedStateTag : ActorSnap.SavedInteractableStates)
+                        if (UDynamicInteractableComponent* Interactable = SpawnedActor->GetInteractableComponent())
                         {
-                            Interactable->AddStateTag(SavedStateTag);
+                            for (const FGameplayTag& SavedStateTag : ActorSnap.SavedInteractableStates)
+                            {
+                                Interactable->AddStateTag(SavedStateTag);
+                            }
+                        }
+
+                        RestoreDraggedActorContainers(SpawnedActor, ActorSnap.ContainerInventory);
+
+                        if (UPrimitiveComponent* Prim = SpawnedActor->GetActivePhysicsPrimitive())
+                        {
+                            Prim->SetSimulatePhysics(true);
+                            Prim->SetPhysicsLinearVelocity(ActorSnap.LinearVelocity);
+                            Prim->SetPhysicsAngularVelocityInDegrees(ActorSnap.AngularVelocity);
                         }
                     }
-
-                    RestoreDraggedActorContainers(SpawnedActor, ActorSnap.ContainerInventory);
-
-                    if (UPrimitiveComponent* Prim = SpawnedActor->GetActivePhysicsPrimitive())
-                    {
-                        Prim->SetSimulatePhysics(true);
-                        Prim->SetPhysicsLinearVelocity(ActorSnap.LinearVelocity);
-                        Prim->SetPhysicsAngularVelocityInDegrees(ActorSnap.AngularVelocity);
-                    }
                 }
+                SpawnsProcessedThisFrame++;
             }
-        }
+            
+            return PendingSpawns->Num() > 0;
+        }));
     }
 
     return true;

@@ -48,6 +48,8 @@ public:
     void InitializeChunk(FIntPoint InCoord, int32 InDimX, int32 InDimY, float CellSizeWorldUnits, const FVector& WorldOrigin);
     void UpdateCellData(int32 GlobalCellIndex, const FEnvironmentGridCellItem& NewCellData);
     const FEnvironmentGridCellItem* FindCellItemByGlobalIndex(int32 GlobalCellIndex) const;
+    
+    void UpdateCellDataBulk(const TArray<FEnvironmentGridCellItem>& ModifiedCells);
 
 private:
     TMap<int32, int32> GlobalToLocalCellIndexMap;

@@ -54,40 +54,33 @@ public:
 
 protected:
     UPROPERTY(EditAnywhere, Category = "Dynamic GAS|Voxels|Streaming")
-    float HighResRadius = 10000.0f; // 100m
+    float HighResRadius = 10000.0f; 
     UPROPERTY(EditAnywhere, Category = "Dynamic GAS|Voxels|Streaming")
-    float LowResRadius = 30000.0f;  // 300m
+    float LowResRadius = 30000.0f;  
     UPROPERTY(EditAnywhere, Category = "Dynamic GAS|Voxels|Streaming")
-    float VirtualNearbyRadius = 60000.0f; // 600m
+    float VirtualNearbyRadius = 60000.0f; 
     UPROPERTY(EditAnywhere, Category = "Dynamic GAS|Voxels|Streaming")
-    float VirtualDistantRadius = 120000.0f; // 1.2km
+    float VirtualDistantRadius = 120000.0f; 
 
 private:
-    // Virtualized memory map of only chunks that have been modified or loaded
     UPROPERTY()
     TMap<FIntPoint, FVoxelChunkPersistentData> VirtualChunkRegistry;
 
-    // Physical actors currently spawned in the world
     UPROPERTY()
     TMap<FIntPoint, ADynamicVoxelChunkActor*> ActiveSpawnedChunks;
 
-    FVoxelMapDataCache MapDataCache;
+    // OPTIMIZATION: Converted to thread-safe SharedPtr to prevent 250MB deep copies
+    TSharedPtr<FVoxelMapDataCache> MapDataCache;
     
     float VoxelWorldSize = 100.0f;
     float StreamingTimer = 0.0f;
     bool bHasInitializedMapData = false;
+    int32 GenerativeUpdateIndex = 0;
 
-    // Evaluates streaming thresholds and spawns/despawns actors seamlessly
     void ProcessChunkStreamingAndLODs();
-
-    // Runs time-sliced generative updates on background threads for virtualized chunks
     void ProcessTemporalGenerativeUpdates(double CurrentWorldTime);
     void ExecuteGenerativePassAsync(FIntPoint ChunkCoord, EVoxelLODState LodState);
-
     void ProcessVoxelEnvironmentFeedback(const FVector& WorldLocation, FGameplayTag OldVoxelTag, FGameplayTag NewVoxelTag);
     bool LoadTextureDataToCache(TSoftObjectPtr<UTexture2D> TexturePtr, TArray<FColor>& OutData, int32& OutWidth, int32& OutHeight);
-    
     FIntPoint GetChunkCoordFromLocation(const FVector& WorldLocation) const;
-    
-    int32 GenerativeUpdateIndex = 0;
 };

@@ -61,4 +61,7 @@ private:
     {
         return X + (Y * CHUNK_SIZE) + (Z * CHUNK_SIZE * CHUNK_SIZE);
     }
+    
+    // NEW: O(1) Fast-Path index mapping for Voxel Deltas
+    TMap<int32, int32> VoxelIndexToDeltaMap;
 };

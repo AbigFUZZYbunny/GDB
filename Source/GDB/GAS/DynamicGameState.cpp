@@ -275,6 +275,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
     AccumulatedUnsimulatedHours += ElapsedGameHours;
     const double CurrentWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 
+    // Watchdog check to prevent deadlock if a background simulation task hangs
     if (bIsSimulationTaskRunning)
     {
         if (SimulationTaskStartTimestamp > 0.0 && (CurrentWorldTime - SimulationTaskStartTimestamp) > SimulationTaskTimeoutSeconds)
@@ -300,7 +301,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
     const int32 CapturedChunkDim = ChunkDimension;
     const FDynamicEnvironmentSystemConfig CapturedEnvConfig = EnvironmentConfig;
 
-    // OPTIMIZATION: Capture registries and maps by pointer to eliminate deep-copy overhead on the GameThread
+    // OPTIMIZATION: Capture registries by pointer to eliminate deep-copy overhead on the GameThread
     const TMap<FGameplayTag, int32>* ElementMapPtr = &TrackedElementsMap;
     const TMap<FGameplayTag, FDynamicBiomeDef>* BiomeRegistryPtr = &BiomeMasterRegistry;
 
@@ -325,6 +326,9 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
         const float BorderDissipation = FMath::Clamp(CapturedEnvConfig.BorderDissipationRate, 0.0f, 1.0f);
         const float TransferRatio = FMath::Clamp(0.15f * HoursToSimulate, 0.0f, 0.35f);
 
+        // ------------------------------------------------------------------------
+        // PASS A: Advection & Wind Displacements
+        // ------------------------------------------------------------------------
         for (int32 i = 0; i < TotalCells; ++i)
         {
             const FEnvironmentGridCellItem& Cell = ReadCells[i];
@@ -377,6 +381,9 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
         }
 
+        // ------------------------------------------------------------------------
+        // PASS B: Element Aggregation, Homeostasis, Biome Shifting & Metric Formulae
+        // ------------------------------------------------------------------------
         TArray<int32> ModifiedCellIndices;
         ModifiedCellIndices.Reserve(TotalCells / 4);
 
@@ -407,13 +414,12 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 }
             }
 
-            // Dereference the Biome Registry pointer safely
+            // Biome Homeostasis and Shifting
             if (const FDynamicBiomeDef* BiomeDef = BiomeRegistryPtr->Find(WriteCell.CurrentBiomeTag))
             {
                 float MaxDeviation = 0.0f;
                 for (const FTagFloatPair& Eq : BiomeDef->DefaultElementalEquilibrium)
                 {
-                    // Dereference the Element Map pointer safely
                     if (const int32* ElemIdxPtr = ElementMapPtr->Find(Eq.KeyTag))
                     {
                         const int32 ElemIdx = *ElemIdxPtr;
@@ -457,6 +463,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 }
             }
 
+            // Derive Physical Environmental Metrics
             for (const FDynamicEnvironmentPhysicalMetricFormula& Formula : CapturedEnvConfig.MetricFormulas)
             {
                 float MetricAccum = Formula.BaseConstant;
@@ -481,7 +488,9 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             }
         }
 
-        // Pass C: GameThread completion using dynamic time-sliced budget (2ms cap)
+        // ------------------------------------------------------------------------
+        // PASS C: GameThread Synchronization & Bulk Chunk Replication
+        // ------------------------------------------------------------------------
         Async(EAsyncExecution::TaskGraphMainThread, [this, ModifiedIndices = MoveTemp(ModifiedCellIndices), CapturedGridWidth, CapturedChunkDim, CapturedEnvConfig, HoursToSimulate]()
         {
             if (!IsValid(this))
@@ -491,6 +500,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 return;
             }
 
+            // Double-buffer swap
             Swap(EnvironmentReadBuffer, EnvironmentWriteBuffer);
 
             FEnvironmentManaModificationRecord PendingMod;
@@ -498,6 +508,7 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
             PostSwapModifiedCells.Reserve(ModifiedIndices.Num());
             PostSwapModifiedCells.Append(ModifiedIndices);
 
+            // Drain MPSC queue within a strict 2 ms budget
             const double DrainStartTime = FPlatformTime::Seconds();
             constexpr double MaxDrainBudgetSeconds = 0.002;
 
@@ -518,8 +529,11 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 }
             }
 
-            // Execute the newly integrated Network Graph Solver update
+            // Solve simulated network supply/demand across the world
             EvaluateNetworkGraphs(HoursToSimulate * 3600.0f);
+
+            // OPTIMIZATION: Aggregate modified cells by Chunk Coord to eliminate network queue flooding
+            TMap<FIntPoint, TArray<FEnvironmentGridCellItem>> BulkChunkUpdates;
 
             for (const int32 CellIdx : PostSwapModifiedCells)
             {
@@ -533,11 +547,17 @@ void ADynamicGameState::ServerTickEnvironmentSimulation(float ElapsedGameHours)
                 const int32 CellY = CellIdx / CapturedGridWidth;
                 const FIntPoint ChunkCoord(CellX / CapturedChunkDim, CellY / CapturedChunkDim);
 
-                if (TObjectPtr<ADynamicEnvironmentChunkActor>* FoundChunk = ActiveChunkMap.Find(ChunkCoord))
+                BulkChunkUpdates.FindOrAdd(ChunkCoord).Add(EnvironmentReadBuffer[CellIdx]);
+            }
+
+            // Dispatch bulk updates to each active chunk actor
+            for (const auto& Pair : BulkChunkUpdates)
+            {
+                if (TObjectPtr<ADynamicEnvironmentChunkActor>* FoundChunk = ActiveChunkMap.Find(Pair.Key))
                 {
                     if (FoundChunk->Get())
                     {
-                        (*FoundChunk)->UpdateCellData(CellIdx, EnvironmentReadBuffer[CellIdx]);
+                        (*FoundChunk)->UpdateCellDataBulk(Pair.Value);
                     }
                 }
             }
@@ -1240,17 +1260,18 @@ void ADynamicGameState::QueueNetworkBurstTransfer(UDynamicNetworkComponent* Node
 
 void ADynamicGameState::RebuildNetworkGraphs()
 {
-    // Fast O(N+E) Breadth-First Search to label Disjoint Sets
     ComputedResourceGraphs.Empty();
     ActiveNetworkNodes.RemoveAll([](const TWeakObjectPtr<UDynamicNetworkComponent>& Node) { return !Node.IsValid(); });
 
     int32 CurrentGraphID = 0;
-    TSet<UDynamicNetworkComponent*> Visited;
+    
+    // OPTIMIZATION & FIX: Isolate visited nodes per resource to allow multi-resource conduits (e.g. Water & Steam)
+    TMap<FGameplayTag, TSet<UDynamicNetworkComponent*>> VisitedPerResource;
 
     for (const TWeakObjectPtr<UDynamicNetworkComponent>& WeakNode : ActiveNetworkNodes)
     {
         UDynamicNetworkComponent* RootNode = WeakNode.Get();
-        if (!RootNode || Visited.Contains(RootNode)) continue;
+        if (!RootNode) continue;
 
         const FDynamicNetworkNodeDef* RootDef = RootNode->GetNodeDefinition();
         if (!RootDef) continue;
@@ -1258,6 +1279,10 @@ void ADynamicGameState::RebuildNetworkGraphs()
         for (const FDynamicNetworkResourceConfig& ResConfig : RootDef->SupportedResources)
         {
             const FGameplayTag TargetRes = ResConfig.ResourceTag;
+            TSet<UDynamicNetworkComponent*>& Visited = VisitedPerResource.FindOrAdd(TargetRes);
+
+            if (Visited.Contains(RootNode)) continue;
+
             CurrentGraphID++;
             FResourceGraphState& Graph = ComputedResourceGraphs.Add(CurrentGraphID);
 
@@ -1265,7 +1290,7 @@ void ADynamicGameState::RebuildNetworkGraphs()
             Queue.Add(RootNode);
             Visited.Add(RootNode);
 
-            int32 QueueIndex = 0; // Advancing index avoids O(N) array shifts
+            int32 QueueIndex = 0;
             while (QueueIndex < Queue.Num())
             {
                 UDynamicNetworkComponent* Node = Queue[QueueIndex++];
@@ -1273,10 +1298,12 @@ void ADynamicGameState::RebuildNetworkGraphs()
                 const FDynamicNetworkNodeDef* NodeDef = Node->GetNodeDefinition();
                 if (NodeDef)
                 {
+                    bool bSupportsCurrentRes = false;
                     for (const FDynamicNetworkResourceConfig& Config : NodeDef->SupportedResources)
                     {
                         if (Config.ResourceTag == TargetRes)
                         {
+                            bSupportsCurrentRes = true;
                             Node->ActiveGraphIDs.Add(TargetRes, CurrentGraphID);
                             
                             switch (Config.NodeType)
@@ -1286,19 +1313,23 @@ void ADynamicGameState::RebuildNetworkGraphs()
                                 case ENetworkNodeType::Storage: Graph.Storages.Add(Node); break;
                                 case ENetworkNodeType::Transporter: Graph.Transporters.Add(Node); break;
                             }
+                            break; 
                         }
                     }
-                }
 
-                // Traverse edges
-                for (const FNetworkConnectionItem& Edge : Node->ReplicatedConnections.Items)
-                {
-                    if (UDynamicNetworkComponent* Connected = Edge.ConnectedNode.Get())
+                    // Only traverse edges if this node actually conducts the current resource
+                    if (bSupportsCurrentRes)
                     {
-                        if (!Visited.Contains(Connected))
+                        for (const FNetworkConnectionItem& Edge : Node->ReplicatedConnections.Items)
                         {
-                            Visited.Add(Connected);
-                            Queue.Add(Connected);
+                            if (UDynamicNetworkComponent* Connected = Edge.ConnectedNode.Get())
+                            {
+                                if (!Visited.Contains(Connected))
+                                {
+                                    Visited.Add(Connected);
+                                    Queue.Add(Connected);
+                                }
+                            }
                         }
                     }
                 }

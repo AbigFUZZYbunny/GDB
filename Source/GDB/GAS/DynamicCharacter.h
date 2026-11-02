@@ -217,4 +217,8 @@ private:
     
     float HistorySaveAccumulator = 0.0f;
     static constexpr float HistorySaveInterval = 1.0f / 20.0f; // 20 Hz Lag Compensation
+    
+    // Caching mass calculation to prevent spamming Physics Sweeps every frame during climbing
+    mutable float CachedTotalMass = 80.0f;
+    mutable double LastMassCalculateTime = -100.0;
 };

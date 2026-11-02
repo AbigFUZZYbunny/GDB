@@ -13,7 +13,7 @@ void UDynamicVoxelSubsystem::Deinitialize()
 {
     ActiveSpawnedChunks.Empty();
     VirtualChunkRegistry.Empty();
-    MapDataCache = FVoxelMapDataCache();
+    MapDataCache.Reset();
     Super::Deinitialize();
 }
 
@@ -390,26 +390,29 @@ void UDynamicVoxelSubsystem::InitializeVoxelGenerationData()
 
     const FDynamicVoxelGenerationConfig& Config = GS->VoxelGenerationConfig;
 
+    MapDataCache = MakeShared<FVoxelMapDataCache>();
     int32 W = 0, H = 0;
-    if (LoadTextureDataToCache(Config.SurfaceHeightMap, MapDataCache.SurfaceHeightData, W, H))
+    
+    if (LoadTextureDataToCache(Config.SurfaceHeightMap, MapDataCache->SurfaceHeightData, W, H))
     {
-        MapDataCache.Width = W;
-        MapDataCache.Height = H;
+        MapDataCache->Width = W;
+        MapDataCache->Height = H;
         
-        LoadTextureDataToCache(Config.BiomeMap, MapDataCache.BiomeData, W, H);
-        LoadTextureDataToCache(Config.CaveDensityMap, MapDataCache.CaveData, W, H);
-        LoadTextureDataToCache(Config.EnergyLevelMap, MapDataCache.EnergyData, W, H);
+        LoadTextureDataToCache(Config.BiomeMap, MapDataCache->BiomeData, W, H);
+        LoadTextureDataToCache(Config.CaveDensityMap, MapDataCache->CaveData, W, H);
+        LoadTextureDataToCache(Config.EnergyLevelMap, MapDataCache->EnergyData, W, H);
     }
 }
 
 void UDynamicVoxelSubsystem::GenerateChunkDataAsync(FIntPoint ChunkCoord, int32 ChunkSize, float VoxelSize, TWeakObjectPtr<ADynamicVoxelChunkActor> RequestingChunk)
 {
-    if (!MapDataCache.IsValid() || !RequestingChunk.IsValid()) return;
+    if (!MapDataCache.IsValid() || !MapDataCache->IsValid() || !RequestingChunk.IsValid()) return;
 
     ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
     if (!GS) return;
 
-    FVoxelMapDataCache LocalCache = MapDataCache;
+    // OPTIMIZATION: Thread-safe O(1) ref-count copy prevents massive memory stalls
+    TSharedPtr<FVoxelMapDataCache> LocalCache = MapDataCache;
     FDynamicVoxelGenerationConfig LocalConfig = GS->VoxelGenerationConfig;
 
     Async(EAsyncExecution::ThreadPool, [ChunkCoord, ChunkSize, VoxelSize, LocalCache, LocalConfig, RequestingChunk]() {
@@ -430,11 +433,11 @@ void UDynamicVoxelSubsystem::GenerateChunkDataAsync(FIntPoint ChunkCoord, int32 
                 const float U = FMath::Clamp((WorldX + (LocalConfig.MapWorldBounds * 0.5f)) / LocalConfig.MapWorldBounds, 0.0f, 1.0f);
                 const float V = FMath::Clamp((WorldY + (LocalConfig.MapWorldBounds * 0.5f)) / LocalConfig.MapWorldBounds, 0.0f, 1.0f);
                 
-                const int32 PixelX = FMath::Clamp(FMath::RoundToInt(U * (LocalCache.Width - 1)), 0, LocalCache.Width - 1);
-                const int32 PixelY = FMath::Clamp(FMath::RoundToInt(V * (LocalCache.Height - 1)), 0, LocalCache.Height - 1);
-                const int32 PixelIdx = PixelY * LocalCache.Width + PixelX;
+                const int32 PixelX = FMath::Clamp(FMath::RoundToInt(U * (LocalCache->Width - 1)), 0, LocalCache->Width - 1);
+                const int32 PixelY = FMath::Clamp(FMath::RoundToInt(V * (LocalCache->Height - 1)), 0, LocalCache->Height - 1);
+                const int32 PixelIdx = PixelY * LocalCache->Width + PixelX;
 
-                const FColor HeightPixel = LocalCache.SurfaceHeightData[PixelIdx];
+                const FColor HeightPixel = LocalCache->SurfaceHeightData[PixelIdx];
                 const float HeightNormalized = HeightPixel.R / 255.0f;
                 const float TargetWorldHeight = LocalConfig.BaseElevation + (HeightNormalized * LocalConfig.WorldHeightScale);
                 const int32 HeightZ = FMath::Clamp(FMath::FloorToInt(TargetWorldHeight / VoxelSize), 0, ChunkSize - 1);
@@ -442,14 +445,13 @@ void UDynamicVoxelSubsystem::GenerateChunkDataAsync(FIntPoint ChunkCoord, int32 
                 uint8 SurfaceVoxelID = 1; 
                 uint8 SubsurfaceVoxelID = 2; 
                 
-                if (LocalCache.BiomeData.IsValidIndex(PixelIdx))
+                if (LocalCache->BiomeData.IsValidIndex(PixelIdx))
                 {
-                    const FColor BiomeColor = LocalCache.BiomeData[PixelIdx];
+                    const FColor BiomeColor = LocalCache->BiomeData[PixelIdx];
                     for (int i = 0; i < LocalConfig.BiomeColorMappings.Num(); ++i)
                     {
                         if (BiomeColor == LocalConfig.BiomeColorMappings[i].MapColorKey)
                         {
-                            // In a full implementation, these map to the FGameplayTag uint8 dictionary index
                             SurfaceVoxelID = 1; 
                             SubsurfaceVoxelID = 2;
                             break;
@@ -458,9 +460,9 @@ void UDynamicVoxelSubsystem::GenerateChunkDataAsync(FIntPoint ChunkCoord, int32 
                 }
 
                 float CaveDensity = 0.0f;
-                if (LocalCache.CaveData.IsValidIndex(PixelIdx))
+                if (LocalCache->CaveData.IsValidIndex(PixelIdx))
                 {
-                    CaveDensity = LocalCache.CaveData[PixelIdx].R / 255.0f;
+                    CaveDensity = LocalCache->CaveData[PixelIdx].R / 255.0f;
                 }
 
                 for (int32 Z = 0; Z <= HeightZ; ++Z)

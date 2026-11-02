@@ -201,6 +201,13 @@ void UDynamicCustomizationComponent::FlushDeferredMorphs()
         if (!WeakThis.IsValid()) return false;
         
         UDynamicCustomizationComponent* StrongThis = WeakThis.Get();
+        ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(StrongThis->GetOwner());
+        if (!CharOwner) return false;
+
+        // Hoisted outside the time-sliced `while` loop to prevent repeated hierarchical allocation
+        TArray<USkeletalMeshComponent*> ModularMeshes;
+        CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
+
         const double StartTime = FPlatformTime::Seconds();
         constexpr double MaxBudgetPerFrameSeconds = 0.0005; // 0.5 ms cap
 
@@ -209,7 +216,7 @@ void UDynamicCustomizationComponent::FlushDeferredMorphs()
             FGameplayTag SliderTag = StrongThis->DeferredMorphSliders.Pop();
             if (const float* Val = StrongThis->LocalMorphCache.Find(SliderTag))
             {
-                StrongThis->ApplySingleSliderDeformation(SliderTag, *Val);
+                StrongThis->ApplySingleSliderDeformation(SliderTag, *Val, ModularMeshes);
                 StrongThis->OnMorphUpdated.Broadcast(SliderTag, *Val);
             }
         }
@@ -217,7 +224,7 @@ void UDynamicCustomizationComponent::FlushDeferredMorphs()
         if (StrongThis->DeferredMorphSliders.Num() == 0)
         {
             StrongThis->FlushTickerHandle.Reset();
-            return false; // Stop ticking
+            return false;
         }
         return true; 
     }));
@@ -229,6 +236,7 @@ void UDynamicCustomizationComponent::HandleSingleMorphReplicated(const FDynamicC
 
     if (CheckCurrentSignificance())
     {
+        // Line 239 resolved: Calls single-slider convenience overload
         ApplySingleSliderDeformation(MorphItem.SliderTag, MorphItem.SliderValue);
         OnMorphUpdated.Broadcast(MorphItem.SliderTag, MorphItem.SliderValue);
     }
@@ -245,6 +253,14 @@ void UDynamicCustomizationComponent::OnRep_ReplicatedMorphs()
 
     const bool bSignificant = CheckCurrentSignificance();
 
+    // Hoist component retrieval once for full-array replication rebuilds
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    TArray<USkeletalMeshComponent*> ModularMeshes;
+    if (CharOwner && bSignificant)
+    {
+        CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
+    }
+
     for (const FDynamicCharacterMorphItem& Item : ReplicatedMorphs.Items)
     {
         ReplicatedTags.Add(Item.SliderTag);
@@ -255,12 +271,13 @@ void UDynamicCustomizationComponent::OnRep_ReplicatedMorphs()
 
             if (bSignificant)
             {
-                ApplySingleSliderDeformation(Item.SliderTag, Item.SliderValue);
+                // Line 265 resolved: Passes pre-queried ModularMeshes
+                ApplySingleSliderDeformation(Item.SliderTag, Item.SliderValue, ModularMeshes);
                 OnMorphUpdated.Broadcast(Item.SliderTag, Item.SliderValue);
             }
             else
             {
-                DeferredMorphSliders.Add(Item.SliderTag);
+                DeferredMorphSliders.AddUnique(Item.SliderTag);
             }
         }
     }
@@ -281,7 +298,8 @@ void UDynamicCustomizationComponent::OnRep_ReplicatedMorphs()
             DeferredMorphSliders.Remove(DeadTag);
             if (bSignificant)
             {
-                ApplySingleSliderDeformation(DeadTag, 0.0f);
+                // Line 291 resolved: Passes pre-queried ModularMeshes
+                ApplySingleSliderDeformation(DeadTag, 0.0f, ModularMeshes);
                 OnMorphUpdated.Broadcast(DeadTag, 0.0f);
             }
         }
@@ -406,31 +424,50 @@ void UDynamicCustomizationComponent::ApplyCustomizationToMesh()
     {
         for (const auto& Pair : LocalMorphCache)
         {
-            DeferredMorphSliders.Add(Pair.Key);
+            DeferredMorphSliders.AddUnique(Pair.Key);
         }
         return;
     }
 
+    ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    if (!CharOwner) return;
+
+    // Hoisted outside the slider loop
+    TArray<USkeletalMeshComponent*> ModularMeshes;
+    CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
+
     for (const auto& Pair : LocalMorphCache)
     {
-        ApplySingleSliderDeformation(Pair.Key, Pair.Value);
+        ApplySingleSliderDeformation(Pair.Key, Pair.Value, ModularMeshes);
     }
 }
 
+// Convenience overload: fetches meshes once and forwards to the bulk implementation
 void UDynamicCustomizationComponent::ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value)
 {
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+    if (!CharOwner) return;
+
+    TArray<USkeletalMeshComponent*> ModularMeshes;
+    CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
+
+    ApplySingleSliderDeformation(SliderTag, Value, ModularMeshes);
+}
+
+// Bulk-optimized implementation: reuses pre-queried mesh array
+void UDynamicCustomizationComponent::ApplySingleSliderDeformation(
+    FGameplayTag SliderTag, 
+    float Value, 
+    const TArray<USkeletalMeshComponent*>& ModularMeshes)
+{
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!CharOwner || !GS) return;
+    if (!GS) return;
 
     FCharacterTemplateDef TemplateDef;
     if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return;
 
     const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag);
     if (!SkelDef) return;
-
-    TArray<USkeletalMeshComponent*> ModularMeshes;
-    CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
 
     for (const FBodyslideSliderDef& SliderDef : SkelDef->BodyslideSliders)
     {

@@ -96,19 +96,16 @@ void ADynamicVoxelChunkActor::UpdateVoxelData(int32 VoxelIndex, uint8 NewTypeID,
         NewDelta.VoxelTypeID = NewTypeID;
         NewDelta.CurrentHP = NewHP;
 
-        int32 FoundIdx = ReplicatedDeltas.Items.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
-            return Item.VoxelIndex == VoxelIndex;
-        });
-
-        if (FoundIdx != INDEX_NONE)
+        if (const int32* FoundIdx = VoxelIndexToDeltaMap.Find(VoxelIndex))
         {
-            ReplicatedDeltas.Items[FoundIdx] = NewDelta;
-            ReplicatedDeltas.MarkItemDirty(ReplicatedDeltas.Items[FoundIdx]);
+            ReplicatedDeltas.Items[*FoundIdx] = NewDelta;
+            ReplicatedDeltas.MarkItemDirty(ReplicatedDeltas.Items[*FoundIdx]);
         }
         else
         {
-            FVoxelDeltaItem& Added = ReplicatedDeltas.Items.Add_GetRef(NewDelta);
-            ReplicatedDeltas.MarkItemDirty(Added);
+            const int32 NewIdx = ReplicatedDeltas.Items.Add(NewDelta);
+            VoxelIndexToDeltaMap.Add(VoxelIndex, NewIdx);
+            ReplicatedDeltas.MarkItemDirty(ReplicatedDeltas.Items[NewIdx]);
         }
     }
     
@@ -117,8 +114,12 @@ void ADynamicVoxelChunkActor::UpdateVoxelData(int32 VoxelIndex, uint8 NewTypeID,
 
 void ADynamicVoxelChunkActor::OnRep_VoxelDeltas()
 {
-    for (const FVoxelDeltaItem& Item : ReplicatedDeltas.Items)
+    VoxelIndexToDeltaMap.Empty(ReplicatedDeltas.Items.Num());
+    for (int32 i = 0; i < ReplicatedDeltas.Items.Num(); ++i)
     {
+        const FVoxelDeltaItem& Item = ReplicatedDeltas.Items[i];
+        VoxelIndexToDeltaMap.Add(Item.VoxelIndex, i);
+
         if (CachedVoxelData.IsValidIndex(Item.VoxelIndex))
         {
             CachedVoxelData[Item.VoxelIndex] = Item.VoxelTypeID;
@@ -132,6 +133,15 @@ void ADynamicVoxelChunkActor::HandleSingleVoxelReplicated(const FVoxelDeltaItem&
     if (CachedVoxelData.IsValidIndex(Item.VoxelIndex))
     {
         CachedVoxelData[Item.VoxelIndex] = Item.VoxelTypeID;
+        
+        const int32 FoundIdx = ReplicatedDeltas.Items.IndexOfByPredicate([Item](const FVoxelDeltaItem& Element) {
+            return Element.VoxelIndex == Item.VoxelIndex;
+        });
+        if (FoundIdx != INDEX_NONE)
+        {
+            VoxelIndexToDeltaMap.Add(Item.VoxelIndex, FoundIdx);
+        }
+
         ScheduleAsyncMeshGeneration();
     }
 }
@@ -166,6 +176,15 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
         TArray<FVector2D> UVs;
         TArray<FColor> Colors;
 
+        // OPTIMIZATION: Heuristically reserve memory to prevent massive ThreadPool heap allocation stalling.
+        // Assumes roughly 15% of the theoretical max volume might be exposed surface faces.
+        const int32 EstimatedVisibleFaces = (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE) / (8 * FMath::Max(1, LODStep));
+        Vertices.Reserve(EstimatedVisibleFaces * 4);
+        Triangles.Reserve(EstimatedVisibleFaces * 6);
+        Normals.Reserve(EstimatedVisibleFaces * 4);
+        UVs.Reserve(EstimatedVisibleFaces * 4);
+        Colors.Reserve(EstimatedVisibleFaces * 4);
+
         const FVector VoxelExtents = FVector(CapturedSize * 0.5f * LODStep);
         int32 VertexCount = 0;
 
@@ -186,21 +205,13 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
                         return CapturedData[nX + (nY * CHUNK_SIZE) + (nZ * CHUNK_SIZE * CHUNK_SIZE)] != 0;
                     };
 
-                    // Define Face Data
                     struct FFaceData { FVector Offset[4]; FVector Normal; };
-                    
                     FFaceData Faces[6] = {
-                        // Top (+Z)
                         { { FVector(-1, -1, 1), FVector(-1, 1, 1), FVector(1, 1, 1), FVector(1, -1, 1) }, FVector::UpVector },
-                        // Bottom (-Z)
                         { { FVector(1, -1, -1), FVector(1, 1, -1), FVector(-1, 1, -1), FVector(-1, -1, -1) }, FVector::DownVector },
-                        // North (+Y)
                         { { FVector(1, 1, -1), FVector(1, 1, 1), FVector(-1, 1, 1), FVector(-1, 1, -1) }, FVector::RightVector },
-                        // South (-Y)
                         { { FVector(-1, -1, -1), FVector(-1, -1, 1), FVector(1, -1, 1), FVector(1, -1, -1) }, FVector::LeftVector },
-                        // East (+X)
                         { { FVector(1, -1, -1), FVector(1, -1, 1), FVector(1, 1, 1), FVector(1, 1, -1) }, FVector::ForwardVector },
-                        // West (-X)
                         { { FVector(-1, 1, -1), FVector(-1, 1, 1), FVector(-1, -1, 1), FVector(-1, -1, -1) }, FVector::BackwardVector }
                     };
 
@@ -213,7 +224,6 @@ void ADynamicVoxelChunkActor::ScheduleAsyncMeshGeneration()
                         !IsSolid(X - LODStep, Y, Z)
                     };
 
-                    // Map Type to Vertex Color for Material Blending (e.g., R=Grass, G=Dirt, B=Stone)
                     FColor VoxelColor = FColor(255, 0, 0, 255);
                     if (Type == 2) VoxelColor = FColor(0, 255, 0, 255);
                     else if (Type == 3) VoxelColor = FColor(0, 0, 255, 255);

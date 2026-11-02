@@ -20,6 +20,7 @@ void UDynamicWorldDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collec
 void UDynamicWorldDirectorSubsystem::Deinitialize()
 {
     VirtualNPCRegistry.Empty();
+    VirtualNPCSpatialHash.Empty();
     ActiveNPCs.Empty();
     Super::Deinitialize();
 }
@@ -62,15 +63,21 @@ void UDynamicWorldDirectorSubsystem::RegisterActiveNPC(ADynamicCharacter* NPC)
 
 void UDynamicWorldDirectorSubsystem::PerformProximityChecks()
 {
-    TArray<APlayerController*> Players;
+    TArray<FVector> PlayerLocations;
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
-        if (APlayerController* PC = It->Get()) Players.Add(PC);
+        if (APawn* P = It->Get()->GetPawn())
+        {
+            PlayerLocations.Add(P->GetActorLocation());
+        }
     }
 
-    if (Players.Num() == 0) return;
+    if (PlayerLocations.Num() == 0) return;
 
-    // 1. Check Active NPCs for Hibernation (Exiting Radius)
+    const float WakeDistSq = FMath::Square(InstantiationRadius);
+    const float SleepDistSq = FMath::Square(HibernationRadius);
+
+    // 1. Check Active NPCs for Hibernation
     for (int32 i = ActiveNPCs.Num() - 1; i >= 0; --i)
     {
         if (!ActiveNPCs[i].IsValid())
@@ -83,15 +90,12 @@ void UDynamicWorldDirectorSubsystem::PerformProximityChecks()
         bool bShouldHibernate = true;
         const FVector NPCLoc = NPC->GetActorLocation();
 
-        for (APlayerController* PC : Players)
+        for (const FVector& PLoc : PlayerLocations)
         {
-            if (APawn* PlayerPawn = PC->GetPawn())
+            if (FVector::DistSquared(NPCLoc, PLoc) < SleepDistSq)
             {
-                if (FVector::DistSquared(NPCLoc, PlayerPawn->GetActorLocation()) < FMath::Square(HibernationRadius))
-                {
-                    bShouldHibernate = false;
-                    break;
-                }
+                bShouldHibernate = false;
+                break;
             }
         }
 
@@ -102,26 +106,34 @@ void UDynamicWorldDirectorSubsystem::PerformProximityChecks()
         }
     }
 
-    // 2. Check Virtual NPCs for Instantiation (Entering Radius)
-    TArray<FGuid> NPCsToWake;
-    for (auto& Pair : VirtualNPCRegistry)
+    // 2. Check Virtual NPCs for Instantiation (Using O(1) Spatial Hash Grid Lookups)
+    TSet<FGuid> NPCsToWake;
+    for (const FVector& PLoc : PlayerLocations)
     {
-        bool bShouldWake = false;
-        for (APlayerController* PC : Players)
+        const FIntPoint CenterCell(
+            FMath::FloorToInt(PLoc.X / VirtualSpatialGridSize),
+            FMath::FloorToInt(PLoc.Y / VirtualSpatialGridSize)
+        );
+
+        // Check the 3x3 surrounding spatial buckets
+        for (int32 X = -1; X <= 1; ++X)
         {
-            if (APawn* PlayerPawn = PC->GetPawn())
+            for (int32 Y = -1; Y <= 1; ++Y)
             {
-                if (FVector::DistSquared(Pair.Value.WorldLocation, PlayerPawn->GetActorLocation()) < FMath::Square(InstantiationRadius))
+                if (const TSet<FGuid>* Bucket = VirtualNPCSpatialHash.Find(CenterCell + FIntPoint(X, Y)))
                 {
-                    bShouldWake = true;
-                    break;
+                    for (const FGuid& Guid : *Bucket)
+                    {
+                        if (const FVirtualNPCRecord* Rec = VirtualNPCRegistry.Find(Guid))
+                        {
+                            if (FVector::DistSquared(Rec->WorldLocation, PLoc) < WakeDistSq)
+                            {
+                                NPCsToWake.Add(Guid);
+                            }
+                        }
+                    }
                 }
             }
-        }
-
-        if (bShouldWake)
-        {
-            NPCsToWake.Add(Pair.Key);
         }
     }
 
@@ -149,13 +161,11 @@ void UDynamicWorldDirectorSubsystem::VirtualizeNPC(ADynamicCharacter* NPC)
     Record.WorldRotation = NPC->GetActorRotation();
     Record.HibernationStartWorldTime = GetWorld()->GetTimeSeconds();
 
-    // Fix A: Capture CharacterTemplateTag so pooled rehydration restores mesh, morphs, and stats
     if (const UDynamicCustomizationComponent* Cust = NPC->GetCustomizationComponent())
     {
         Record.CharacterTemplateTag = Cust->ActiveCharacterTemplateTag;
     }
     
-    // Extract movement intent if navigating via AAIController
     if (AAIController* AICon = Cast<AAIController>(NPC->GetController()))
     {
         if (AICon->GetPathFollowingComponent() && AICon->GetPathFollowingComponent()->HasValidPath())
@@ -167,12 +177,17 @@ void UDynamicWorldDirectorSubsystem::VirtualizeNPC(ADynamicCharacter* NPC)
         }
     }
 
-    // Capture full data payload to JSON
     if (UDynamicDataSerializer::SerializePlayerToSnapshotJson(NPC, Record.SerializedPersistenceJson))
     {
         VirtualNPCRegistry.Add(Record.NPCGuid, Record);
         
-        // Return physical character to pool
+        // Register to Spatial Hash
+        const FIntPoint Cell(
+            FMath::FloorToInt(Record.WorldLocation.X / VirtualSpatialGridSize),
+            FMath::FloorToInt(Record.WorldLocation.Y / VirtualSpatialGridSize)
+        );
+        VirtualNPCSpatialHash.FindOrAdd(Cell).Add(Record.NPCGuid);
+        
         if (ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>())
         {
             GS->ReleaseCharacterToPool(NPC);
@@ -189,16 +204,23 @@ ADynamicCharacter* UDynamicWorldDirectorSubsystem::InstantiateNPC(const FGuid& N
     FVirtualNPCRecord Record;
     if (!VirtualNPCRegistry.RemoveAndCopyValue(NPCGuid, Record)) return nullptr;
 
+    // Scrub from Spatial Hash
+    const FIntPoint Cell(
+        FMath::FloorToInt(Record.WorldLocation.X / VirtualSpatialGridSize),
+        FMath::FloorToInt(Record.WorldLocation.Y / VirtualSpatialGridSize)
+    );
+    if (TSet<FGuid>* Bucket = VirtualNPCSpatialHash.Find(Cell))
+    {
+        Bucket->Remove(NPCGuid);
+    }
+
     ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
     if (!GS) return nullptr;
 
     FTransform SpawnTransform(Record.WorldRotation, Record.WorldLocation);
-    
-    // Pull from Object Pool to prevent hitching
     ADynamicCharacter* WokenNPC = GS->AcquireCharacter(Record.CharacterTemplateTag, SpawnTransform, nullptr, nullptr);
     if (!WokenNPC) return nullptr;
 
-    // Rehydrate state
     if (UDynamicDataSerializer::DeserializePlayerFromSnapshotJson(WokenNPC, Record.SerializedPersistenceJson))
     {
         ActiveNPCs.Add(WokenNPC);
@@ -206,7 +228,6 @@ ADynamicCharacter* UDynamicWorldDirectorSubsystem::InstantiateNPC(const FGuid& N
         const double SleepDuration = GetWorld()->GetTimeSeconds() - Record.HibernationStartWorldTime;
         PerformCatchUpSimulation(WokenNPC, SleepDuration);
 
-        // Re-issue movement command to AAIController if traveling
         if (Record.bIsTraveling)
         {
             if (AAIController* AICon = Cast<AAIController>(WokenNPC->GetController()))
@@ -228,7 +249,7 @@ void UDynamicWorldDirectorSubsystem::SimulateVirtualNPCs(float DeltaTime)
     VirtualNPCRegistry.GenerateKeyArray(KeysToProcess.Get());
     TSharedRef<int32> CurrentIndex = MakeShared<int32>(0);
 
-    // OPTIMIZATION: Time-sliced iteration over multiple frames (2ms budget per frame)
+    // OPTIMIZATION: Disperse math operations via 2ms time-slices across multiple frames
     FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, KeysToProcess, CurrentIndex, DeltaTime](float TickDelta) -> bool 
     {
         if (!WeakThis.IsValid()) return false;
@@ -242,9 +263,13 @@ void UDynamicWorldDirectorSubsystem::SimulateVirtualNPCs(float DeltaTime)
             const FGuid& NpcKey = (*KeysToProcess)[*CurrentIndex];
             if (FVirtualNPCRecord* Record = StrongThis->VirtualNPCRegistry.Find(NpcKey))
             {
-                // 1. Process Virtual Travel
                 if (Record->bIsTraveling)
                 {
+                    const FIntPoint OldCell(
+                        FMath::FloorToInt(Record->WorldLocation.X / StrongThis->VirtualSpatialGridSize),
+                        FMath::FloorToInt(Record->WorldLocation.Y / StrongThis->VirtualSpatialGridSize)
+                    );
+
                     FVector Direction = Record->TravelDestination - Record->WorldLocation;
                     float DistanceToTarget = Direction.Size();
 
@@ -259,9 +284,19 @@ void UDynamicWorldDirectorSubsystem::SimulateVirtualNPCs(float DeltaTime)
                         Record->WorldLocation += Direction * (Record->TravelSpeed * DeltaTime);
                         Record->WorldRotation = Direction.Rotation();
                     }
+
+                    const FIntPoint NewCell(
+                        FMath::FloorToInt(Record->WorldLocation.X / StrongThis->VirtualSpatialGridSize),
+                        FMath::FloorToInt(Record->WorldLocation.Y / StrongThis->VirtualSpatialGridSize)
+                    );
+                    
+                    if (OldCell != NewCell)
+                    {
+                        if (TSet<FGuid>* Bucket = StrongThis->VirtualNPCSpatialHash.Find(OldCell)) Bucket->Remove(Record->NPCGuid);
+                        StrongThis->VirtualNPCSpatialHash.FindOrAdd(NewCell).Add(Record->NPCGuid);
+                    }
                 }
 
-                // 2. High-Level Needs / AI Directives (Local Co-Op macro simulation loop)
                 if (StrongThis->bIsLocalCoopMode)
                 {
                     // Execute simplified daily routine math natively here
@@ -270,7 +305,6 @@ void UDynamicWorldDirectorSubsystem::SimulateVirtualNPCs(float DeltaTime)
             (*CurrentIndex)++;
         }
 
-        // Keep ticking if there are more NPCs to process
         return *CurrentIndex < KeysToProcess->Num();
     }));
 }
@@ -300,19 +334,27 @@ void UDynamicWorldDirectorSubsystem::UnregisterActiveNPC(ADynamicCharacter* NPC)
 {
     if (!NPC || !GetWorld() || GetWorld()->GetNetMode() == NM_Client) return;
 
-    // Remove the character from the ActiveNPCs array
     int32 RemovedCount = ActiveNPCs.RemoveAllSwap([NPC](const TWeakObjectPtr<ADynamicCharacter>& WeakNPC) {
         return !WeakNPC.IsValid() || WeakNPC.Get() == NPC;
     });
 
-    // Optionally: If the NPC is currently hibernating (virtualized), we should ensure they 
-    // are scrubbed from the virtual registry if they are being permanently destroyed.
     if (RemovedCount == 0)
     {
         if (UDynamicSocialComponent* Social = NPC->FindComponentByClass<UDynamicSocialComponent>())
         {
             if (Social->CharacterPersistentGuid.IsValid())
             {
+                if (const FVirtualNPCRecord* Rec = VirtualNPCRegistry.Find(Social->CharacterPersistentGuid))
+                {
+                    const FIntPoint Cell(
+                        FMath::FloorToInt(Rec->WorldLocation.X / VirtualSpatialGridSize), 
+                        FMath::FloorToInt(Rec->WorldLocation.Y / VirtualSpatialGridSize)
+                    );
+                    if (TSet<FGuid>* Bucket = VirtualNPCSpatialHash.Find(Cell))
+                    {
+                        Bucket->Remove(Social->CharacterPersistentGuid);
+                    }
+                }
                 VirtualNPCRegistry.Remove(Social->CharacterPersistentGuid);
             }
         }

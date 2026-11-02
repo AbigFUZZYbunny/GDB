@@ -103,4 +103,5 @@ private:
 
     UPROPERTY()
     TObjectPtr<UAT_WaitChargeTime> ActiveChargeTask;
+    float LastComboEvalTime = -1.0f;
 };

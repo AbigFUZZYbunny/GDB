@@ -90,6 +90,9 @@ private:
     TMap<int32, int32> FlatKeyToReplicationIDMap;
     TMap<int32, int32> ReplicationIDToIndexMap;
     
+    // NEW: O(1) Mask mapping for immediate Free Space resolution
+    TArray<bool> LocalGridOccupancyMask;
+    
     float CachedTotalWeight = 0.0f;
     FTimerHandle TimerHandle_TombstoneCompression;
     int32 PendingTombstoneCount = 0;

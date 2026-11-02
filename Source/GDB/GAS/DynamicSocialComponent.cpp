@@ -435,6 +435,22 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     RootObj->SetStringField(TEXT("AgentGuid"), CharacterPersistentGuid.ToString());
     RootObj->SetStringField(TEXT("RequestType"), UEnum::GetValueAsString(RequestType));
 
+    // NEW: Identity and Language Context
+    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        RootObj->SetStringField(TEXT("AgentDisplayName"), ResolveActorDisplayName(CharOwner));
+        
+        if (UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent())
+        {
+            RootObj->SetStringField(TEXT("RaceTemplate"), CustComp->ActiveCharacterTemplateTag.ToString());
+        }
+
+        if (UDynamicLanguageComponent* LangComp = CharOwner->FindComponentByClass<UDynamicLanguageComponent>())
+        {
+            RootObj->SetStringField(TEXT("NativeLanguage"), LangComp->ActiveSpokenLanguageTag.ToString());
+        }
+    }
+
     const double CurrentWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     const AActor* OwnerActor = GetOwner();
     const FVector OwnerLoc = OwnerActor ? OwnerActor->GetActorLocation() : FVector::ZeroVector;

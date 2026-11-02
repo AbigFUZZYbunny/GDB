@@ -342,3 +342,94 @@ bool UDynamicLanguageComponent::ServerForgetWord(FGameplayTag LanguageTag, const
     }
     return false;
 }
+
+FString UDynamicLanguageComponent::TranslateToNativeTongue(FGameplayTag LanguageTag, const FString& SourceText) const
+{
+    static const FGameplayTag CommonLangTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false);
+    if (LanguageTag == CommonLangTag || !LanguageTag.IsValid()) return SourceText;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return SourceText;
+
+    const FDynamicLanguageDef* LangDef = GS->LanguageMasterRegistry.Find(LanguageTag);
+    if (!LangDef) return SourceText;
+
+    TArray<FString> Tokens;
+    TArray<FString> Separators;
+    FString CurrentWord;
+
+    for (int32 i = 0; i < SourceText.Len(); ++i)
+    {
+        const TCHAR C = SourceText[i];
+        if (FChar::IsAlnum(C) || C == '\'')
+        {
+            CurrentWord.AppendChar(C);
+        }
+        else
+        {
+            if (!CurrentWord.IsEmpty())
+            {
+                Tokens.Add(CurrentWord);
+                CurrentWord.Empty();
+            }
+            Separators.Add(FString(1, &C));
+        }
+    }
+    if (!CurrentWord.IsEmpty()) Tokens.Add(CurrentWord);
+
+    FString TranslatedResult;
+    int32 SepIndex = 0;
+
+    for (const FString& Token : Tokens)
+    {
+        bool bFoundTranslation = false;
+        FString OutWord = Token;
+        
+        // 1. Search dictionary for reverse mapping (English -> Native)
+        for (const FDynamicVocabularyWordDef& WordDef : LangDef->Vocabulary)
+        {
+            for (const FTagStringPair& TransPair : WordDef.LocalizedTranslations.ReplicatedEntries)
+            {
+                if (TransPair.DisplayValue.Equals(Token, ESearchCase::IgnoreCase))
+                {
+                    OutWord = WordDef.NativeWord;
+                    // Match original capitalization
+                    if (FChar::IsUpper(Token[0]) && OutWord.Len() > 0)
+                    {
+                        OutWord[0] = FChar::ToUpper(OutWord[0]);
+                    }
+                    bFoundTranslation = true;
+                    break;
+                }
+            }
+            if (bFoundTranslation) break;
+        }
+
+        // 2. Procedurally generate a culturally-accurate word if missing from the dictionary
+        // (Skips words starting with capital letters to preserve Proper Nouns like "Bainbridge")
+        if (!bFoundTranslation && !FChar::IsUpper(Token[0]) && LangDef->PhoneticPhonemes.Num() > 0)
+        {
+            const uint32 WordHash = GetTypeHash(Token.ToLower());
+            const int32 SyllableCount = (WordHash % 3) + 1;
+            OutWord = TEXT("");
+            for (int32 s = 0; s < SyllableCount; ++s)
+            {
+                const int32 PhonemeIdx = (WordHash + s) % LangDef->PhoneticPhonemes.Num();
+                OutWord += LangDef->PhoneticPhonemes[PhonemeIdx];
+            }
+        }
+
+        TranslatedResult.Append(OutWord);
+        if (Separators.IsValidIndex(SepIndex))
+        {
+            TranslatedResult.Append(Separators[SepIndex]);
+            ++SepIndex;
+        }
+        else if (Token != Tokens.Last())
+        {
+            TranslatedResult.Append(TEXT(" "));
+        }
+    }
+
+    return TranslatedResult.TrimEnd();
+}

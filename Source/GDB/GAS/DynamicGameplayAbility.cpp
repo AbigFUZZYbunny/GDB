@@ -494,7 +494,12 @@ void UDynamicGameplayAbility::HandleTickDrain(float TotalElapsedTime, float Delt
     const float MaxCharge = FMath::Max(0.01f, AbilityConfig.ChargeProfile.MaxChargeTime);
     const float ChargeAlpha = FMath::Clamp(RuntimeTrackedChargeTime / MaxCharge, 0.0f, 1.0f);
 
-    RefreshOpenComboWindows(RuntimeTrackedChargeTime, ChargeAlpha);
+    // OPTIMIZATION: Throttle logic condition tree evaluation to 10 Hz to conserve GameThread budget
+    if (TotalElapsedTime - LastComboEvalTime > 0.1f || LastComboEvalTime < 0.0f)
+    {
+        RefreshOpenComboWindows(RuntimeTrackedChargeTime, ChargeAlpha);
+        LastComboEvalTime = TotalElapsedTime;
+    }
 
     if (AbilityConfig.LifeCycleRequirements.bApplyChargeCostSmoothly)
     {

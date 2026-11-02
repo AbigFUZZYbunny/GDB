@@ -82,6 +82,20 @@ void UDynamicContainerComponent::RebuildLocalSlotCache()
     CachedTotalWeight = 0.0f;
     PendingTombstoneCount = 0;
 
+    const int32 TotalCells = ContainerConfig.GridWidth * ContainerConfig.GridHeight;
+    LocalGridOccupancyMask.Init(false, TotalCells);
+
+    // Bake hard-blocked cells into mask
+    for (const FIntPoint& Pt : ContainerConfig.BlockedGridCells)
+    {
+        if (Pt.X >= 0 && Pt.X < ContainerConfig.GridWidth && Pt.Y >= 0 && Pt.Y < ContainerConfig.GridHeight)
+        {
+            LocalGridOccupancyMask[Pt.Y * ContainerConfig.GridWidth + Pt.X] = true;
+        }
+    }
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+
     for (int32 i = 0; i < ReplicatedSlots.Items.Num(); ++i)
     {
         const FDynamicContainerSlotItem& Item = ReplicatedSlots.Items[i];
@@ -90,11 +104,36 @@ void UDynamicContainerComponent::RebuildLocalSlotCache()
             PendingTombstoneCount++;
             continue;
         }
+        
         const int32 FlatKey = Item.GridY * ContainerConfig.GridWidth + Item.GridX;
         FlatKeyToReplicationIDMap.Add(FlatKey, Item.ReplicationID);
         ReplicationIDToIndexMap.Add(Item.ReplicationID, i);
 
         CachedTotalWeight += ResolveArchetypeUnitWeight(Item.StoredActorArchetypeTag, Item.SavedAttributeState) * static_cast<float>(Item.StackCount);
+
+        if (GS)
+        {
+            if (const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(Item.StoredActorArchetypeTag))
+            {
+                const int32 ItemW = Item.bIsRotated ? Def->ItemConfig.GridSizeY : Def->ItemConfig.GridSizeX;
+                const int32 ItemH = Item.bIsRotated ? Def->ItemConfig.GridSizeX : Def->ItemConfig.GridSizeY;
+
+                // Bake existing item footprint into mask
+                for (int32 OY = 0; OY < ItemH; ++OY)
+                {
+                    const int32 MaskY = Item.GridY + OY;
+                    const int32 RowOffset = MaskY * ContainerConfig.GridWidth;
+                    for (int32 OX = 0; OX < ItemW; ++OX)
+                    {
+                        const int32 MaskX = Item.GridX + OX;
+                        if (MaskX < ContainerConfig.GridWidth && MaskY < ContainerConfig.GridHeight)
+                        {
+                            LocalGridOccupancyMask[RowOffset + MaskX] = true;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -162,12 +201,24 @@ bool UDynamicContainerComponent::IsGridSpaceFree(int32 GridX, int32 GridY, int32
 {
     if (GridX < 0 || GridY < 0 || (GridX + SizeX) > ContainerConfig.GridWidth || (GridY + SizeY) > ContainerConfig.GridHeight) return false;
 
-    for (int32 X = GridX; X < GridX + SizeX; ++X)
+    // OPTIMIZATION: If we are just finding space (IgnoreReplicationID == -1), use the O(1) flattened mask
+    if (IgnoreReplicationID == -1 && LocalGridOccupancyMask.Num() == (ContainerConfig.GridWidth * ContainerConfig.GridHeight))
     {
         for (int32 Y = GridY; Y < GridY + SizeY; ++Y)
         {
-            if (ContainerConfig.BlockedGridCells.Contains(FIntPoint(X, Y))) return false;
+            const int32 RowOffset = Y * ContainerConfig.GridWidth;
+            for (int32 X = GridX; X < GridX + SizeX; ++X)
+            {
+                if (LocalGridOccupancyMask[RowOffset + X]) return false;
+            }
         }
+        return true;
+    }
+
+    // Fallback: If we are moving a currently existing item, we must ignore its own mask footprint
+    for (const FIntPoint& Pt : ContainerConfig.BlockedGridCells)
+    {
+        if (Pt.X >= GridX && Pt.X < GridX + SizeX && Pt.Y >= GridY && Pt.Y < GridY + SizeY) return false;
     }
 
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;

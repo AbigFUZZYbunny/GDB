@@ -155,3 +155,23 @@ void FEnvironmentGridCellItem::PostReplicatedChange(const FFastEnvironmentGridAr
         InArrayOwner.OwningChunkActor->HandleSingleCellReplicated(*this);
     }
 }
+
+void ADynamicEnvironmentChunkActor::UpdateCellDataBulk(const TArray<FEnvironmentGridCellItem>& ModifiedCells)
+{
+    if (!HasAuthority()) return;
+
+    for (const FEnvironmentGridCellItem& NewCellData : ModifiedCells)
+    {
+        if (const int32* FoundLocalIdx = GlobalToLocalCellIndexMap.Find(NewCellData.CellIndex))
+        {
+            ChunkCells.Items[*FoundLocalIdx] = NewCellData;
+            ChunkCells.MarkItemDirty(ChunkCells.Items[*FoundLocalIdx]);
+        }
+        else
+        {
+            const int32 NewIdx = ChunkCells.Items.Add(NewCellData);
+            GlobalToLocalCellIndexMap.Add(NewCellData.CellIndex, NewIdx);
+            ChunkCells.MarkItemDirty(ChunkCells.Items[NewIdx]);
+        }
+    }
+}

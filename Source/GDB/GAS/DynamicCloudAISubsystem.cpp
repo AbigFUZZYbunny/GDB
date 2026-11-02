@@ -239,7 +239,36 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
         {
             const FString NewUtteranceChunk = Task->PrimaryAccumulatedJson.Mid(Task->LastBroadcastedLength, ReadToIdx - Task->LastBroadcastedLength);
             Task->LastBroadcastedLength = ReadToIdx;
-            Task->TokenStreamDelegate.ExecuteIfBound(NewUtteranceChunk);
+            
+            // OPTIMIZATION: Real-time streaming translation
+            Task->StreamingWordBuffer += NewUtteranceChunk;
+            
+            int32 LastBoundaryIdx = -1;
+            for (int32 i = Task->StreamingWordBuffer.Len() - 1; i >= 0; --i)
+            {
+                if (!FChar::IsAlnum(Task->StreamingWordBuffer[i]) && Task->StreamingWordBuffer[i] != '\'')
+                {
+                    LastBoundaryIdx = i;
+                    break;
+                }
+            }
+
+            if (LastBoundaryIdx != -1)
+            {
+                FString ToProcess = Task->StreamingWordBuffer.Left(LastBoundaryIdx + 1);
+                Task->StreamingWordBuffer = Task->StreamingWordBuffer.Mid(LastBoundaryIdx + 1);
+
+                FString TranslatedChunk = ToProcess;
+                if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task->RequestingAgentPawn.Get()))
+                {
+                    if (UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
+                    {
+                        TranslatedChunk = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, ToProcess);
+                    }
+                }
+                
+                Task->TokenStreamDelegate.ExecuteIfBound(TranslatedChunk);
+            }
         }
     }
 }
@@ -278,9 +307,11 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
         const FCloudAICommand& PriCmd = PrimaryResponse.Commands[0];
         const FCloudAICommand& ValCmd = ValidatorResponse.Commands[0];
 
+        // 1. Verify semantic and tactical command agreement
         if (PriCmd.CommandActionTag == ValCmd.CommandActionTag &&
             PriCmd.TargetEntityOrPlaceRoleTag == ValCmd.TargetEntityOrPlaceRoleTag)
         {
+            // 2. Bound divergence on generated dialogue length to prevent hallucinated drift
             if (FMath::Abs(PriCmd.UtteranceText.Len() - ValCmd.UtteranceText.Len()) <= Config.MaxConsensusUtteranceLengthDelta)
             {
                 bConsensusReached = true;
@@ -290,6 +321,22 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
 
     if (bConsensusReached)
     {
+        // 3. Flush any remaining words left in the real-time token stream buffer
+        if (!Task.StreamingWordBuffer.IsEmpty())
+        {
+            FString TrailingChunk = Task.StreamingWordBuffer;
+            if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()))
+            {
+                if (UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
+                {
+                    TrailingChunk = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, TrailingChunk);
+                }
+            }
+            Task.TokenStreamDelegate.ExecuteIfBound(TrailingChunk);
+            Task.StreamingWordBuffer.Empty();
+        }
+
+        // 4. Grant PoW mining rewards and increase peer trust scores
         const FGameplayTag ResolvedRewardTag = Config.MiningRewardAttributeTag.IsValid()
             ? Config.MiningRewardAttributeTag
             : MiningRewardAttributeTag;
@@ -315,19 +362,34 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
             GrantReward(Task.ValidatorMiner.Get());
         }
 
+        // 5. Construct authoritative command list and translate final utterances to native tongue
         TArray<FCloudAICommandOutput> Output;
         for (const FCloudAICommand& Cmd : PrimaryResponse.Commands)
         {
             FCloudAICommandOutput OutCmd;
             OutCmd.CommandActionTag = Cmd.CommandActionTag;
             OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
-            OutCmd.UtteranceText = ValidatorResponse.Commands[0].UtteranceText;
+            OutCmd.PriorityWeight = Cmd.PriorityWeight;
+
+            // Use the validated text payload and translate across the Language Master Registry
+            FString ResolvedText = ValidatorResponse.Commands[0].UtteranceText;
+            if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()))
+            {
+                if (UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
+                {
+                    ResolvedText = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, ResolvedText);
+                }
+            }
+
+            OutCmd.UtteranceText = ResolvedText;
             Output.Add(OutCmd);
         }
+
         Task.FinalCompletionDelegate.ExecuteIfBound(Output);
     }
     else
     {
+        // Slash trust ratings on consensus mismatch or malformed response
         if (Task.PrimaryMiner.IsValid()) Task.PrimaryMiner->NodeStats.TrustScore -= 0.2f;
         if (Task.ValidatorMiner.IsValid()) Task.ValidatorMiner->NodeStats.TrustScore -= 0.2f;
 
@@ -360,6 +422,12 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
                 TSoftObjectPtr<UAnimMontage> OutMontage;
                 FGameplayTag OutVoice;
                 SocialComp->TryResolveDialogueForBehavior(BestBehavior, nullptr, Cmd.UtteranceText, OutMontage, OutVoice);
+            }
+
+            // Translate Fallback Utterance
+            if (UDynamicLanguageComponent* LangComp = Character->FindComponentByClass<UDynamicLanguageComponent>())
+            {
+                Cmd.UtteranceText = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, Cmd.UtteranceText);
             }
 
             OutFallbackResponse.Commands.Add(Cmd);

@@ -343,6 +343,14 @@ void UDynamicCustomizationComponent::InitializeCustomization(FGameplayTag Templa
             LocalMorphCache.Add(DefaultPair.KeyTag, ClampedVal);
         }
     }
+    
+    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        if (UDynamicLanguageComponent* LangComp = CharOwner->FindComponentByClass<UDynamicLanguageComponent>())
+        {
+            LangComp->InitializeFromTemplate(TemplateDef);
+        }
+    }
 
     ReplicatedMorphs.MarkArrayDirty();
     ApplyCustomizationToMesh();
@@ -734,6 +742,26 @@ void UDynamicCustomizationComponent::CacheBoneCurveNames()
                 Names.Direct = BoneConstraint.BoneName;
                 CachedBoneCurveNames.Add(BoneConstraint.BoneName, Names);
             }
+        }
+    }
+}
+
+void UDynamicCustomizationComponent::ApplyEmotion(FGameplayTag EmotionTag)
+{
+    if (!EmotionTag.IsValid()) return;
+    
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    FCharacterTemplateDef TemplateDef;
+    if (!GS->GetCharacterTemplate(ActiveCharacterTemplateTag, TemplateDef)) return;
+
+    if (const FDynamicTagFloatMapWrapper* MorphMap = TemplateDef.PersonalityProfile.EmotionMorphMap.Find(EmotionTag))
+    {
+        for (const FTagFloatPair& MorphPair : MorphMap->ReplicatedEntries)
+        {
+            // Reusing our morph slider pipeline to smoothly handle facial muscle states across the network
+            ServerSetMorphSliderValue(MorphPair.KeyTag, MorphPair.Value);
         }
     }
 }

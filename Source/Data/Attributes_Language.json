@@ -1,0 +1,107 @@
+﻿{
+  "_comment":"This schema handles default attribute values via the FFastAttributeArray layout, automatic milestone modifiers such as stat gains on level up, and progressive breakthrough capping calculations",
+  "AttributeMasterRegistry": {
+    "Attribute.Language.Common": {
+      "AttributeTag": "Attribute.Language.Common",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Common Tongue Fluency" },
+          { "KeyTag": "Localization.Description", "Value": "Measures conversational proficiency in the Common tongue." },
+          { "KeyTag": "Localization.Category", "Value": "Language" }
+        ]
+      },
+      "DefaultValue": 20.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Common.Max": {
+      "AttributeTag": "Attribute.Language.Common.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Common.GainMod": {
+      "AttributeTag": "Attribute.Language.Common.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Common.LossMod": {
+      "AttributeTag": "Attribute.Language.Common.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Sense.Hearing": {
+      "AttributeTag": "Attribute.Sense.Hearing",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Acoustic Hearing Acuity" },
+          { "KeyTag": "Localization.Description", "Value": "Governs the maximum audible distance for whispers, speech, and footsteps." },
+          { "KeyTag": "Localization.Category", "Value": "Perception" }
+        ]
+      },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Elvish": {
+      "AttributeTag": "Attribute.Language.Elvish",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Elvish Comprehension" },
+          { "KeyTag": "Localization.Description", "Value": "Fluency and comprehension in spoken and written Elvish." },
+          { "KeyTag": "Localization.Category", "Value": "Language" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Elvish.Max": {
+      "AttributeTag": "Attribute.Language.Elvish.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Elvish.GainMod": {
+      "AttributeTag": "Attribute.Language.Elvish.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Elvish.LossMod": {
+      "AttributeTag": "Attribute.Language.Elvish.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Orcish": {
+      "AttributeTag": "Attribute.Language.Orcish",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Orcish Comprehension" },
+          { "KeyTag": "Localization.Description", "Value": "Fluency and comprehension in spoken and written Orcish." },
+          { "KeyTag": "Localization.Category", "Value": "Language" }
+        ]
+      },
+      "DefaultValue": 0.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Orcish.Max": {
+      "AttributeTag": "Attribute.Language.Orcish.Max",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 100.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Orcish.GainMod": {
+      "AttributeTag": "Attribute.Language.Orcish.GainMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    },
+    "Attribute.Language.Orcish.LossMod": {
+      "AttributeTag": "Attribute.Language.Orcish.LossMod",
+      "Localization": { "ReplicatedEntries": [] },
+      "DefaultValue": 1.0,
+      "bDoesReplicate": true
+    }
+  }
+}

@@ -15,23 +15,7 @@ DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudA
 DECLARE_DELEGATE_OneParam(FOnCloudAITokenStream, const FString&);
 DECLARE_DELEGATE_OneParam(FOnCloudAITaskAssigned, float /*EstimatedLatency*/);
 
-USTRUCT(BlueprintType)
-struct FCloudAICommand
-{
-    GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
-    FGameplayTag CommandActionTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
-    FGameplayTag TargetEntityOrPlaceRoleTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
-    FString UtteranceText;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
-    float PriorityWeight = 0.0f;
-};
 
 USTRUCT(BlueprintType)
 struct FCloudAIDirectiveResponse
@@ -49,6 +33,7 @@ struct GDB_API FCloudAIQueuedTask
 
     UPROPERTY() FGuid TaskId;
     UPROPERTY() TWeakObjectPtr<APawn> RequestingAgentPawn;
+    UPROPERTY() ECloudAIRequestType RequestType = ECloudAIRequestType::ComplexDecision;
     UPROPERTY() ECloudAITaskPriority Priority = ECloudAITaskPriority::Medium;
     UPROPERTY() FString ContextPrompt;
     UPROPERTY() double TimeQueued = 0.0;
@@ -66,8 +51,8 @@ struct GDB_API FCloudAIQueuedTask
     UPROPERTY() int32 UtteranceStartIndex = 0;
     UPROPERTY() int32 LastBroadcastedLength = 0;
 
-    // NEW: Real-time translation buffer for LLM Token Streaming
-    UPROPERTY() FString StreamingWordBuffer; 
+    // Real-time translation buffer for LLM Token Streaming
+    UPROPERTY() FString StreamingWordBuffer;
 
     FOnCloudAIResponseDirectCallback FinalCompletionDelegate;
     FOnCloudAITokenStream TokenStreamDelegate;
@@ -85,7 +70,6 @@ public:
     virtual void Tick(float DeltaTime) override;
     virtual TStatId GetStatId() const override { return TStatId(); }
 
-    // Server-only fallback endpoint & private API key (strictly server-side, never sent to client miners)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Server Fallback")
     FString ServerFallbackEndpointUrl = TEXT("http://127.0.0.1:8000/v1/chat/completions");
 

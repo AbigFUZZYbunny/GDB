@@ -758,7 +758,24 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             }
         }
     }
-    // 3. STANDARD WORLD INTERACTION
+    // 3. READ LORE / SIGNPOST ACTION
+    else if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Read"))))
+    {
+        if (UDynamicLanguageComponent* LangComp = AvatarChar->FindComponentByClass<UDynamicLanguageComponent>())
+        {
+            if (AbilityConfig.InteractionConfig.ReadableLanguageTag.IsValid() && !AbilityConfig.InteractionConfig.ReadableTextPayload.IsEmpty())
+            {
+                LangComp->ServerReadWrittenText(
+                    AbilityConfig.InteractionConfig.ReadableLanguageTag, 
+                    AbilityConfig.InteractionConfig.ReadableTextPayload, 
+                    TargetOwnerActor
+                );
+                PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+            }
+        }
+    }
+    // 4. STANDARD WORLD INTERACTION
     else if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
     {
         PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);

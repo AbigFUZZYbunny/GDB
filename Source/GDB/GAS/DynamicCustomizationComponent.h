@@ -89,6 +89,9 @@ public:
     void SetSignificanceState(bool bNewSignificant);
 
     void FlushDeferredMorphs();
+    
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Customization|Emotions")
+    void ApplyEmotion(FGameplayTag EmotionTag);
 
 private:
     float ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const;

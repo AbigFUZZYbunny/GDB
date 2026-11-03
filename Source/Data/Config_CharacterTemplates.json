@@ -7,7 +7,9 @@
       "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Mannequin.SK_Mannequin",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
-      "DefaultAIAgentTag": "AI.Type.Humanoid.Villager",
+      "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
+      "NativeLanguageTag": "Language.Common",
+      "KnownLanguageTags": [ "Language.Common" ],
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Base Humanoid" },
@@ -46,6 +48,27 @@
           "ReplicatedEntries": [
             { "KeyTag": "Activity.Work", "Value": 1.1 }
           ]
+        },
+        "EmotionMorphMap": {
+          "Emotion.Angry": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Slider.Face.BrowFurrow", "Value": 1.0 },
+              { "KeyTag": "Slider.Face.JawClench", "Value": 0.8 },
+              { "KeyTag": "Slider.Face.Smile", "Value": 0.0 }
+            ]
+          },
+          "Emotion.Happy": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Slider.Face.Smile", "Value": 1.0 },
+              { "KeyTag": "Slider.Face.BrowFurrow", "Value": 0.0 }
+            ]
+          },
+          "Emotion.Sad": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Slider.Face.Frown", "Value": 0.9 },
+              { "KeyTag": "Slider.Face.EyeDroop", "Value": 0.7 }
+            ]
+          }
         }
       },
       "DefaultPlaceBindings": [
@@ -74,6 +97,7 @@
       ],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Human": {
       "TemplateTag": "Character.Humanoid.Human",
       "ParentTemplateTag": "Character.Humanoid",
@@ -81,16 +105,34 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Human" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.85, "G": 0.75, "B": 0.65, "A": 1.0 }, "SecondaryColor": { "R": 0.65, "G": 0.55, "B": 0.45, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.3, "B": 0.1, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 100.0, "MaxValue": 100.0 } ],
+      "NativeLanguageTag": "Language.Common",
+      "KnownLanguageTags": [ "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Human" },
+          { "KeyTag": "Localization.Description", "Value": "Adaptable and industrious cosmopolitans speaking the Common Tongue." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.85, "G": 0.75, "B": 0.65, "A": 1.0 }, "SecondaryColor": { "R": 0.65, "G": 0.55, "B": 0.45, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.3, "B": 0.1, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 100.0, "MaxValue": 100.0 },
+        { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 10.0, "MaxValue": 14.0 },
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 10.0, "MaxValue": 14.0 }
+      ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.Height", "Value": 0.5 } ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.5 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Dwarf": {
       "TemplateTag": "Character.Humanoid.Dwarf",
       "ParentTemplateTag": "Character.Humanoid",
@@ -98,16 +140,35 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Dwarf" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.8, "G": 0.7, "B": 0.6, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.5, "B": 0.4, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.2, "G": 0.1, "B": 0.05, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.6, "B": 0.5, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 140.0 } ],
+      "NativeLanguageTag": "Language.Dwarvish",
+      "KnownLanguageTags": [ "Language.Dwarvish", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Dwarf" },
+          { "KeyTag": "Localization.Description", "Value": "Sturdy subterranean artisans and warriors speaking ancient Dwarvish." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.8, "G": 0.7, "B": 0.6, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.5, "B": 0.4, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.2, "G": 0.1, "B": 0.05, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.6, "B": 0.5, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 120.0, "MaxValue": 140.0 },
+        { "AttributeTag": "Attribute.Stat.Constitution", "MinValue": 14.0, "MaxValue": 18.0 }
+      ],
       "GenderVariants": [],
-      "RacialSliderClamps": [ { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.0, "ClampedMax": 0.4 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.Height", "Value": 0.2 } ],
+      "RacialSliderClamps": [
+        { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.0, "ClampedMax": 0.4 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.2 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Halfling": {
       "TemplateTag": "Character.Humanoid.Halfling",
       "ParentTemplateTag": "Character.Humanoid",
@@ -115,16 +176,35 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Halfling" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.75, "G": 0.65, "B": 0.55, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.5, "G": 0.3, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.6, "B": 0.3, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 18.0 } ],
+      "NativeLanguageTag": "Language.Halfling",
+      "KnownLanguageTags": [ "Language.Halfling", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Halfling" },
+          { "KeyTag": "Localization.Description", "Value": "Nimble, light-footed folk with sharp acoustic hearing and agricultural affinity." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.75, "G": 0.65, "B": 0.55, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.5, "G": 0.3, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.6, "B": 0.3, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 18.0 },
+        { "AttributeTag": "Attribute.Sense.Hearing", "MinValue": 110.0, "MaxValue": 130.0 }
+      ],
       "GenderVariants": [],
-      "RacialSliderClamps": [ { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.1, "ClampedMax": 0.35 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.Height", "Value": 0.25 } ],
+      "RacialSliderClamps": [
+        { "SliderTag": "Slider.Body.Height", "ClampedMin": 0.1, "ClampedMax": 0.35 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.25 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Orc.Snow": {
       "TemplateTag": "Character.Humanoid.Orc.Snow",
       "ParentTemplateTag": "Character.Humanoid",
@@ -132,16 +212,34 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Snow Orc" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.6, "G": 0.7, "B": 0.8, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.5, "B": 0.6, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.9, "G": 0.9, "B": 0.95, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.6, "B": 0.7, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 16.0, "MaxValue": 22.0 } ],
+      "NativeLanguageTag": "Language.Orcish",
+      "KnownLanguageTags": [ "Language.Orcish", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Snow Orc" },
+          { "KeyTag": "Localization.Description", "Value": "Frost-hardened northern orcs speaking guttural northern dialects." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.6, "G": 0.7, "B": 0.8, "A": 1.0 }, "SecondaryColor": { "R": 0.4, "G": 0.5, "B": 0.6, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.9, "B": 0.95, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.6, "B": 0.7, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 16.0, "MaxValue": 22.0 }
+      ],
       "GenderVariants": [],
-      "RacialSliderClamps": [ { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.6, "ClampedMax": 1.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.Height", "Value": 0.85 } ],
+      "RacialSliderClamps": [
+        { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.6, "ClampedMax": 1.0 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.85 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Orc.Blood": {
       "TemplateTag": "Character.Humanoid.Orc.Blood",
       "ParentTemplateTag": "Character.Humanoid",
@@ -149,16 +247,86 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Blood Orc" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.5, "G": 0.2, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.1, "B": 0.1, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.1, "B": 0.1, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 18.0, "MaxValue": 25.0 } ],
+      "NativeLanguageTag": "Language.Orcish",
+      "KnownLanguageTags": [ "Language.Orcish", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Blood Orc" },
+          { "KeyTag": "Localization.Description", "Value": "Fierce warlord clans bound by ancestral battle chants." }
+        ]
+      },
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Violent" ],
+        "FoodAndDrinkPreferences": { "ReplicatedEntries": [] },
+        "ActivityPreferences": { "ReplicatedEntries": [] },
+        "OnIgnoredReaction": {
+          "SelfAttributeDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Need.Mood.Angry", "Value": 25.0 }
+            ]
+          },
+          "RelationalMetricDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Relationship.Metric.Hostility", "Value": 25.0 }
+            ]
+          }
+        },
+        "OnInterruptedReaction": {
+          "SelfAttributeDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Need.Mood.Angry", "Value": 50.0 }
+            ]
+          },
+          "RelationalMetricDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Relationship.Metric.Affinity", "Value": -40.0 },
+              { "KeyTag": "Relationship.Metric.Hostility", "Value": 50.0 }
+            ]
+          },
+          "EmotionMorphMap": {
+            "Emotion.Angry": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Slider.Face.BrowFurrow", "Value": 1.0 },
+                { "KeyTag": "Slider.Face.JawClench", "Value": 0.8 },
+                { "KeyTag": "Slider.Face.Smile", "Value": 0.0 }
+              ]
+            },
+            "Emotion.Happy": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Slider.Face.Smile", "Value": 1.0 },
+                { "KeyTag": "Slider.Face.BrowFurrow", "Value": 0.0 }
+              ]
+            },
+            "Emotion.Sad": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Slider.Face.Frown", "Value": 0.9 },
+                { "KeyTag": "Slider.Face.EyeDroop", "Value": 0.7 }
+              ]
+            }
+          },
+          "ReactionBehaviorTag": "Behavior.Combat.Alert"
+        }
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.5, "G": 0.2, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.3, "G": 0.1, "B": 0.1, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.1, "G": 0.1, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.6, "G": 0.1, "B": 0.1, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Stat.Strength", "MinValue": 18.0, "MaxValue": 25.0 }
+      ],
       "GenderVariants": [],
-      "RacialSliderClamps": [ { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.7, "ClampedMax": 1.0 } ],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Body.Height", "Value": 0.9 } ],
+      "RacialSliderClamps": [
+        { "SliderTag": "Slider.Body.Muscularity", "ClampedMin": 0.7, "ClampedMax": 1.0 }
+      ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Body.Height", "Value": 0.9 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Elf.Forest": {
       "TemplateTag": "Character.Humanoid.Elf.Forest",
       "ParentTemplateTag": "Character.Humanoid",
@@ -166,16 +334,33 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Forest Elf" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.7, "G": 0.8, "B": 0.6, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.6, "B": 0.4, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.2, "G": 0.5, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.7, "B": 0.4, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 15.0, "MaxValue": 20.0 } ],
+      "NativeLanguageTag": "Language.Elvish",
+      "KnownLanguageTags": [ "Language.Elvish", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Forest Elf" },
+          { "KeyTag": "Localization.Description", "Value": "Woodland elves attuned to nature, speaking sylvan Elvish dialects." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.7, "G": 0.8, "B": 0.6, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.6, "B": 0.4, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.2, "G": 0.5, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.7, "B": 0.4, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 15.0, "MaxValue": 20.0 },
+        { "AttributeTag": "Attribute.Sense.Hearing", "MinValue": 115.0, "MaxValue": 140.0 }
+      ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.EarLength", "Value": 0.8 } ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Appendage.EarLength", "Value": 0.8 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Elf.High": {
       "TemplateTag": "Character.Humanoid.Elf.High",
       "ParentTemplateTag": "Character.Humanoid",
@@ -183,16 +368,87 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "High Elf" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.95, "G": 0.9, "B": 0.85, "A": 1.0 }, "SecondaryColor": { "R": 0.85, "G": 0.8, "B": 0.7, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 1.0, "G": 0.9, "B": 0.5, "A": 1.0 }, "SecondaryColor": { "R": 0.9, "G": 0.7, "B": 0.2, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Mastery.Element.Fire", "MinValue": 10.0, "MaxValue": 25.0 } ],
+      "NativeLanguageTag": "Language.Elvish",
+      "KnownLanguageTags": [ "Language.Elvish", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "High Elf" },
+          { "KeyTag": "Localization.Description", "Value": "Noble arcane scholar elves speaking High Elvish." }
+        ]
+      },
+      "PersonalityProfile": {
+        "PersonalityTraitTags": [ "Personality.Trait.Arrogant" ],
+        "FoodAndDrinkPreferences": { "ReplicatedEntries": [] },
+        "ActivityPreferences": { "ReplicatedEntries": [] },
+        "OnIgnoredReaction": {
+          "SelfAttributeDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Need.Mood.Irritated", "Value": 35.0 }
+            ]
+          },
+          "RelationalMetricDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Relationship.Metric.Affinity", "Value": -20.0 },
+              { "KeyTag": "Relationship.Metric.Respect", "Value": -30.0 }
+            ]
+          },
+          "ReactionDialogueCategoryTag": "Dialogue.Category.Complain"
+        },
+        "OnInterruptedReaction": {
+          "SelfAttributeDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Need.Mood.Angry", "Value": 45.0 }
+            ]
+          },
+          "RelationalMetricDeltas": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Relationship.Metric.Affinity", "Value": -30.0 },
+              { "KeyTag": "Relationship.Metric.Hostility", "Value": 40.0 }
+            ]
+          },
+          "ReactionDialogueCategoryTag": "Dialogue.Category.Scold"
+        },
+        "EmotionMorphMap": {
+          "Emotion.Angry": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Slider.Face.BrowFurrow", "Value": 1.0 },
+              { "KeyTag": "Slider.Face.JawClench", "Value": 0.8 },
+              { "KeyTag": "Slider.Face.Smile", "Value": 0.0 }
+            ]
+          },
+          "Emotion.Happy": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Slider.Face.Smile", "Value": 1.0 },
+              { "KeyTag": "Slider.Face.BrowFurrow", "Value": 0.0 }
+            ]
+          },
+          "Emotion.Sad": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Slider.Face.Frown", "Value": 0.9 },
+              { "KeyTag": "Slider.Face.EyeDroop", "Value": 0.7 }
+            ]
+          }
+        }
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.95, "G": 0.9, "B": 0.85, "A": 1.0 }, "SecondaryColor": { "R": 0.85, "G": 0.8, "B": 0.7, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 1.0, "G": 0.9, "B": 0.5, "A": 1.0 }, "SecondaryColor": { "R": 0.9, "G": 0.7, "B": 0.2, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "GDBMagic.Attribute.Stat.Intelligence", "MinValue": 14.0, "MaxValue": 20.0 },
+        { "AttributeTag": "Attribute.Sense.Hearing", "MinValue": 120.0, "MaxValue": 145.0 }
+      ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.EarLength", "Value": 0.9 } ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Appendage.EarLength", "Value": 0.9 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Elf.Dark": {
       "TemplateTag": "Character.Humanoid.Elf.Dark",
       "ParentTemplateTag": "Character.Humanoid",
@@ -200,16 +456,33 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Dark Elf" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.2, "G": 0.2, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.1, "G": 0.1, "B": 0.15, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.8, "G": 0.8, "B": 0.9, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.4, "B": 0.8, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 19.0 } ],
+      "NativeLanguageTag": "Language.Elvish",
+      "KnownLanguageTags": [ "Language.Elvish", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Dark Elf" },
+          { "KeyTag": "Localization.Description", "Value": "Subterranean elves speaking an ancient nocturnal dialect." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.2, "G": 0.2, "B": 0.3, "A": 1.0 }, "SecondaryColor": { "R": 0.1, "G": 0.1, "B": 0.15, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.8, "G": 0.8, "B": 0.9, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.4, "B": 0.8, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 14.0, "MaxValue": 19.0 },
+        { "AttributeTag": "Attribute.Sense.Hearing", "MinValue": 125.0, "MaxValue": 150.0 }
+      ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
-      "DefaultBodyslideSliders": [ { "KeyTag": "Slider.Appendage.EarLength", "Value": 0.7 } ],
+      "DefaultBodyslideSliders": [
+        { "KeyTag": "Slider.Appendage.EarLength", "Value": 0.7 }
+      ],
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Draconeme": {
       "TemplateTag": "Character.Humanoid.Draconeme",
       "ParentTemplateTag": "Character.Humanoid",
@@ -217,10 +490,23 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Draconeme" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.3, "G": 0.5, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.3, "B": 0.2, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.9, "G": 0.7, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.2, "B": 0.1, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Resource.Health", "MinValue": 130.0, "MaxValue": 150.0 } ],
+      "NativeLanguageTag": "Language.Draconic",
+      "KnownLanguageTags": [ "Language.Draconic", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Draconeme" },
+          { "KeyTag": "Localization.Description", "Value": "Dragon-blooded humanoids speaking Draconic and resonant Common." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.3, "G": 0.5, "B": 0.4, "A": 1.0 }, "SecondaryColor": { "R": 0.2, "G": 0.3, "B": 0.2, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.7, "B": 0.2, "A": 1.0 }, "SecondaryColor": { "R": 0.5, "G": 0.2, "B": 0.1, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Resource.Health", "MinValue": 130.0, "MaxValue": 150.0 }
+      ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
       "DefaultBodyslideSliders": [
@@ -230,6 +516,7 @@
       "StartupAbilities": [],
       "StartupEquipmentArchetypes": []
     },
+
     "Character.Humanoid.Folcali": {
       "TemplateTag": "Character.Humanoid.Folcali",
       "ParentTemplateTag": "Character.Humanoid",
@@ -237,10 +524,24 @@
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
-      "Localization": { "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Folcali" } ] },
-      "AllowedSkinTones": [ { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.6, "B": 0.5, "A": 1.0 } } ],
-      "AllowedHairColors": [ { "PrimaryColor": { "R": 0.9, "G": 0.4, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.2, "B": 0.05, "A": 1.0 } } ],
-      "AttributeRanges": [ { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 16.0, "MaxValue": 21.0 } ],
+      "NativeLanguageTag": "Language.Folcali",
+      "KnownLanguageTags": [ "Language.Folcali", "Language.Common" ],
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Folcali" },
+          { "KeyTag": "Localization.Description", "Value": "Vulpes-descended humanoids with keen hearing who speak Folcali and Common." }
+        ]
+      },
+      "AllowedSkinTones": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.8, "B": 0.7, "A": 1.0 }, "SecondaryColor": { "R": 0.8, "G": 0.6, "B": 0.5, "A": 1.0 } }
+      ],
+      "AllowedHairColors": [
+        { "PrimaryColor": { "R": 0.9, "G": 0.4, "B": 0.1, "A": 1.0 }, "SecondaryColor": { "R": 0.7, "G": 0.2, "B": 0.05, "A": 1.0 } }
+      ],
+      "AttributeRanges": [
+        { "AttributeTag": "Attribute.Stat.Agility", "MinValue": 16.0, "MaxValue": 21.0 },
+        { "AttributeTag": "Attribute.Sense.Hearing", "MinValue": 130.0, "MaxValue": 160.0 }
+      ],
       "GenderVariants": [],
       "RacialSliderClamps": [],
       "DefaultBodyslideSliders": [

@@ -559,12 +559,56 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             FCharacterTemplateDef TempDef;
             FJsonObjectConverter::JsonObjectToUStruct(TempObj.ToSharedRef(), &TempDef, 0, 0);
             DeserializeLocalizationMap(TempObj, TEXT("Localization"), TempDef.Localization);
+
             if (TempObj->HasField(TEXT("PersonalityProfile")))
             {
                 TSharedPtr<FJsonObject> PersObj = TempObj->GetObjectField(TEXT("PersonalityProfile"));
                 DeserializeMapWrapper(PersObj, TEXT("FoodAndDrinkPreferences"), TempDef.PersonalityProfile.FoodAndDrinkPreferences);
                 DeserializeMapWrapper(PersObj, TEXT("ActivityPreferences"), TempDef.PersonalityProfile.ActivityPreferences);
+
+                // NEW: Emotion Morph Maps
+                if (PersObj->HasField(TEXT("EmotionMorphMap")))
+                {
+                    const TSharedPtr<FJsonObject> EmotionMapObj = PersObj->GetObjectField(TEXT("EmotionMorphMap"));
+                    if (EmotionMapObj.IsValid())
+                    {
+                        for (const auto& EmotionPair : EmotionMapObj->Values)
+                        {
+                            const FString EmotionTagStr(*EmotionPair.Key);
+                            const FGameplayTag EmoTag = FGameplayTag::RequestGameplayTag(FName(*EmotionPair.Key), false);
+                            if (EmoTag.IsValid() && EmotionPair.Value.IsValid() && EmotionPair.Value->Type == EJson::Object)
+                            {
+                                FDynamicTagFloatMapWrapper Wrapper;
+                                DeserializeMapWrapper(EmotionMapObj, EmotionTagStr, Wrapper);
+                                TempDef.PersonalityProfile.EmotionMorphMap.Add(EmoTag, Wrapper);
+                            }
+                        }
+                    }
+                }
+
+                auto DeserializeReactionRule = [](const TSharedPtr<FJsonObject>& InObj, const FString& FieldName, FDynamicDialogueReactionRule& OutRule)
+                {
+                    if (!InObj.IsValid() || !InObj->HasField(FieldName)) return;
+                    TSharedPtr<FJsonObject> RuleObj = InObj->GetObjectField(FieldName);
+                    if (!RuleObj.IsValid()) return;
+
+                    DeserializeMapWrapper(RuleObj, TEXT("SelfAttributeDeltas"), OutRule.SelfAttributeDeltas);
+                    DeserializeMapWrapper(RuleObj, TEXT("RelationalMetricDeltas"), OutRule.RelationalMetricDeltas);
+
+                    if (RuleObj->HasField(TEXT("ReactionDialogueCategoryTag")))
+                    {
+                        OutRule.ReactionDialogueCategoryTag = FGameplayTag::RequestGameplayTag(FName(*RuleObj->GetStringField(TEXT("ReactionDialogueCategoryTag"))), false);
+                    }
+                    if (RuleObj->HasField(TEXT("ReactionBehaviorTag")))
+                    {
+                        OutRule.ReactionBehaviorTag = FGameplayTag::RequestGameplayTag(FName(*RuleObj->GetStringField(TEXT("ReactionBehaviorTag"))), false);
+                    }
+                };
+
+                DeserializeReactionRule(PersObj, TEXT("OnIgnoredReaction"), TempDef.PersonalityProfile.OnIgnoredReaction);
+                DeserializeReactionRule(PersObj, TEXT("OnInterruptedReaction"), TempDef.PersonalityProfile.OnInterruptedReaction);
             }
+
             if (TempObj->HasField(TEXT("AgingProfile")))
             {
                 FJsonObjectConverter::JsonObjectToUStruct(TempObj->GetObjectField(TEXT("AgingProfile")).ToSharedRef(), &TempDef.AgingProfile, 0, 0);
@@ -744,6 +788,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         OutStaging.bHasEnvironmentConfig = true;
         OutStaging.EnvironmentConfig = Config;
     }
+    // 1. Language Deserialization with Teaching Attributes
     if (RootObject->HasField(TEXT("Languages")))
     {
         for (const auto& LangVal : RootObject->GetArrayField(TEXT("Languages")))
@@ -751,10 +796,54 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             TSharedPtr<FJsonObject> LangObj = LangVal->AsObject();
             FGameplayTag LangTag = FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("LanguageTag"))), false);
             if (!LangTag.IsValid()) continue;
+
             FDynamicLanguageDef LangDef;
             LangDef.LanguageTag = LangTag;
             LangDef.ComprehensionAttributeTag = FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("ComprehensionAttributeTag"))), false);
+            LangDef.bIsLinguaFranca = LangObj->HasField(TEXT("bIsLinguaFranca")) ? LangObj->GetBoolField(TEXT("bIsLinguaFranca")) : false;
+            LangDef.FluencyMasteryThreshold = LangObj->HasField(TEXT("FluencyMasteryThreshold")) ? static_cast<float>(LangObj->GetNumberField(TEXT("FluencyMasteryThreshold"))) : 85.0f;
+            LangDef.ConversationalBreakthroughThreshold = LangObj->HasField(TEXT("ConversationalBreakthroughThreshold")) ? static_cast<float>(LangObj->GetNumberField(TEXT("ConversationalBreakthroughThreshold"))) : 50.0f;
+
+            LangDef.TeachingAttributeTag = LangObj->HasField(TEXT("TeachingAttributeTag")) 
+                ? FGameplayTag::RequestGameplayTag(FName(*LangObj->GetStringField(TEXT("TeachingAttributeTag"))), false) 
+                : FGameplayTag();
+            LangDef.TeachingAttributeBonusScalar = LangObj->HasField(TEXT("TeachingAttributeBonusScalar"))
+                ? static_cast<float>(LangObj->GetNumberField(TEXT("TeachingAttributeBonusScalar")))
+                : 0.05f;
+            LangDef.MinTeacherAttributeRequired = LangObj->HasField(TEXT("MinTeacherAttributeRequired"))
+                ? static_cast<float>(LangObj->GetNumberField(TEXT("MinTeacherAttributeRequired")))
+                : 0.0f;
+
             DeserializeLocalizationMap(LangObj, TEXT("Localization"), LangDef.Localization);
+
+            if (LangObj->HasField(TEXT("StopWords")))
+            {
+                for (const auto& SwVal : LangObj->GetArrayField(TEXT("StopWords")))
+                {
+                    if (SwVal.IsValid())
+                    {
+                        LangDef.StopWords.Add(SwVal->AsString());
+                    }
+                }
+            }
+
+            if (LangObj->HasField(TEXT("PidginSubstitutions")))
+            {
+                const TSharedPtr<FJsonObject> SubObj = LangObj->GetObjectField(TEXT("PidginSubstitutions"));
+                if (SubObj.IsValid())
+                {
+                    for (const TPair<FString, TSharedPtr<FJsonValue>>& SubPair : SubObj->Values)
+                    {
+                        if (SubPair.Value.IsValid())
+                        {
+                            const FString KeyStr = SubPair.Key;
+                            const FString ValStr = SubPair.Value->AsString();
+                            LangDef.PidginSubstitutions.FindOrAdd(KeyStr) = ValStr;
+                        }
+                    }
+                }
+            }
+
             if (LangObj->HasField(TEXT("PhoneticPhonemes")))
             {
                 for (const auto& PhVal : LangObj->GetArrayField(TEXT("PhoneticPhonemes")))
@@ -762,6 +851,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                     LangDef.PhoneticPhonemes.Add(PhVal->AsString());
                 }
             }
+
             if (LangObj->HasField(TEXT("Vocabulary")))
             {
                 for (const auto& VocVal : LangObj->GetArrayField(TEXT("Vocabulary")))
@@ -772,6 +862,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                     WordDef.DifficultyRating = static_cast<float>(VocObj->GetNumberField(TEXT("DifficultyRating")));
                     WordDef.ComprehensionXPGranted = static_cast<float>(VocObj->GetNumberField(TEXT("ComprehensionXPGranted")));
                     DeserializeLocalizationMap(VocObj, TEXT("LocalizedTranslations"), WordDef.LocalizedTranslations);
+
                     if (VocObj->HasField(TEXT("MiniGameDecoyOptions")))
                     {
                         for (const auto& Decoy : VocObj->GetArrayField(TEXT("MiniGameDecoyOptions")))
@@ -782,6 +873,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                     LangDef.Vocabulary.Add(WordDef);
                 }
             }
+
             OutStaging.LanguageMasterRegistry.Add(LangTag, LangDef);
         }
     }
@@ -1884,7 +1976,6 @@ bool UDynamicDataSerializer::SerializeWorldStateToJson(const UObject* WorldConte
     FWorldPersistenceSnapshot WorldSnap;
     WorldSnap.WorldTime = World->GetTimeSeconds();
 
-    // Delegate voxel extraction seamlessly to the Subsystem's virtualized map
     if (UDynamicVoxelSubsystem* VoxelSub = World->GetSubsystem<UDynamicVoxelSubsystem>())
     {
         VoxelSub->SerializeWorldVoxelState(WorldSnap);
@@ -1893,6 +1984,23 @@ bool UDynamicDataSerializer::SerializeWorldStateToJson(const UObject* WorldConte
     if (UDynamicBuildingSubsystem* BuildSub = World->GetSubsystem<UDynamicBuildingSubsystem>())
     {
         BuildSub->SerializeWorldBuildingState(WorldSnap);
+    }
+
+    // Persist all dynamically coined vocabulary words
+    if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
+    {
+        WorldSnap.CoinedVocabulary.Empty(GS->ReplicatedCoinedWords.Items.Num());
+        for (const FDynamicCoinedWordItem& Item : GS->ReplicatedCoinedWords.Items)
+        {
+            FDynamicCoinedWordSnapshot Snap;
+            Snap.LanguageTag = Item.LanguageTag;
+            Snap.EnglishWord = Item.EnglishWord;
+            Snap.CoinedNativeWord = Item.CoinedNativeWord;
+            Snap.DifficultyRating = Item.DifficultyRating;
+            Snap.ComprehensionXPGranted = Item.ComprehensionXPGranted;
+            Snap.DecoyOptions = Item.DecoyOptions;
+            WorldSnap.CoinedVocabulary.Add(Snap);
+        }
     }
 
     TSharedPtr<FJsonObject> JsonObj = FJsonObjectConverter::UStructToJsonObject(WorldSnap);
@@ -1914,7 +2022,6 @@ bool UDynamicDataSerializer::DeserializeWorldStateFromJson(const UObject* WorldC
     FWorldPersistenceSnapshot WorldSnap;
     if (!FJsonObjectConverter::JsonObjectToUStruct(RootObj.ToSharedRef(), &WorldSnap, 0, 0)) return false;
 
-    // Push the loaded state map down into the Subsystem's mathematical abstraction
     if (UDynamicVoxelSubsystem* VoxelSub = World->GetSubsystem<UDynamicVoxelSubsystem>())
     {
         VoxelSub->RestoreWorldVoxelState(WorldSnap);
@@ -1923,6 +2030,30 @@ bool UDynamicDataSerializer::DeserializeWorldStateFromJson(const UObject* WorldC
     if (UDynamicBuildingSubsystem* BuildSub = World->GetSubsystem<UDynamicBuildingSubsystem>())
     {
         BuildSub->RestoreWorldBuildingState(WorldSnap);
+    }
+
+    // Restore dynamically coined vocabulary back into the Language Master Registry and FastArray
+    if (ADynamicGameState* GS = World->GetGameState<ADynamicGameState>())
+    {
+        for (const FDynamicCoinedWordSnapshot& CoinedSnap : WorldSnap.CoinedVocabulary)
+        {
+            FDynamicCoinedWordItem NewItem;
+            NewItem.LanguageTag = CoinedSnap.LanguageTag;
+            NewItem.EnglishWord = CoinedSnap.EnglishWord;
+            NewItem.CoinedNativeWord = CoinedSnap.CoinedNativeWord;
+            NewItem.DifficultyRating = CoinedSnap.DifficultyRating;
+            NewItem.ComprehensionXPGranted = CoinedSnap.ComprehensionXPGranted;
+            NewItem.DecoyOptions = CoinedSnap.DecoyOptions;
+
+            GS->HandleSingleCoinedWordReplicated(NewItem);
+
+            if (GS->HasAuthority())
+            {
+                FDynamicCoinedWordItem& AddedRef = GS->ReplicatedCoinedWords.Items.Add_GetRef(NewItem);
+                GS->ReplicatedCoinedWords.MarkItemDirty(AddedRef);
+            }
+        }
+        GS->RebuildLanguageLookupCaches();
     }
 
     return true;

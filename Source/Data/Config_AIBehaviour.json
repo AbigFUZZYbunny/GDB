@@ -1,5 +1,31 @@
 ﻿{
   "AIBehaviorMasterRegistry": {
+    "Behavior.Core.ShareGossip": {
+      "ActionTag": "Action.Interact.Chat",
+      "TargetPlaceRoleTag": "Role.Place.TownSquare",
+      "ExecutionType": "Wait",
+      "BasePriority": 7.0,
+      "CooldownDuration": 20.0,
+      "bInterruptible": true,
+      "DialogueCategoryTag": "Dialogue.Category.Conversation",
+      "PriorityAttributeScalars": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Need.Social", "Value": 1.5 }
+        ]
+      },
+      "ExecutionMetrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.Duration", "Value": 4.0 }
+        ]
+      },
+      "Utterances": [
+        {
+          "UtteranceText": "Have you heard the rumors around %Location%? Times are growing perilous.",
+          "SelectionWeight": 5.0,
+          "EmotionTag": "Emotion.Pensive"
+        }
+      ]
+    },
     "Behavior.Core.BegOrGreet": {
       "ActionTag": "Action.Interact.Chat",
       "TargetPlaceRoleTag": "Role.Place.TownSquare",

@@ -1,5 +1,7 @@
 ﻿// DynamicGameState.cpp
 #include "DynamicGameState.h"
+#include "Net/UnrealNetwork.h"
+
 #include "DynamicSpatialActor.h"
 #include "DynamicDataSerializer.h"
 #include "DynamicPhysicsActor.h"
@@ -24,11 +26,13 @@
 ADynamicGameState::ADynamicGameState()
 {
     bReplicates = true;
+    ReplicatedCoinedWords.OwningGameState = this;
 }
 
 void ADynamicGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(ADynamicGameState, ReplicatedCoinedWords);
 }
 
 void ADynamicGameState::BeginPlay()
@@ -64,6 +68,342 @@ void ADynamicGameState::BeginPlay()
 
         SpawnServerEnvironmentChunks();
     }
+}
+
+void FDynamicCoinedWordItem::PostReplicatedAdd(const FFastCoinedWordArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningGameState)
+    {
+        InArrayOwner.OwningGameState->HandleSingleCoinedWordReplicated(*this);
+    }
+}
+
+void FDynamicCoinedWordItem::PostReplicatedChange(const FFastCoinedWordArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningGameState)
+    {
+        InArrayOwner.OwningGameState->HandleSingleCoinedWordReplicated(*this);
+    }
+}
+
+void ADynamicGameState::OnRep_ReplicatedCoinedWords()
+{
+    for (const FDynamicCoinedWordItem& Item : ReplicatedCoinedWords.Items)
+    {
+        HandleSingleCoinedWordReplicated(Item);
+    }
+}
+
+void ADynamicGameState::HandleSingleCoinedWordReplicated(const FDynamicCoinedWordItem& Item)
+{
+    if (!Item.LanguageTag.IsValid() || Item.CoinedNativeWord.IsEmpty() || Item.EnglishWord.IsEmpty()) return;
+
+    FDynamicLanguageDef& LangDef = LanguageMasterRegistry.FindOrAdd(Item.LanguageTag);
+    LangDef.LanguageTag = Item.LanguageTag;
+
+    const FString CleanNative = Item.CoinedNativeWord.ToLower().TrimStartAndEnd();
+    const FString CleanEnglish = Item.EnglishWord.ToLower().TrimStartAndEnd();
+
+    bool bAlreadyExists = false;
+    for (const FDynamicVocabularyWordDef& Existing : LangDef.Vocabulary)
+    {
+        if (Existing.NativeWord.Equals(Item.CoinedNativeWord, ESearchCase::IgnoreCase))
+        {
+            bAlreadyExists = true;
+            break;
+        }
+    }
+
+    if (!bAlreadyExists)
+    {
+        FDynamicVocabularyWordDef NewWord;
+        NewWord.NativeWord = Item.CoinedNativeWord;
+        NewWord.DifficultyRating = Item.DifficultyRating;
+        NewWord.ComprehensionXPGranted = Item.ComprehensionXPGranted;
+        NewWord.MiniGameDecoyOptions = Item.DecoyOptions;
+
+        static const FGameplayTag LocEnTag = FGameplayTag::RequestGameplayTag(TEXT("Localization.Text.en"), false);
+        FTagStringPair TransPair;
+        TransPair.KeyTag = LocEnTag.IsValid() ? LocEnTag : FGameplayTag::RequestGameplayTag(TEXT("Localization.Name"), false);
+        TransPair.DisplayValue = Item.EnglishWord;
+        NewWord.LocalizedTranslations.ReplicatedEntries.Add(TransPair);
+        NewWord.LocalizedTranslations.SyncMapFromChangesArray();
+
+        LangDef.Vocabulary.Add(NewWord);
+    }
+
+    EnglishToNativeLookupCache.FindOrAdd(Item.LanguageTag).FindOrAdd(CleanEnglish) = Item.CoinedNativeWord;
+
+    FNativeWordLookupEntry Entry;
+    Entry.EnglishTranslation = Item.EnglishWord;
+    Entry.Difficulty = Item.DifficultyRating;
+    NativeToEnglishLookupCache.FindOrAdd(Item.LanguageTag).FindOrAdd(CleanNative) = Entry;
+}
+
+bool ADynamicGameState::FindTranslationForNativeWord(FGameplayTag LanguageTag, const FString& NativeWord, FString& OutEnglishTranslation, float& OutDifficulty) const
+{
+    if (!LanguageTag.IsValid() || NativeWord.IsEmpty()) return false;
+
+    const FString CleanNative = NativeWord.ToLower().TrimStartAndEnd();
+    if (const TMap<FString, FNativeWordLookupEntry>* NatMap = NativeToEnglishLookupCache.Find(LanguageTag))
+    {
+        if (const FNativeWordLookupEntry* Entry = NatMap->Find(CleanNative))
+        {
+            OutEnglishTranslation = Entry->EnglishTranslation;
+            OutDifficulty = Entry->Difficulty;
+            return true;
+        }
+    }
+    return false;
+}
+
+void ADynamicGameState::SaveCoinedVocabularyToDisk()
+{
+    if (!HasAuthority() || ReplicatedCoinedWords.Items.Num() == 0) return;
+
+    TSharedRef<FJsonObject> RootObj = MakeShareable(new FJsonObject());
+    TArray<TSharedPtr<FJsonValue>> ItemsArray;
+
+    for (const FDynamicCoinedWordItem& Item : ReplicatedCoinedWords.Items)
+    {
+        TSharedRef<FJsonObject> ItemObj = MakeShareable(new FJsonObject());
+        ItemObj->SetStringField(TEXT("LanguageTag"), Item.LanguageTag.ToString());
+        ItemObj->SetStringField(TEXT("CoinedNativeWord"), Item.CoinedNativeWord);
+        ItemObj->SetStringField(TEXT("EnglishWord"), Item.EnglishWord);
+        ItemObj->SetNumberField(TEXT("DifficultyRating"), Item.DifficultyRating);
+        ItemObj->SetNumberField(TEXT("ComprehensionXPGranted"), Item.ComprehensionXPGranted);
+
+        TArray<TSharedPtr<FJsonValue>> Decoys;
+        for (const FString& Decoy : Item.DecoyOptions)
+        {
+            Decoys.Add(MakeShareable(new FJsonValueString(Decoy)));
+        }
+        ItemObj->SetArrayField(TEXT("DecoyOptions"), Decoys);
+
+        ItemsArray.Add(MakeShareable(new FJsonValueObject(ItemObj)));
+    }
+
+    RootObj->SetArrayField(TEXT("CoinedWords"), ItemsArray);
+
+    FString OutputString;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+    if (FJsonSerializer::Serialize(RootObj, Writer))
+    {
+        const FString SaveDir = FPaths::ProjectSavedDir() / TEXT("DynamicModules");
+        IFileManager::Get().MakeDirectory(*SaveDir, true);
+        const FString FilePath = SaveDir / TEXT("CoinedVocabulary.json");
+        FFileHelper::SaveStringToFile(OutputString, *FilePath);
+    }
+}
+
+void ADynamicGameState::LoadCoinedVocabularyFromDisk()
+{
+    const FString FilePath = FPaths::ProjectSavedDir() / TEXT("DynamicModules/CoinedVocabulary.json");
+    if (!FPaths::FileExists(FilePath)) return;
+
+    FString JsonString;
+    if (!FFileHelper::LoadFileToString(JsonString, *FilePath)) return;
+
+    TSharedPtr<FJsonObject> RootObj;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+    if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid()) return;
+
+    if (RootObj->HasField(TEXT("CoinedWords")))
+    {
+        for (const auto& Val : RootObj->GetArrayField(TEXT("CoinedWords")))
+        {
+            TSharedPtr<FJsonObject> ItemObj = Val->AsObject();
+            if (!ItemObj.IsValid()) continue;
+
+            FDynamicCoinedWordItem Item;
+            Item.LanguageTag = FGameplayTag::RequestGameplayTag(FName(*ItemObj->GetStringField(TEXT("LanguageTag"))), false);
+            Item.CoinedNativeWord = ItemObj->GetStringField(TEXT("CoinedNativeWord"));
+            Item.EnglishWord = ItemObj->GetStringField(TEXT("EnglishWord"));
+            Item.DifficultyRating = static_cast<float>(ItemObj->GetNumberField(TEXT("DifficultyRating")));
+            Item.ComprehensionXPGranted = static_cast<float>(ItemObj->GetNumberField(TEXT("ComprehensionXPGranted")));
+
+            if (ItemObj->HasField(TEXT("DecoyOptions")))
+            {
+                for (const auto& DecoyVal : ItemObj->GetArrayField(TEXT("DecoyOptions")))
+                {
+                    Item.DecoyOptions.Add(DecoyVal->AsString());
+                }
+            }
+
+            if (Item.LanguageTag.IsValid() && !Item.CoinedNativeWord.IsEmpty())
+            {
+                FDynamicCoinedWordItem& Added = ReplicatedCoinedWords.Items.Add_GetRef(Item);
+                ReplicatedCoinedWords.MarkItemDirty(Added);
+                HandleSingleCoinedWordReplicated(Item);
+            }
+        }
+    }
+}
+
+void ADynamicGameState::RebuildLanguageLookupCaches()
+{
+    EnglishToNativeLookupCache.Empty(LanguageMasterRegistry.Num());
+
+    for (auto& LangPair : LanguageMasterRegistry)
+    {
+        TMap<FString, FString>& TargetMap = EnglishToNativeLookupCache.FindOrAdd(LangPair.Key);
+        for (const FDynamicVocabularyWordDef& Vocab : LangPair.Value.Vocabulary)
+        {
+            for (const FTagStringPair& Trans : Vocab.LocalizedTranslations.ReplicatedEntries)
+            {
+                if (!Trans.DisplayValue.IsEmpty())
+                {
+                    TargetMap.Add(Trans.DisplayValue.ToLower().TrimStartAndEnd(), Vocab.NativeWord);
+                }
+            }
+        }
+    }
+}
+
+FString ADynamicGameState::GetOrCreateDynamicVocabularyWord(FGameplayTag LanguageTag, const FString& EnglishWord)
+{
+    if (!LanguageTag.IsValid() || EnglishWord.IsEmpty()) return EnglishWord;
+
+    const FString CleanEnglish = EnglishWord.ToLower().TrimStartAndEnd();
+
+    // 1. O(1) Fast Cache Lookup
+    if (const TMap<FString, FString>* LangMap = EnglishToNativeLookupCache.Find(LanguageTag))
+    {
+        if (const FString* ExistingNative = LangMap->Find(CleanEnglish))
+        {
+            return *ExistingNative;
+        }
+    }
+
+    FDynamicLanguageDef* LangDef = LanguageMasterRegistry.Find(LanguageTag);
+    if (!LangDef) return EnglishWord;
+
+    // 2. Scan vocabulary array if cache was dirty or unbuilt
+    for (const FDynamicVocabularyWordDef& Vocab : LangDef->Vocabulary)
+    {
+        for (const FTagStringPair& Trans : Vocab.LocalizedTranslations.ReplicatedEntries)
+        {
+            if (Trans.DisplayValue.Equals(CleanEnglish, ESearchCase::IgnoreCase))
+            {
+                EnglishToNativeLookupCache.FindOrAdd(LanguageTag).Add(CleanEnglish, Vocab.NativeWord);
+                return Vocab.NativeWord;
+            }
+        }
+    }
+
+    // 3. Dynamic Word Coining via Phonetic Phonemes
+    if (LangDef->PhoneticPhonemes.Num() == 0)
+    {
+        return EnglishWord;
+    }
+
+    // Hash the English token and Language Tag together to ensure deterministic procedural consistency
+    const uint32 WordSeed = HashCombine(GetTypeHash(LanguageTag), GetTypeHash(CleanEnglish));
+    FRandomStream Rnd(WordSeed);
+
+    const int32 SyllableCount = FMath::Clamp((CleanEnglish.Len() / 3) + (WordSeed % 2), 1, 3);
+    FString CoinedWord;
+
+    for (int32 s = 0; s < SyllableCount; ++s)
+    {
+        const int32 Idx = Rnd.RandRange(0, LangDef->PhoneticPhonemes.Num() - 1);
+        const FString& Phoneme = LangDef->PhoneticPhonemes[Idx];
+
+        if (s > 0 && LanguageTag.GetTagName().ToString().Contains(TEXT("Orcish")))
+        {
+            if (Rnd.FRand() < 0.35f)
+            {
+                CoinedWord += (Rnd.FRand() < 0.5f) ? TEXT("'") : TEXT("-");
+            }
+        }
+
+        CoinedWord += Phoneme;
+    }
+
+    CoinedWord = CoinedWord.ToLower();
+    if (CoinedWord.Len() > 0)
+    {
+        CoinedWord[0] = FChar::ToUpper(CoinedWord[0]);
+    }
+
+    bool bCollision = true;
+    int32 CollisionTries = 0;
+    while (bCollision && CollisionTries < 10)
+    {
+        bCollision = false;
+        for (const FDynamicVocabularyWordDef& Existing : LangDef->Vocabulary)
+        {
+            if (Existing.NativeWord.Equals(CoinedWord, ESearchCase::IgnoreCase))
+            {
+                bCollision = true;
+                const int32 ExtraIdx = Rnd.RandRange(0, LangDef->PhoneticPhonemes.Num() - 1);
+                CoinedWord += LangDef->PhoneticPhonemes[ExtraIdx];
+                break;
+            }
+        }
+        CollisionTries++;
+    }
+
+    // 4. Construct Full Vocabulary Definition
+    FDynamicVocabularyWordDef NewDef;
+    NewDef.NativeWord = CoinedWord;
+    NewDef.DifficultyRating = FMath::Clamp(static_cast<float>(SyllableCount) * 8.0f, 5.0f, 35.0f);
+    NewDef.ComprehensionXPGranted = FMath::Max(1.0f, NewDef.DifficultyRating * 0.2f);
+
+    static const FGameplayTag LocEnTag = FGameplayTag::RequestGameplayTag(TEXT("Localization.Text.en"), false);
+    FTagStringPair TransPair;
+    TransPair.KeyTag = LocEnTag.IsValid() ? LocEnTag : FGameplayTag::RequestGameplayTag(TEXT("Localization.Name"), false);
+    TransPair.DisplayValue = CleanEnglish;
+    NewDef.LocalizedTranslations.ReplicatedEntries.Add(TransPair);
+    NewDef.LocalizedTranslations.SyncMapFromChangesArray();
+
+    TArray<FString> DecoyPool;
+    for (const FDynamicVocabularyWordDef& Existing : LangDef->Vocabulary)
+    {
+        for (const FTagStringPair& Pair : Existing.LocalizedTranslations.ReplicatedEntries)
+        {
+            if (!Pair.DisplayValue.IsEmpty() && !Pair.DisplayValue.Equals(CleanEnglish, ESearchCase::IgnoreCase))
+            {
+                DecoyPool.AddUnique(Pair.DisplayValue);
+            }
+        }
+    }
+
+    if (DecoyPool.Num() < 3)
+    {
+        DecoyPool.Add(TEXT("Danger"));
+        DecoyPool.Add(TEXT("Friend"));
+        DecoyPool.Add(TEXT("Halt"));
+        DecoyPool.Add(TEXT("Safe"));
+    }
+
+    for (int32 d = 0; d < 3 && DecoyPool.Num() > 0; ++d)
+    {
+        const int32 Pick = Rnd.RandRange(0, DecoyPool.Num() - 1);
+        NewDef.MiniGameDecoyOptions.Add(DecoyPool[Pick]);
+        DecoyPool.RemoveAtSwap(Pick);
+    }
+
+    // 5. Commit to Permanent GameState Language Definitions and Cache
+    LangDef->Vocabulary.Add(NewDef);
+    EnglishToNativeLookupCache.FindOrAdd(LanguageTag).Add(CleanEnglish, CoinedWord);
+
+    // 6. Push to Replicated FastArray for Client Subtitle Synchronization
+    if (HasAuthority())
+    {
+        FDynamicCoinedWordItem NewReplicatedItem;
+        NewReplicatedItem.LanguageTag = LanguageTag;
+        NewReplicatedItem.EnglishWord = CleanEnglish;
+        NewReplicatedItem.CoinedNativeWord = CoinedWord;
+        NewReplicatedItem.DifficultyRating = NewDef.DifficultyRating;
+        NewReplicatedItem.ComprehensionXPGranted = NewDef.ComprehensionXPGranted;
+        NewReplicatedItem.DecoyOptions = NewDef.MiniGameDecoyOptions;
+
+        FDynamicCoinedWordItem& AddedRef = ReplicatedCoinedWords.Items.Add_GetRef(NewReplicatedItem);
+        ReplicatedCoinedWords.MarkItemDirty(AddedRef);
+    }
+
+    return CoinedWord;
 }
 
 void ADynamicGameState::RegisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk)
@@ -1041,6 +1381,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     RoomTypeRegistry.Append(MoveTemp(StagingData.RoomTypeRegistry));
     CrimeMasterRegistry.Append(MoveTemp(StagingData.CrimeMasterRegistry));
     JurisdictionMasterRegistry.Append(MoveTemp(StagingData.JurisdictionMasterRegistry));
+    
+    RebuildLanguageLookupCaches();
 
     if (StagingData.MasterEffectRegistry.Num() > 0)
     {

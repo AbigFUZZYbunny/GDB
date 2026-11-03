@@ -11,6 +11,7 @@ class ADynamicCharacter;
 class UAnimMontage;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnFastPathDialogueSpokenSignature, AActor*, Speaker, AActor*, Listener, const FString&, SpokenText);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnConversationalLockStateChangedSignature, EConversationalTurnState, NewState, AActor*, Interlocutor);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicSocialComponent : public UActorComponent
@@ -39,6 +40,71 @@ public:
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Social")
     FGuid CurrentPropertyID;
 
+    // --- Conversational Lock & Arbitration ---
+    UPROPERTY(ReplicatedUsing = OnRep_ActiveTurnState, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
+    EConversationalTurnState ActiveTurnState = EConversationalTurnState::Idle;
+
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
+    TWeakObjectPtr<AActor> ActiveInterlocutor = nullptr;
+
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Social|Conversation")
+    FOnConversationalLockStateChangedSignature OnConversationalLockStateChanged;
+
+    UFUNCTION()
+    void OnRep_ActiveTurnState();
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
+    bool ServerAcquireConversationalLock(AActor* InterlocutorActor, bool bPondering = false);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
+    void ServerReleaseConversationalLock();
+
+    // --- Memory & Dialogue Buffers ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|Conversation")
+    float ConversationalMemoryTimeoutSeconds = 300.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|Conversation")
+    int32 MaxDialogueHistoryTurns = 5;
+
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
+    TArray<FDynamicDialogueTurn> RecentDialogueHistory;
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Conversation")
+    void RecordDialogueTurn(const FGuid& SpeakerGuid, const FString& SpeakerName, FGameplayTag SpokenLanguageTag, const FString& UtteranceText);
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Conversation")
+    void RecordNonVerbalAction(const FGuid& ActorGuid, const FString& ActorName, const FString& ActionDescription);
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Conversation")
+    void CleanExpiredDialogueTurns();
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
+    void TriggerMemoryConsolidation(const FGuid& TargetEntityGuid, const TArray<FDynamicDialogueTurn>& TurnsToCompress);
+
+    // Overheard Gossip / Topic Knowledge
+    UPROPERTY(ReplicatedUsing = OnRep_ReplicatedTopics)
+    FFastTopicMemoryArray ReplicatedTopics;
+
+    UFUNCTION()
+    void OnRep_ReplicatedTopics();
+
+    void HandleSingleTopicReplicated(const FDynamicTopicMemoryItem& Item);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Gossip")
+    void ServerRecordOverheardTopic(FGameplayTag TopicTag, const FString& TopicSummary, const FGuid& OriginatorGuid, float Credibility = 1.0f);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|AI")
+    void HandleHeardDialogueFromSpeaker(AActor* Speaker, const FString& UtteranceText, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Language")
+    void ServerBroadcastStreamingDialogueChunk(const FString& FormulatedChunk, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag, float BaseAudibleRadius, bool bIsFinalChunk);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Reactivity")
+    void ApplySocialReactionConsequences(const FDynamicDialogueReactionRule& Rule, AActor* TargetOffender);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Reactivity")
+    void ServerHandleSpeechInterrupted(AActor* Interrupter);
+
     UPROPERTY(ReplicatedUsing = OnRep_Relationships) FFastRelationshipEdgeArray ReplicatedRelationships;
     UPROPERTY(ReplicatedUsing = OnRep_NeedsAndMoods) FFastNeedStateArray ReplicatedNeedsAndMoods;
     UPROPERTY(ReplicatedUsing = OnRep_KnownPlaces) FFastKnownPlaceArray ReplicatedKnownPlaces;
@@ -55,6 +121,7 @@ public:
     void RebuildRelationshipCache();
     void RebuildNeedCache();
     void RebuildPlaceCache();
+    void RebuildTopicCache();
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Social")
     bool GetNeedValue(const FGameplayTag& NeedTag, float& OutValue) const;
@@ -126,7 +193,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Senses")
     float SightFieldOfViewDegrees = 120.0f;
 
-    // FIX: Default parameters removed from UFUNCTIONs to satisfy UHT constraints
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
     void ServerEvaluateAndBroadcastAction(
         FGameplayTag ActionTag,
@@ -174,6 +240,7 @@ private:
     TMap<FGuid, int32> CachedRelationshipIndices;
     TMap<FGameplayTag, float> CachedNeeds;
     TMap<FGameplayTag, FDynamicKnownPlaceItem> CachedPlacesByRole;
+    TMap<FGameplayTag, int32> CachedTopicIndices;
 
     TWeakObjectPtr<AActor> ActiveCalloutTarget;
     FTimerHandle TimerHandle_CalloutTimeout;

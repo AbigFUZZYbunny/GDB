@@ -77,6 +77,7 @@ FGuid UDynamicCloudAISubsystem::DispatchDistributedAIRequest(
 
     NewTask.TaskId = FGuid::NewGuid();
     NewTask.RequestingAgentPawn = AgentPawn;
+    NewTask.RequestType = RequestType;
     NewTask.Priority = Priority;
     NewTask.ContextPrompt = ContextJsonPrompt;
     NewTask.TimeQueued = CurrentTime;
@@ -123,7 +124,7 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
 
     const FString ResolvedModel = !Config.DefaultModelName.IsEmpty() ? Config.DefaultModelName : ModelName;
 
-    // Instant local rule-based fallback mode for single-player / small co-op without miners
+    // 1. Instant local rule-based fallback mode for single-player / small co-op without miners
     if (Config.ExecutionBackend == ECloudAIExecutionBackend::LocalRuleBasedFallback)
     {
         for (int32 i = TaskQueue.Num() - 1; i >= 0; --i)
@@ -149,9 +150,36 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
         return;
     }
 
+    // 2. Filter connected miners
     ConnectedMiners.RemoveAll([](const TWeakObjectPtr<UDynamicAILinkComponent>& M) { return !M.IsValid(); });
-    if (ConnectedMiners.Num() < 2) return;
 
+    // OPTIMIZATION: If fewer than 2 miners are available, do NOT stall. Fall back gracefully to rule-based or server HTTP!
+    if (ConnectedMiners.Num() < 2)
+    {
+        for (int32 i = TaskQueue.Num() - 1; i >= 0; --i)
+        {
+            FCloudAIQueuedTask Task = TaskQueue[i];
+            TaskQueue.RemoveAt(i);
+
+            FCloudAIDirectiveResponse FallbackResp;
+            ExecuteRuleBasedFallback(Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()), FallbackResp);
+
+            TArray<FCloudAICommandOutput> Output;
+            for (const FCloudAICommand& Cmd : FallbackResp.Commands)
+            {
+                FCloudAICommandOutput OutCmd;
+                OutCmd.CommandActionTag = Cmd.CommandActionTag;
+                OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
+                OutCmd.UtteranceText = Cmd.UtteranceText;
+                OutCmd.PriorityWeight = Cmd.PriorityWeight;
+                Output.Add(OutCmd);
+            }
+            Task.FinalCompletionDelegate.ExecuteIfBound(Output);
+        }
+        return;
+    }
+
+    // 3. Priority Sort: High Priority tasks dispatched first to lowest ping miners
     TaskQueue.Sort([](const FCloudAIQueuedTask& A, const FCloudAIQueuedTask& B) {
         if (A.Priority != B.Priority) return A.Priority > B.Priority;
         return A.TimeQueued < B.TimeQueued;
@@ -195,7 +223,7 @@ void UDynamicCloudAISubsystem::ProcessTaskQueue()
         const float EstimatedLatency = (Primary->NodeStats.AveragePingMs + Validator->NodeStats.AveragePingMs) / 2000.0f;
         Task.TaskAssignedDelegate.ExecuteIfBound(EstimatedLatency);
 
-        // SECURITY HARDENED: Never transmit server ApiKey or central EndpointUrl to client miner nodes
+        // Security hardened: Server ApiKey / internal URLs are never sent across the client RPC
         Primary->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ResolvedModel);
         Validator->Client_AssignAITask(Task.TaskId, Task.ContextPrompt, ResolvedModel);
 
@@ -240,7 +268,7 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
             const FString NewUtteranceChunk = Task->PrimaryAccumulatedJson.Mid(Task->LastBroadcastedLength, ReadToIdx - Task->LastBroadcastedLength);
             Task->LastBroadcastedLength = ReadToIdx;
             
-            // OPTIMIZATION: Real-time streaming translation
+            // Buffer incoming words to formulate non-native speech across word boundaries
             Task->StreamingWordBuffer += NewUtteranceChunk;
             
             int32 LastBoundaryIdx = -1;
@@ -255,19 +283,19 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
 
             if (LastBoundaryIdx != -1)
             {
-                FString ToProcess = Task->StreamingWordBuffer.Left(LastBoundaryIdx + 1);
+                const FString ToProcess = Task->StreamingWordBuffer.Left(LastBoundaryIdx + 1);
                 Task->StreamingWordBuffer = Task->StreamingWordBuffer.Mid(LastBoundaryIdx + 1);
 
-                FString TranslatedChunk = ToProcess;
-                if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task->RequestingAgentPawn.Get()))
+                FString StreamedChunk = ToProcess;
+                if (const ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task->RequestingAgentPawn.Get()))
                 {
-                    if (UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
+                    if (const UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
                     {
-                        TranslatedChunk = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, ToProcess);
+                        StreamedChunk = LangComp->FormulateSpokenUtterance(LangComp->ActiveSpokenLanguageTag, ToProcess);
                     }
                 }
                 
-                Task->TokenStreamDelegate.ExecuteIfBound(TranslatedChunk);
+                Task->TokenStreamDelegate.ExecuteIfBound(StreamedChunk);
             }
         }
     }
@@ -297,6 +325,30 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
     const FString CleanPrimary = SanitizeMarkdownJson(Task.PrimaryAccumulatedJson);
     const FString CleanValidator = SanitizeMarkdownJson(Task.ValidatorAccumulatedJson);
 
+    // --- HANDLE BACKGROUND MEMORY CONSOLIDATION ---
+    if (Task.RequestType == ECloudAIRequestType::MemoryConsolidation)
+    {
+        TSharedPtr<FJsonObject> RootObj;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(CleanValidator); // Trust validator for simple summaries
+        
+        if (FJsonSerializer::Deserialize(Reader, RootObj) && RootObj.IsValid())
+        {
+            FString NewSummary;
+            if (RootObj->TryGetStringField(TEXT("NewMemorySummary"), NewSummary))
+            {
+                TArray<FCloudAICommandOutput> Output;
+                FCloudAICommandOutput Cmd;
+                Cmd.UtteranceText = NewSummary; // Overload UtteranceText to pass the summary string back
+                Output.Add(Cmd);
+                Task.FinalCompletionDelegate.ExecuteIfBound(Output);
+                return;
+            }
+        }
+        Task.FinalCompletionDelegate.ExecuteIfBound(TArray<FCloudAICommandOutput>());
+        return;
+    }
+
+    // --- HANDLE STANDARD DIRECTIVES ---
     FCloudAIDirectiveResponse PrimaryResponse, ValidatorResponse;
     const bool bPrimaryValid = FJsonObjectConverter::JsonObjectStringToUStruct(CleanPrimary, &PrimaryResponse, 0, 0);
     const bool bValidatorValid = FJsonObjectConverter::JsonObjectStringToUStruct(CleanValidator, &ValidatorResponse, 0, 0);
@@ -307,11 +359,9 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
         const FCloudAICommand& PriCmd = PrimaryResponse.Commands[0];
         const FCloudAICommand& ValCmd = ValidatorResponse.Commands[0];
 
-        // 1. Verify semantic and tactical command agreement
         if (PriCmd.CommandActionTag == ValCmd.CommandActionTag &&
             PriCmd.TargetEntityOrPlaceRoleTag == ValCmd.TargetEntityOrPlaceRoleTag)
         {
-            // 2. Bound divergence on generated dialogue length to prevent hallucinated drift
             if (FMath::Abs(PriCmd.UtteranceText.Len() - ValCmd.UtteranceText.Len()) <= Config.MaxConsensusUtteranceLengthDelta)
             {
                 bConsensusReached = true;
@@ -321,22 +371,20 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
 
     if (bConsensusReached)
     {
-        // 3. Flush any remaining words left in the real-time token stream buffer
         if (!Task.StreamingWordBuffer.IsEmpty())
         {
             FString TrailingChunk = Task.StreamingWordBuffer;
-            if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()))
+            if (const ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()))
             {
-                if (UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
+                if (const UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
                 {
-                    TrailingChunk = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, TrailingChunk);
+                    TrailingChunk = LangComp->FormulateSpokenUtterance(LangComp->ActiveSpokenLanguageTag, TrailingChunk);
                 }
             }
             Task.TokenStreamDelegate.ExecuteIfBound(TrailingChunk);
             Task.StreamingWordBuffer.Empty();
         }
 
-        // 4. Grant PoW mining rewards and increase peer trust scores
         const FGameplayTag ResolvedRewardTag = Config.MiningRewardAttributeTag.IsValid()
             ? Config.MiningRewardAttributeTag
             : MiningRewardAttributeTag;
@@ -362,7 +410,6 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
             GrantReward(Task.ValidatorMiner.Get());
         }
 
-        // 5. Construct authoritative command list and translate final utterances to native tongue
         TArray<FCloudAICommandOutput> Output;
         for (const FCloudAICommand& Cmd : PrimaryResponse.Commands)
         {
@@ -370,18 +417,19 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
             OutCmd.CommandActionTag = Cmd.CommandActionTag;
             OutCmd.TargetEntityOrPlaceRoleTag = Cmd.TargetEntityOrPlaceRoleTag;
             OutCmd.PriorityWeight = Cmd.PriorityWeight;
+            OutCmd.EmotionTag = Cmd.EmotionTag; // Pass the emotion tag forward
 
-            // Use the validated text payload and translate across the Language Master Registry
-            FString ResolvedText = ValidatorResponse.Commands[0].UtteranceText;
-            if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()))
+            // Formulate validated dialogue through the speaker's language proficiency
+            FString FormulatedText = ValidatorResponse.Commands[0].UtteranceText;
+            if (const ADynamicCharacter* Char = Cast<ADynamicCharacter>(Task.RequestingAgentPawn.Get()))
             {
-                if (UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
+                if (const UDynamicLanguageComponent* LangComp = Char->FindComponentByClass<UDynamicLanguageComponent>())
                 {
-                    ResolvedText = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, ResolvedText);
+                    FormulatedText = LangComp->FormulateSpokenUtterance(LangComp->ActiveSpokenLanguageTag, FormulatedText);
                 }
             }
 
-            OutCmd.UtteranceText = ResolvedText;
+            OutCmd.UtteranceText = FormulatedText;
             Output.Add(OutCmd);
         }
 
@@ -389,7 +437,6 @@ void UDynamicCloudAISubsystem::EvaluateConsensusAndReward(FCloudAIQueuedTask& Ta
     }
     else
     {
-        // Slash trust ratings on consensus mismatch or malformed response
         if (Task.PrimaryMiner.IsValid()) Task.PrimaryMiner->NodeStats.TrustScore -= 0.2f;
         if (Task.ValidatorMiner.IsValid()) Task.ValidatorMiner->NodeStats.TrustScore -= 0.2f;
 
@@ -424,10 +471,9 @@ void UDynamicCloudAISubsystem::ExecuteRuleBasedFallback(ADynamicCharacter* Chara
                 SocialComp->TryResolveDialogueForBehavior(BestBehavior, nullptr, Cmd.UtteranceText, OutMontage, OutVoice);
             }
 
-            // Translate Fallback Utterance
-            if (UDynamicLanguageComponent* LangComp = Character->FindComponentByClass<UDynamicLanguageComponent>())
+            if (const UDynamicLanguageComponent* LangComp = Character->FindComponentByClass<UDynamicLanguageComponent>())
             {
-                Cmd.UtteranceText = LangComp->TranslateToNativeTongue(LangComp->ActiveSpokenLanguageTag, Cmd.UtteranceText);
+                Cmd.UtteranceText = LangComp->FormulateSpokenUtterance(LangComp->ActiveSpokenLanguageTag, Cmd.UtteranceText);
             }
 
             OutFallbackResponse.Commands.Add(Cmd);

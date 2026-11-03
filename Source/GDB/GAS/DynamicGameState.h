@@ -72,6 +72,15 @@ public:
     UPROPERTY() FDynamicEnvironmentSystemConfig EnvironmentConfig;
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Cloud AI") FCloudAISystemConfig CloudAIConfig;
 
+    // FastArray of procedurally coined words replicated to all connected clients
+    UPROPERTY(ReplicatedUsing = OnRep_ReplicatedCoinedWords)
+    FFastCoinedWordArray ReplicatedCoinedWords;
+
+    UFUNCTION()
+    void OnRep_ReplicatedCoinedWords();
+
+    void HandleSingleCoinedWordReplicated(const FDynamicCoinedWordItem& Item);
+
     // Generic Pre-warmed Gameplay Effects (Zero runtime GC allocations)
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericInstantEffect;
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericDurationEffect;
@@ -90,6 +99,17 @@ public:
     bool EvaluateBestDynamicBehavior(ADynamicCharacter* Character, FDynamicAIBehaviorDef& OutBestBehavior, float& OutBestScore) const;
     void RecordBehaviorExecutionCooldown(ADynamicCharacter* Character, FGameplayTag BehaviorTag, float CooldownSeconds);
     bool IsBehaviorOnCooldown(ADynamicCharacter* Character, FGameplayTag BehaviorTag) const;
+
+    // Dynamic Linguistic Coining & Translation Caches
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Language")
+    FString GetOrCreateDynamicVocabularyWord(FGameplayTag LanguageTag, const FString& EnglishWord);
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Language")
+    bool FindTranslationForNativeWord(FGameplayTag LanguageTag, const FString& NativeWord, FString& OutEnglishTranslation, float& OutDifficulty) const;
+
+    void RebuildLanguageLookupCaches();
+    void SaveCoinedVocabularyToDisk();
+    void LoadCoinedVocabularyFromDisk();
 
     // Network Component Graph Management
     void RegisterNetworkNode(UDynamicNetworkComponent* Node);
@@ -159,7 +179,6 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Voxels")
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;
 
-    // Hierarchy: JurisdictionTag -> (PerpetratorGuid -> BountyRecord)
     TMap<FGameplayTag, TMap<FGuid, FDynamicBountyRecord>> JurisdictionBounties;
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Law")
@@ -188,7 +207,6 @@ private:
     void RebuildNetworkGraphs();
     void EvaluateNetworkGraphs(float DeltaSeconds);
 
-    // O(1) Persistent GUID -> Active Character Map
     TMap<FGuid, TWeakObjectPtr<ADynamicCharacter>> ActiveCharacterByGuidMap;
 
     TMap<uint8, FPhysicsLimbConfig> LimbLookupMap;
@@ -196,7 +214,16 @@ private:
     TMap<FName, FPhysicsJointNodeConfig> BoneToJointMap;
     TMap<FGameplayTag, FComputedAbilityScoreInfo> ComputedAbilityScoresCache;
 
-    // Environmental Grid Constants
+    // Bidirectional O(1) Language Translation Caches
+    TMap<FGameplayTag, TMap<FString, FString>> EnglishToNativeLookupCache;
+
+    struct FNativeWordLookupEntry
+    {
+        FString EnglishTranslation;
+        float Difficulty = 10.0f;
+    };
+    TMap<FGameplayTag, TMap<FString, FNativeWordLookupEntry>> NativeToEnglishLookupCache;
+
     static constexpr int32 GridWidth = 64;
     static constexpr int32 GridHeight = 64;
     static constexpr int32 ChunkDimension = 8;
@@ -215,16 +242,13 @@ private:
     static constexpr double SimulationTaskTimeoutSeconds = 5.0;
     float AccumulatedUnsimulatedHours = 0.0f;
 
-    // Actor Pools
     UPROPERTY() TArray<TObjectPtr<ADynamicSpatialActor>> InactiveSpatialActorPool;
     UPROPERTY() TArray<TObjectPtr<ADynamicPhysicsActor>> InactivePhysicsActorPool;
     UPROPERTY() TArray<TObjectPtr<ADynamicCharacter>> InactiveCharacterPool;
 
-    // Spatial Roles Registry
     TMap<FGameplayTag, TArray<TWeakObjectPtr<AActor>>> SpatialRoleActorRegistry;
     TMap<TWeakObjectPtr<AActor>, TArray<FGameplayTag>> ActorToRegisteredRolesMap;
 
-    // Network Components
     UPROPERTY() TArray<TWeakObjectPtr<UDynamicNetworkComponent>> ActiveNetworkNodes;
     bool bIsNetworkGraphDirty = false;
 

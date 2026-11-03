@@ -350,7 +350,8 @@ enum class ECloudAIRequestType : uint8
     ComplexDecision,
     DailySchedulePlan,
     DynamicDialogue,
-    QuestConditionGeneration
+    QuestConditionGeneration,
+    MemoryConsolidation // NEW: Used for background memory compression
 };
 
 UENUM(BlueprintType)
@@ -397,6 +398,15 @@ enum class ENpcBehaviorExecutionType : uint8
     Movement,       // Switches Mover locomotion state (Walk, Run, Sprint, Flee)
     Montage,        // Plays a contextual animation montage with custom playrate
     Wait            // Idles/waits for a designated duration
+};
+
+UENUM(BlueprintType)
+enum class EConversationalTurnState : uint8
+{
+    Idle,           // Ready to converse or listen
+    Engaged,        // Currently in an active dialogue turn with an interlocutor
+    Pondering,      // Waiting on remote LLM cloud response (vamping active)
+    Interrupted     // Speech was cut off; executing reaction
 };
 
 // ============================================================================
@@ -537,8 +547,6 @@ struct FDynamicTagFloatMapWrapper
         }
     }
 };
-
-
 
 // ============================================================================
 // DATA-DRIVEN SYSTEM MAPPING TYPES
@@ -788,6 +796,57 @@ struct FFastNetworkConnectionArray : public FFastArraySerializer
 
 template<>
 struct TStructOpsTypeTraits<FFastNetworkConnectionArray> : public TStructOpsTypeTraitsBase2<FFastNetworkConnectionArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// ============================================================================
+// ACOUSTIC TOPIC & GOSSIP MEMORY (REPLICATED OVERHEARD RUMORS)
+// ============================================================================
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicTopicMemoryItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Social|Gossip")
+    FGameplayTag TopicTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Social|Gossip")
+    FString TopicSummary = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Social|Gossip")
+    FGuid OriginatorGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Social|Gossip")
+    float CredibilityScore = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Social|Gossip")
+    double OverheardWorldTime = 0.0;
+
+    void PreReplicatedRemove(const struct FFastTopicMemoryArray& InArrayOwner) {}
+    void PostReplicatedAdd(const struct FFastTopicMemoryArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastTopicMemoryArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FFastTopicMemoryArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicTopicMemoryItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicSocialComponent* OwningSocialComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicTopicMemoryItem, FFastTopicMemoryArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastTopicMemoryArray> : public TStructOpsTypeTraitsBase2<FFastTopicMemoryArray>
 {
     enum { WithNetDeltaSerializer = true };
 };
@@ -1156,7 +1215,6 @@ struct FDynamicSpatialDeliveryDef
 // ============================================================================
 // INTERACTION PROFILE
 // ============================================================================
-
 USTRUCT(BlueprintType)
 struct FDynamicInteractionProfile
 {
@@ -1211,10 +1269,17 @@ struct FDynamicInteractionProfile
     bool bCanModifyVoxels = false;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Voxels")
-    FGameplayTag VoxelModificationTypeTag; // e.g., Element.Air for digging, Voxel.Type.Stone for building
+    FGameplayTag VoxelModificationTypeTag;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Voxels")
     float VoxelModificationRadius = 150.0f;
+
+    // NEW: Text and Language definitions for readable items (books, ancient runes, signs)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Lore")
+    FString ReadableTextPayload = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Lore")
+    FGameplayTag ReadableLanguageTag;
 };
 
 // ============================================================================
@@ -2387,6 +2452,89 @@ struct FBuildingChunkSnapshot
     UPROPERTY() TArray<FStructureInstanceItem> SavedStructures;
 };
 
+// ============================================================================
+// DYNAMIC COINED VOCABULARY FAST ARRAY (SERVER-TO-CLIENT DELTA SYNC)
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicCoinedWordItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag LanguageTag;
+
+    UPROPERTY()
+    FString EnglishWord;
+
+    UPROPERTY()
+    FString CoinedNativeWord;
+
+    UPROPERTY()
+    float DifficultyRating = 10.0f;
+
+    UPROPERTY()
+    float ComprehensionXPGranted = 2.0f;
+
+    UPROPERTY()
+    TArray<FString> DecoyOptions;
+
+    void PreReplicatedRemove(const struct FFastCoinedWordArray& InArrayOwner) {}
+    void PostReplicatedAdd(const struct FFastCoinedWordArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastCoinedWordArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct FFastCoinedWordArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FDynamicCoinedWordItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class ADynamicGameState* OwningGameState = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FDynamicCoinedWordItem, FFastCoinedWordArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastCoinedWordArray> : public TStructOpsTypeTraitsBase2<FFastCoinedWordArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+// ============================================================================
+// PERSISTENCE SNAPSHOTS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct FDynamicCoinedWordSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FGameplayTag LanguageTag;
+
+    UPROPERTY()
+    FString EnglishWord;
+
+    UPROPERTY()
+    FString CoinedNativeWord;
+
+    UPROPERTY()
+    float DifficultyRating = 10.0f;
+
+    UPROPERTY()
+    float ComprehensionXPGranted = 2.0f;
+
+    UPROPERTY()
+    TArray<FString> DecoyOptions;
+};
+
 USTRUCT(BlueprintType)
 struct FWorldPersistenceSnapshot
 {
@@ -2398,9 +2546,15 @@ struct FWorldPersistenceSnapshot
     UPROPERTY()
     TArray<FChunkDeltaSnapshot> ModifiedVoxelChunks;
     
-    UPROPERTY() TArray<FBuildingChunkSnapshot> ModifiedBuildingChunks;
+    UPROPERTY()
+    TArray<FBuildingChunkSnapshot> ModifiedBuildingChunks;
     
-    UPROPERTY() TArray<FDynamicPropertyInstance> ActiveProperties;
+    UPROPERTY()
+    TArray<FDynamicPropertyInstance> ActiveProperties;
+
+    // Persisted coined vocabulary generated procedurally during world simulation
+    UPROPERTY()
+    TArray<FDynamicCoinedWordSnapshot> CoinedVocabulary;
 };
 
 USTRUCT(BlueprintType)
@@ -3722,6 +3876,34 @@ struct FDynamicSkeletonDef
     TArray<FPhysicsLimbConfig> Limbs;
 };
 
+// ============================================================================
+// DATA-DRIVEN DIALOGUE REACTIVITY & INTERRUPTION CONSEQUENCES
+// ============================================================================
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicDialogueReactionRule
+{
+    GENERATED_BODY()
+
+    // Self attribute and mood deltas applied to the speaker (e.g. Need.Mood.Angry +35.0, Need.Mood.Depressed +20.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue|Reactivity")
+    FDynamicTagFloatMapWrapper SelfAttributeDeltas;
+
+    // Relational metric deltas applied toward the offender (e.g. Relationship.Metric.Affinity -20.0, Relationship.Metric.Respect -30.0)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue|Reactivity")
+    FDynamicTagFloatMapWrapper RelationalMetricDeltas;
+
+    // Optional follow-up dialogue category tag (e.g. Dialogue.Category.Scold, Dialogue.Category.Grumble)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue|Reactivity")
+    FGameplayTag ReactionDialogueCategoryTag;
+
+    // Optional AI behavior tag to engage (e.g. Behavior.Combat.Attack, Behavior.Flee, Schedule.Wander)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue|Reactivity")
+    FGameplayTag ReactionBehaviorTag;
+};
+
+// ============================================================================
+// PERSONALITY PROFILE (EXTENDED WITH INTERRUPTION & IGNORED RULES)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicPersonalityProfile
 {
@@ -3735,6 +3917,16 @@ struct FDynamicPersonalityProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality")
     FDynamicTagFloatMapWrapper ActivityPreferences;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality|Reactivity")
+    FDynamicDialogueReactionRule OnIgnoredReaction;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality|Reactivity")
+    FDynamicDialogueReactionRule OnInterruptedReaction;
+
+    // NEW: Maps an EmotionTag (e.g. Emotion.Angry) to a set of facial morph target sliders
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Personality|Emotions")
+    TMap<FGameplayTag, FDynamicTagFloatMapWrapper> EmotionMorphMap;
 };
 
 USTRUCT(BlueprintType)
@@ -3777,6 +3969,9 @@ struct FAgingProfileDef
     TArray<FContinuousGrowthKeyframe> GrowthPhases;
 };
 
+// ============================================================================
+// CHARACTER TEMPLATE (EXTENDED FOR NATIVE & KNOWN LANGUAGES)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FCharacterTemplateDef
 {
@@ -3802,6 +3997,14 @@ struct FCharacterTemplateDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     FGameplayTag DefaultAIAgentTag;
+
+    // Mother tongue of this race/template (e.g., Language.Elvish, Language.Orcish)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Language")
+    FGameplayTag NativeLanguageTag;
+
+    // Starting repertoire of spoken languages (e.g., [Language.Elvish, Language.Common])
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Language")
+    TArray<FGameplayTag> KnownLanguageTags;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     TArray<FDynamicColorGradient> AllowedSkinTones;
@@ -4012,6 +4215,10 @@ struct FDynamicRelationshipEdgeItem : public FFastArraySerializerItem
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     double LastInteractionWorldTime = 0.0;
+
+    // NEW: Textual summary of past LLM interactions with this specific entity
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
+    FString LongTermMemorySummary = TEXT("");
 
     void PreReplicatedRemove(const struct FFastRelationshipEdgeArray& InArrayOwner);
     void PostReplicatedAdd(const struct FFastRelationshipEdgeArray& InArrayOwner);
@@ -4918,6 +5125,33 @@ struct FDynamicVocabularyWordDef
     TArray<FString> MiniGameDecoyOptions;
 };
 
+// ============================================================================
+// CONVERSATIONAL MULTI-TURN MEMORY (LLM CONTEXT INGESTION)
+// ============================================================================
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicDialogueTurn
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGuid SpeakerGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FString SpeakerName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FGameplayTag SpokenLanguageTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    FString UtteranceText;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
+    double WorldTimestamp = 0.0;
+};
+
+// ============================================================================
+// DYNAMIC LANGUAGE DEFINITION (EXTENDED WITH DATA-DRIVEN TEACHING ATTRIBUTES)
+// ============================================================================
 USTRUCT(BlueprintType)
 struct FDynamicLanguageDef
 {
@@ -4929,11 +5163,36 @@ struct FDynamicLanguageDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
     FDynamicLocalizationProfile Localization;
 
-    // Maps to character's UDynamicAttributeSet (e.g., Attribute.Language.Elvish)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
     FGameplayTag ComprehensionAttributeTag;
 
-    // Syllables used to procedurally construct pseudo-words for unknown vocabularies
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
+    bool bIsLinguaFranca = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|NonNative")
+    float FluencyMasteryThreshold = 85.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|NonNative")
+    float ConversationalBreakthroughThreshold = 50.0f;
+
+    // Fully dynamic teaching attribute tag (e.g. GDB_Crafting.Attribute.Mastery.Teaching). If empty, teaching functions without attribute requirements.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|Teaching")
+    FGameplayTag TeachingAttributeTag;
+
+    // Multiplier for teacher's attribute scaling on student comprehension XP (0.0 = teacher attribute ignored)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|Teaching")
+    float TeachingAttributeBonusScalar = 0.05f;
+
+    // Minimum teacher attribute value required to successfully teach (0.0 = no requirement)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|Teaching")
+    float MinTeacherAttributeRequired = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|NonNative")
+    TArray<FString> StopWords;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language|NonNative")
+    TMap<FString, FString> PidginSubstitutions;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Language")
     TArray<FString> PhoneticPhonemes;
 
@@ -4992,6 +5251,29 @@ struct FEnvironmentCellWorkerOutput
 };
 
 USTRUCT(BlueprintType)
+struct FCloudAICommand
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag CommandActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag TargetEntityOrPlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FString UtteranceText;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    float PriorityWeight = 0.0f;
+
+    // NEW: Emotion state driven by the LLM
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag EmotionTag;
+};
+
+// Update inside FCloudAICommandOutput
+USTRUCT(BlueprintType)
 struct FCloudAICommandOutput
 {
     GENERATED_BODY()
@@ -5007,6 +5289,10 @@ struct FCloudAICommandOutput
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
     float PriorityWeight = 100.0f;
+
+    // NEW: Emotion state driven by the LLM
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI")
+    FGameplayTag EmotionTag;
 };
 
 USTRUCT(BlueprintType)
@@ -5046,55 +5332,50 @@ struct GDB_API FDynamicDialogueUtteranceDef
 {
     GENERATED_BODY()
 
-    // The text template with wildcard tokens (%Target%, %FName%, %Speaker%, %Amt%, etc.)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FString UtteranceText;
 
-    // Base lottery weight relative to other valid candidate utterances (Default: 1.0)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     float SelectionWeight = 1.0f;
 
-    // Absolute attribute requirements for the speaker (Health, Stamina, Wealth, etc.)
+    // Acoustic volume classification: Dialogue.Volume.Whisper, Dialogue.Volume.Normal, Dialogue.Volume.Shout, Dialogue.Volume.Scream
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue|Acoustics")
+    FGameplayTag VolumeTag;
+
+    // Base physical radius in world units that the sound carries before sensory amplification
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue|Acoustics")
+    float BaseAudibleRadius = 1500.0f;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     TArray<FCharacterAttributeRangeDef> AttributeRequirements;
 
-    // Absolute attribute requirements for the target/listener (e.g. Target Health < 35 to notice wounds)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     TArray<FCharacterAttributeRangeDef> TargetAttributeRequirements;
 
-    // Required relationship tags between speaker and target (e.g. Relation.Social.Spouse)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FGameplayTagContainer RequiredRelationshipTags;
 
-    // Relational metric requirements between speaker and target (e.g. Affinity >= 60)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     TArray<FCharacterAttributeRangeDef> RelationalMetricRequirements;
 
-    // Allowed active moods for the speaker (e.g. Need.Mood.Joyful, Need.Mood.Angry)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FGameplayTagContainer AllowedMoodTags;
 
-    // Required active moods for the target/listener (e.g. Target is Upset, Distressed, or Angry)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FGameplayTagContainer TargetAllowedMoodTags;
 
-    // Dynamic probability bias based on speaker attributes/needs (e.g. Need.Hunger * 1.5)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FDynamicTagFloatMapWrapper ProbabilityAttributeScalars;
 
-    // Dynamic probability bias based on target attributes (e.g. Target Health * -0.4 raises concern when hurt)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FDynamicTagFloatMapWrapper ProbabilityTargetAttributeScalars;
 
-    // Dynamic probability bias based on target moods (e.g. Target Need.Mood.Distressed * 2.0)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FDynamicTagFloatMapWrapper ProbabilityTargetMoodScalars;
 
-    // Dynamic probability bias based on relationship metrics (e.g. Affinity * 2.5)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FDynamicTagFloatMapWrapper ProbabilityRelationalScalars;
 
-    // Dynamic probability bias based on speaker mood values
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialogue")
     FDynamicTagFloatMapWrapper ProbabilityMoodScalars;
 

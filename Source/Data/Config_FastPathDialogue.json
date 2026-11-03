@@ -10,137 +10,87 @@
             {
               "UtteranceText": "Welcome home, my love! I missed you so much today, %FName%.",
               "SelectionWeight": 5.0,
-              "RequiredRelationshipTags": [ "Relation.Social.Spouse", "Relationship.Type.Romantic" ],
-              "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content", "Need.Mood.Happy" ],
+              "VolumeTag": "Dialogue.Volume.Whisper",
+              "BaseAudibleRadius": 300.0,
+              "RequiredRelationshipTags": [
+                "Relation.Social.Spouse",
+                "Relationship.Type.Romantic"
+              ],
+              "AllowedMoodTags": [
+                "Need.Mood.Joyful",
+                "Need.Mood.Content",
+                "Need.Mood.Happy"
+              ],
               "RelationalMetricRequirements": [
-                { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 60.0, "MaxValue": 100.0 }
+                {
+                  "AttributeTag": "Relationship.Metric.Affinity",
+                  "MinValue": 60.0,
+                  "MaxValue": 100.0
+                }
               ],
               "ProbabilityRelationalScalars": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Relationship.Metric.Affinity", "Value": 2.5 }
-                ]
-              },
-              "ProbabilityMoodScalars": {
-                "ReplicatedEntries": [
-                  { "KeyTag": "Need.Mood.Joyful", "Value": 1.5 }
+                  {
+                    "KeyTag": "Relationship.Metric.Affinity",
+                    "Value": 2.5
+                  }
                 ]
               },
               "EmotionTag": "Emotion.Loving"
             },
             {
-              "UtteranceText": "You're finally back, %FName%? Don't make a mess, I've had a miserable day.",
-              "SelectionWeight": 8.0,
-              "RequiredRelationshipTags": [ "Relation.Social.Spouse" ],
-              "AllowedMoodTags": [ "Need.Mood.Angry", "Need.Mood.Irritated", "Need.Mood.Exhausted" ],
-              "RelationalMetricRequirements": [],
-              "ProbabilityMoodScalars": {
+              "UtteranceText": "Ugh... my wounds... I don't know if I can make it much longer... Someone help me!",
+              "SelectionWeight": 15.0,
+              "VolumeTag": "Dialogue.Volume.Scream",
+              "BaseAudibleRadius": 4500.0,
+              "AttributeRequirements": [
+                {
+                  "AttributeTag": "Attribute.Resource.Health",
+                  "MinValue": 0.0,
+                  "MaxValue": 30.0
+                }
+              ],
+              "ProbabilityAttributeScalars": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Need.Mood.Angry", "Value": 2.0 }
+                  {
+                    "KeyTag": "Attribute.Resource.Health",
+                    "Value": -0.5
+                  }
                 ]
               },
-              "EmotionTag": "Emotion.Annoyed"
+              "EmotionTag": "Emotion.Pain"
             },
             {
               "UtteranceText": "Please, %FName%... could you spare %Amt% coins for food? I haven't eaten in two days.",
               "SelectionWeight": 4.0,
+              "VolumeTag": "Dialogue.Volume.Normal",
+              "BaseAudibleRadius": 1200.0,
               "RequiredRelationshipTags": [],
               "AttributeRequirements": [
-                { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 10.0 }
+                {
+                  "AttributeTag": "Attribute.Wealth.Gold",
+                  "MinValue": 0.0,
+                  "MaxValue": 10.0
+                }
               ],
               "ProbabilityAttributeScalars": {
                 "ReplicatedEntries": [
-                  { "KeyTag": "Need.Hunger", "Value": 1.8 }
+                  {
+                    "KeyTag": "Need.Hunger",
+                    "Value": 1.8
+                  }
                 ]
               },
               "EmotionTag": "Emotion.Despair"
-            },
-            {
-              "UtteranceText": "Ugh... it hurts to breathe... %FName%, please find a healer...",
-              "SelectionWeight": 10.0,
-              "RequiredRelationshipTags": [],
-              "AttributeRequirements": [
-                { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 30.0 }
-              ],
-              "ProbabilityAttributeScalars": {
-                "ReplicatedEntries": [
-                  { "KeyTag": "Attribute.Resource.Health", "Value": -0.4 }
-                ]
-              },
-              "EmotionTag": "Emotion.Agony"
             },
             {
               "UtteranceText": "Good day to you, %FName%. Pleasant weather we're having.",
               "SelectionWeight": 1.0,
+              "VolumeTag": "Dialogue.Volume.Normal",
+              "BaseAudibleRadius": 1500.0,
               "RequiredRelationshipTags": [],
               "AllowedMoodTags": [],
               "AttributeRequirements": [],
-              "EmotionTag": "Emotion.Neutral"
-            }
-          ],
-          "AllowedMoodTags": [],
-          "RelationalAttributeRequirements": [],
-          "AllowedRelationshipTypeTags": [],
-          "SelectionWeight": 1.0
-        },
-        {
-          "CategoryTag": "Dialogue.Category.Conversation",
-          "UtteranceTemplate": "Greetings, %TargetFName%.",
-          "UtteranceVariations": [
-            {
-              "UtteranceText": "By the gods, %TargetFName%! You're bleeding badly! What happened to you?",
-              "SelectionWeight": 20.0,
-              "TargetAttributeRequirements": [
-                { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 35.0 }
-              ],
-              "ProbabilityTargetAttributeScalars": {
-                "ReplicatedEntries": [
-                  { "KeyTag": "Attribute.Resource.Health", "Value": -0.6 }
-                ]
-              },
-              "EmotionTag": "Emotion.Shock"
-            },
-            {
-              "UtteranceText": "%TargetFName%, you look like you're carrying the weight of the world on your shoulders. What's wrong?",
-              "SelectionWeight": 15.0,
-              "TargetAllowedMoodTags": [ "Need.Mood.Distressed", "Need.Mood.Crying", "Need.Mood.Depressed" ],
-              "ProbabilityTargetMoodScalars": {
-                "ReplicatedEntries": [
-                  { "KeyTag": "Need.Mood.Distressed", "Value": 1.5 }
-                ]
-              },
-              "EmotionTag": "Emotion.Sympathy"
-            },
-            {
-              "UtteranceText": "Welcome back to the hearth, my love! I missed you today, %TargetFName%.",
-              "SelectionWeight": 10.0,
-              "RequiredRelationshipTags": [ "Relation.Social.Spouse", "Relationship.Type.Romantic" ],
-              "AllowedMoodTags": [ "Need.Mood.Joyful", "Need.Mood.Content", "Need.Mood.Happy" ],
-              "RelationalMetricRequirements": [
-                { "AttributeTag": "Relationship.Metric.Affinity", "MinValue": 70.0, "MaxValue": 100.0 }
-              ],
-              "ProbabilityRelationalScalars": {
-                "ReplicatedEntries": [
-                  { "KeyTag": "Relationship.Metric.Affinity", "Value": 3.0 }
-                ]
-              },
-              "EmotionTag": "Emotion.Loving"
-            },
-            {
-              "UtteranceText": "Please, %TargetFName%... could you spare %Amt% coins? I have nothing left and my family is starving.",
-              "SelectionWeight": 5.0,
-              "AttributeRequirements": [
-                { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 10.0 }
-              ],
-              "ProbabilityAttributeScalars": {
-                "ReplicatedEntries": [
-                  { "KeyTag": "Need.Hunger", "Value": 2.0 }
-                ]
-              },
-              "EmotionTag": "Emotion.Despair"
-            },
-            {
-              "UtteranceText": "Fine weather today, isn't it %TargetFName%?",
-              "SelectionWeight": 1.0,
               "EmotionTag": "Emotion.Neutral"
             }
           ],

@@ -12,10 +12,200 @@
 #include "TimerManager.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
+#include "DynamicCloudAISubsystem.h"
 #include "Async/Async.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/OverlapResult.h"
+
+// Helper function in DynamicSocialComponent.cpp to register language exposure with nearby listeners
+static void BroadcastLanguageExposureToNearbyListeners(AActor* Speaker, FGameplayTag LanguageTag, const FString& Utterance)
+{
+    if (!Speaker || !Speaker->HasAuthority() || !LanguageTag.IsValid() || Utterance.IsEmpty()) return;
+
+    UWorld* World = Speaker->GetWorld();
+    if (!World) return;
+
+    // 1500cm (15m) hearing range for learning spoken vocabulary
+    constexpr float HearingRadius = 1500.0f;
+    TArray<FOverlapResult> Overlaps;
+    FCollisionShape Sphere = FCollisionShape::MakeSphere(HearingRadius);
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(LanguageExposureSweep), false, Speaker);
+
+    if (World->OverlapMultiByChannel(Overlaps, Speaker->GetActorLocation(), FQuat::Identity, ECC_Pawn, Sphere, Params))
+    {
+        for (const FOverlapResult& Overlap : Overlaps)
+        {
+            if (AActor* Listener = Overlap.GetActor())
+            {
+                if (Listener != Speaker)
+                {
+                    if (UDynamicLanguageComponent* LangComp = Listener->FindComponentByClass<UDynamicLanguageComponent>())
+                    {
+                        LangComp->ServerRegisterLanguageExposure(LanguageTag, Utterance);
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void BroadcastLanguageExposureAcoustic(
+    AActor* Speaker, 
+    FGameplayTag LanguageTag, 
+    const FString& Utterance, 
+    float BaseAudibleRadius, 
+    FGameplayTag VolumeTag)
+{
+    if (!Speaker || !Speaker->HasAuthority() || !LanguageTag.IsValid() || Utterance.IsEmpty()) return;
+
+    UWorld* World = Speaker->GetWorld();
+    if (!World) return;
+
+    const float MaxQueryRadius = FMath::Clamp(BaseAudibleRadius * 4.5f, 300.0f, 15000.0f);
+    TArray<FOverlapResult> Overlaps;
+    FCollisionShape Sphere = FCollisionShape::MakeSphere(MaxQueryRadius);
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(LanguageAcousticSweep), false, Speaker);
+
+    const FVector SpeakerLoc = Speaker->GetActorLocation();
+
+    if (World->OverlapMultiByChannel(Overlaps, SpeakerLoc, FQuat::Identity, ECC_Pawn, Sphere, Params))
+    {
+        for (const FOverlapResult& Overlap : Overlaps)
+        {
+            AActor* Listener = Overlap.GetActor();
+            if (Listener && Listener != Speaker)
+            {
+                if (UDynamicLanguageComponent* ListenerLang = Listener->FindComponentByClass<UDynamicLanguageComponent>())
+                {
+                    const float DistUnits = FVector::Dist(SpeakerLoc, Listener->GetActorLocation());
+
+                    // Evaluates perception attributes, buffs, and wall occlusion
+                    if (ListenerLang->CanHearUtteranceAtDistance(DistUnits, BaseAudibleRadius, VolumeTag, SpeakerLoc))
+                    {
+                        // A. Linguistic Exposure
+                        ListenerLang->ServerRegisterLanguageExposure(LanguageTag, Utterance);
+
+                        // B. Client Subtitle RPC for Player Listeners
+                        APawn* ListenerPawn = Cast<APawn>(Listener);
+                        if (ListenerPawn && ListenerPawn->IsPlayerControlled())
+                        {
+                            ListenerLang->ClientReceiveHeardDialogue(Speaker, Utterance, LanguageTag, BaseAudibleRadius, VolumeTag);
+                        }
+
+                        // C. AI Agent Ingestion & Conversational Reaction
+                        if (UDynamicSocialComponent* ListenerSocial = Listener->FindComponentByClass<UDynamicSocialComponent>())
+                        {
+                            ListenerSocial->RecordDialogueTurn(
+                                Speaker->FindComponentByClass<UDynamicSocialComponent>() ? Speaker->FindComponentByClass<UDynamicSocialComponent>()->CharacterPersistentGuid : FGuid(),
+                                Speaker->FindComponentByClass<UDynamicSocialComponent>() ? Speaker->FindComponentByClass<UDynamicSocialComponent>()->CharacterDisplayName : Speaker->GetName(),
+                                LanguageTag,
+                                Utterance
+                            );
+
+                            if (!ListenerPawn || !ListenerPawn->IsPlayerControlled())
+                            {
+                                ListenerSocial->HandleHeardDialogueFromSpeaker(Speaker, Utterance, LanguageTag, VolumeTag);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void UDynamicSocialComponent::CleanExpiredDialogueTurns()
+{
+    const UWorld* World = GetWorld();
+    if (!World || ConversationalMemoryTimeoutSeconds <= 0.0f) return;
+
+    const double CurrentTime = World->GetTimeSeconds();
+    TMap<FGuid, TArray<FDynamicDialogueTurn>> ExpiredTurnsByTarget;
+
+    for (int32 i = RecentDialogueHistory.Num() - 1; i >= 0; --i)
+    {
+        if ((CurrentTime - RecentDialogueHistory[i].WorldTimestamp) > ConversationalMemoryTimeoutSeconds)
+        {
+            FGuid RelevantGuid = RecentDialogueHistory[i].SpeakerGuid;
+            
+            // Group expired turns by the entity we were speaking with
+            if (RelevantGuid.IsValid() && RelevantGuid != CharacterPersistentGuid)
+            {
+                // Insert at 0 to maintain chronological order from the bottom-up iteration
+                ExpiredTurnsByTarget.FindOrAdd(RelevantGuid).Insert(RecentDialogueHistory[i], 0);
+            }
+            
+            RecentDialogueHistory.RemoveAt(i);
+        }
+    }
+
+    // Trigger asynchronous memory compression for any actors whose conversations just timed out
+    for (const auto& Pair : ExpiredTurnsByTarget)
+    {
+        if (Pair.Value.Num() > 0)
+        {
+            TriggerMemoryConsolidation(Pair.Key, Pair.Value);
+        }
+    }
+}
+
+void UDynamicSocialComponent::RecordNonVerbalAction(const FGuid& ActorGuid, const FString& ActorName, const FString& ActionDescription)
+{
+    CleanExpiredDialogueTurns();
+
+    FDynamicDialogueTurn Turn;
+    Turn.SpeakerGuid = ActorGuid;
+    Turn.SpeakerName = ActorName;
+    
+    // Explicitly flag as an action rather than a spoken language
+    Turn.SpokenLanguageTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Action"), false); 
+    Turn.UtteranceText = FString::Printf(TEXT("*%s*"), *ActionDescription);
+    Turn.WorldTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+    RecentDialogueHistory.Add(Turn);
+
+    while (RecentDialogueHistory.Num() > MaxDialogueHistoryTurns)
+    {
+        // If we overflow the buffer during active conversation, immediately consolidate the oldest turn
+        FGuid DroppedGuid = RecentDialogueHistory[0].SpeakerGuid;
+        if (DroppedGuid.IsValid() && DroppedGuid != CharacterPersistentGuid)
+        {
+            TArray<FDynamicDialogueTurn> OverflowArray;
+            OverflowArray.Add(RecentDialogueHistory[0]);
+            TriggerMemoryConsolidation(DroppedGuid, OverflowArray);
+        }
+        RecentDialogueHistory.RemoveAt(0);
+    }
+}
+
+void UDynamicSocialComponent::RecordDialogueTurn(const FGuid& SpeakerGuid, const FString& SpeakerName, FGameplayTag SpokenLanguageTag, const FString& UtteranceText)
+{
+    CleanExpiredDialogueTurns();
+
+    FDynamicDialogueTurn Turn;
+    Turn.SpeakerGuid = SpeakerGuid;
+    Turn.SpeakerName = SpeakerName;
+    Turn.SpokenLanguageTag = SpokenLanguageTag;
+    Turn.UtteranceText = UtteranceText;
+    Turn.WorldTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+    RecentDialogueHistory.Add(Turn);
+
+    // Bounded history buffer management
+    while (RecentDialogueHistory.Num() > MaxDialogueHistoryTurns)
+    {
+        FGuid DroppedGuid = RecentDialogueHistory[0].SpeakerGuid;
+        if (DroppedGuid.IsValid() && DroppedGuid != CharacterPersistentGuid)
+        {
+            TArray<FDynamicDialogueTurn> OverflowArray;
+            OverflowArray.Add(RecentDialogueHistory[0]);
+            TriggerMemoryConsolidation(DroppedGuid, OverflowArray);
+        }
+        RecentDialogueHistory.RemoveAt(0);
+    }
+}
 
 UDynamicSocialComponent::UDynamicSocialComponent()
 {
@@ -120,6 +310,9 @@ void UDynamicSocialComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
     DOREPLIFETIME(UDynamicSocialComponent, ReplicatedProfessions);
     DOREPLIFETIME(UDynamicSocialComponent, ReplicatedCrimeMemories);
     DOREPLIFETIME(UDynamicSocialComponent, bCloudAISuspended);
+    DOREPLIFETIME(UDynamicSocialComponent, ActiveTurnState);
+    DOREPLIFETIME(UDynamicSocialComponent, ActiveInterlocutor);
+    DOREPLIFETIME(UDynamicSocialComponent, ReplicatedTopics);   
 }
 
 void UDynamicSocialComponent::OnRep_Relationships() { RebuildRelationshipCache(); }
@@ -435,26 +628,52 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     RootObj->SetStringField(TEXT("AgentGuid"), CharacterPersistentGuid.ToString());
     RootObj->SetStringField(TEXT("RequestType"), UEnum::GetValueAsString(RequestType));
 
-    // NEW: Identity and Language Context
-    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    // 1. Identity, Race, and Native Language Directive
+    if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
     {
         RootObj->SetStringField(TEXT("AgentDisplayName"), ResolveActorDisplayName(CharOwner));
         
-        if (UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent())
+        if (const UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent())
         {
             RootObj->SetStringField(TEXT("RaceTemplate"), CustComp->ActiveCharacterTemplateTag.ToString());
         }
 
-        if (UDynamicLanguageComponent* LangComp = CharOwner->FindComponentByClass<UDynamicLanguageComponent>())
+        if (const UDynamicLanguageComponent* LangComp = CharOwner->FindComponentByClass<UDynamicLanguageComponent>())
         {
             RootObj->SetStringField(TEXT("NativeLanguage"), LangComp->ActiveSpokenLanguageTag.ToString());
+            RootObj->SetNumberField(TEXT("CommonFluency"), LangComp->GetLanguageFluency(FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false)));
         }
+    }
+
+    // 2. Strict Machine Output Instructions for LLM Miners (Updated with Emotion tracking)
+    RootObj->SetStringField(TEXT("SystemInstruction"), 
+        TEXT("You are an NPC AI brain. You MUST reply ONLY with a raw JSON object matching: ")
+        TEXT("{\"Commands\":[{\"CommandActionTag\":\"Action.Interact.Chat\",\"TargetEntityOrPlaceRoleTag\":\"Role.Place.TownSquare\",\"UtteranceText\":\"<English sentence>\",\"PriorityWeight\":100.0, \"EmotionTag\":\"Emotion.Happy\"}]}. ")
+        TEXT("If a player asks you to teach them a word, you MAY use 'Action.Interact.TeachWord'. ")
+        TEXT("Use EmotionTag to reflect your internal state (e.g. Emotion.Happy, Emotion.Angry, Emotion.Sad, Emotion.Fear, Emotion.Neutral). ")
+        TEXT("Write UtteranceText in natural English. Do NOT wrap in markdown backticks.")
+    );
+
+    // 3. Multi-Turn Conversational Dialogue History (Short-term conversation buffer)
+    if (RecentDialogueHistory.Num() > 0)
+    {
+        TArray<TSharedPtr<FJsonValue>> HistoryArray;
+        for (const FDynamicDialogueTurn& Turn : RecentDialogueHistory)
+        {
+            TSharedPtr<FJsonObject> TurnObj = MakeShareable(new FJsonObject());
+            TurnObj->SetStringField(TEXT("Speaker"), Turn.SpeakerName);
+            TurnObj->SetStringField(TEXT("Language"), Turn.SpokenLanguageTag.ToString());
+            TurnObj->SetStringField(TEXT("Text"), Turn.UtteranceText);
+            HistoryArray.Add(MakeShareable(new FJsonValueObject(TurnObj)));
+        }
+        RootObj->SetArrayField(TEXT("ConversationHistory"), HistoryArray);
     }
 
     const double CurrentWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     const AActor* OwnerActor = GetOwner();
     const FVector OwnerLoc = OwnerActor ? OwnerActor->GetActorLocation() : FVector::ZeroVector;
 
+    // 4. Needs & Moods
     TSharedPtr<FJsonObject> NeedsObj = MakeShareable(new FJsonObject());
     for (const FDynamicNeedStateItem& Item : ReplicatedNeedsAndMoods.Items)
     {
@@ -463,11 +682,12 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
 
         if (!ContextFilterConfig.bFilterUrgentNeedsOnly || bIsUrgent || bHasChanged)
         {
-            NeedsObj->SetNumberField(TEXT("PackedCurrentValue"), Item.PackedCurrentValue);
+            NeedsObj->SetNumberField(Item.NeedTag.ToString(), Item.LocalExactValue);
         }
     }
     RootObj->SetObjectField(TEXT("Needs"), NeedsObj);
 
+    // 5. Spatial Relationships & Long-Term Memory Summaries
     TArray<TSharedPtr<FJsonValue>> RelationshipsArray;
     int32 PackedRelationships = 0;
 
@@ -490,6 +710,12 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
             TSharedPtr<FJsonObject> RelObj = MakeShareable(new FJsonObject());
             RelObj->SetStringField(TEXT("Target"), Edge.TargetEntityGuid.ToString());
             RelObj->SetStringField(TEXT("Type"), Edge.PrimaryRelationshipTag.ToString());
+            
+            // NEW: Inject Long-Term Memory Summary for this specific character
+            if (!Edge.LongTermMemorySummary.IsEmpty())
+            {
+                RelObj->SetStringField(TEXT("MemorySummary"), Edge.LongTermMemorySummary);
+            }
 
             TSharedPtr<FJsonObject> MetricsObj = MakeShareable(new FJsonObject());
             for (const FDynamicRelationshipMetricEntry& Metric : Edge.Metrics)
@@ -503,6 +729,7 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     }
     RootObj->SetArrayField(TEXT("NearbyRelationships"), RelationshipsArray);
 
+    // 6. Known Places
     TArray<TSharedPtr<FJsonValue>> PlacesArray;
     for (const FDynamicKnownPlaceItem& Place : ReplicatedKnownPlaces.Items)
     {
@@ -516,6 +743,53 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     }
     RootObj->SetArrayField(TEXT("KnownPlaces"), PlacesArray);
 
+    // 7. Active Quests
+    if (const UDynamicQuestComponent* QuestComp = OwnerActor->FindComponentByClass<UDynamicQuestComponent>())
+    {
+        TArray<TSharedPtr<FJsonValue>> QuestsArray;
+        for (const FDynamicActiveQuestItem& Quest : QuestComp->GetActiveQuests().Items)
+        {
+            TSharedPtr<FJsonObject> QObj = MakeShareable(new FJsonObject());
+            QObj->SetStringField(TEXT("QuestTag"), Quest.QuestDefTag.ToString());
+            QObj->SetStringField(TEXT("Status"), UEnum::GetValueAsString(Quest.StepState));
+            
+            TArray<TSharedPtr<FJsonValue>> ObjArray;
+            for (const FDynamicActiveQuestObjectiveItem& Obj : QuestComp->GetActiveObjectives().Items)
+            {
+                if (Obj.QuestInstanceGuid == Quest.QuestInstanceGuid)
+                {
+                    TSharedPtr<FJsonObject> OObj = MakeShareable(new FJsonObject());
+                    OObj->SetStringField(TEXT("ObjectiveTag"), Obj.ObjectiveTag.ToString());
+                    OObj->SetNumberField(TEXT("Progress"), Obj.CurrentProgress);
+                    OObj->SetNumberField(TEXT("Required"), Obj.RequiredCount);
+                    OObj->SetBoolField(TEXT("IsComplete"), Obj.bIsComplete);
+                    ObjArray.Add(MakeShareable(new FJsonValueObject(OObj)));
+                }
+            }
+            QObj->SetArrayField(TEXT("Objectives"), ObjArray);
+            QuestsArray.Add(MakeShareable(new FJsonValueObject(QObj)));
+        }
+        if (QuestsArray.Num() > 0)
+        {
+            RootObj->SetArrayField(TEXT("ActiveQuests"), QuestsArray);
+        }
+    }
+    
+    // 8. Overheard Gossip & Regional Topics
+    if (ReplicatedTopics.Items.Num() > 0)
+    {
+        TArray<TSharedPtr<FJsonValue>> GossipArray;
+        for (const FDynamicTopicMemoryItem& Topic : ReplicatedTopics.Items)
+        {
+            TSharedPtr<FJsonObject> TopObj = MakeShareable(new FJsonObject());
+            TopObj->SetStringField(TEXT("Topic"), Topic.TopicTag.ToString());
+            TopObj->SetStringField(TEXT("Summary"), Topic.TopicSummary);
+            TopObj->SetNumberField(TEXT("Credibility"), Topic.CredibilityScore);
+            GossipArray.Add(MakeShareable(new FJsonValueObject(TopObj)));
+        }
+        RootObj->SetArrayField(TEXT("OverheardRumors"), GossipArray);
+    }
+    
     LastContextSerializationTime = CurrentWorldTime;
 
     FString OutputString;
@@ -810,6 +1084,16 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
+    // 1. Resolve Best Spoken Language dynamically (Sociolinguistic Code-Switching)
+    FGameplayTag SpokenLanguageTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false);
+    UDynamicLanguageComponent* SpeakerLang = GetOwner() ? GetOwner()->FindComponentByClass<UDynamicLanguageComponent>() : nullptr;
+    if (SpeakerLang)
+    {
+        FGameplayTagContainer ContextTags;
+        if (CategoryTag.IsValid()) ContextTags.AddTag(CategoryTag);
+        SpokenLanguageTag = SpeakerLang->DetermineSpokenLanguageForTarget(TargetActor, ContextTags);
+    }
+
     const FDynamicRelationshipEdgeItem* TargetEdge = TargetActor ? FindRelationshipWithActor(TargetActor) : nullptr;
 
     FGameplayTagContainer CurrentMoodTags;
@@ -896,6 +1180,9 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
     OutMontage = ChosenEntry->GestureMontage;
     OutVoiceCueTag = ChosenEntry->VoiceCueTag;
 
+    FGameplayTag SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
+    float SelectedAudibleRadius = 1500.0f;
+
     if (ChosenEntry->UtteranceVariations.Num() > 0)
     {
         FDynamicDialogueUtteranceDef ChosenVariation;
@@ -905,11 +1192,51 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
             TemplateText = ChosenVariation.UtteranceText;
             if (ChosenVariation.GestureMontage.IsValid()) OutMontage = ChosenVariation.GestureMontage;
             if (ChosenVariation.VoiceCueTag.IsValid()) OutVoiceCueTag = ChosenVariation.VoiceCueTag;
+            if (ChosenVariation.VolumeTag.IsValid()) SelectedVolumeTag = ChosenVariation.VolumeTag;
+            if (ChosenVariation.BaseAudibleRadius > 0.0f) SelectedAudibleRadius = ChosenVariation.BaseAudibleRadius;
         }
     }
 
-    OutUtterance = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
+    // 2. Dynamic Physiological Volume Modulation (Health / Stance overrides)
+    if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        if (const UDynamicAttributeSet* AttrSet = CharOwner->GetDynamicAttributeSet())
+        {
+            static const FGameplayTag HealthTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.Health"), false);
+            if (HealthTag.IsValid())
+            {
+                const float CurHealth = AttrSet->GetDynamicAttributeValue(HealthTag, 0);
+                if (CurHealth > 0.0f && CurHealth <= 30.0f)
+                {
+                    SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Scream"), false);
+                    SelectedAudibleRadius = FMath::Max(SelectedAudibleRadius, 4500.0f);
+                }
+            }
+        }
+
+        static const FGameplayTag StanceCrouch = FGameplayTag::RequestGameplayTag(TEXT("State.Moving.Crouch"), false);
+        if (CharOwner->ActiveMovementStateTag.MatchesTag(StanceCrouch))
+        {
+            SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Whisper"), false);
+            SelectedAudibleRadius = FMath::Min(SelectedAudibleRadius, 300.0f);
+        }
+    }
+
+    // 3. Format Tokens and Formulate Speech (Handles Native or Non-Native Attempt automatically)
+    const FString FormattedEnglish = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
+    if (SpeakerLang)
+    {
+        OutUtterance = SpeakerLang->FormulateSpokenUtterance(SpokenLanguageTag, FormattedEnglish);
+    }
+    else
+    {
+        OutUtterance = FormattedEnglish;
+    }
+
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
+
+    // 4. Acoustic Broadcast & Linguistic Exposure
+    BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag);
     return true;
 }
 
@@ -931,6 +1258,25 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
     FGameplayTag& OutVoiceCueTag,
     const TMap<FString, FString>& CustomWildcards)
 {
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return false;
+
+    // 1. Resolve Best Spoken Language dynamically (Sociolinguistic Code-Switching)
+    FGameplayTag SpokenLanguageTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false);
+    UDynamicLanguageComponent* SpeakerLang = GetOwner() ? GetOwner()->FindComponentByClass<UDynamicLanguageComponent>() : nullptr;
+    if (SpeakerLang)
+    {
+        FGameplayTagContainer ContextTags;
+        if (BehaviorDef.ActionTag.IsValid()) ContextTags.AddTag(BehaviorDef.ActionTag);
+        if (BehaviorDef.BehaviorTag.IsValid()) ContextTags.AddTag(BehaviorDef.BehaviorTag);
+        SpokenLanguageTag = SpeakerLang->DetermineSpokenLanguageForTarget(TargetActor, ContextTags);
+    }
+
+    FGameplayTag SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
+    float SelectedAudibleRadius = 1500.0f;
+    FString TemplateText;
+    bool bResolved = false;
+
     if (BehaviorDef.Utterances.Num() > 0)
     {
         FDynamicDialogueUtteranceDef ChosenUtterance;
@@ -939,13 +1285,14 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
         {
             OutMontage = ChosenUtterance.GestureMontage;
             OutVoiceCueTag = ChosenUtterance.VoiceCueTag;
-            OutUtterance = FormatDialogueTokens(ChosenUtterance.UtteranceText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
-            OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
-            return true;
+            if (ChosenUtterance.VolumeTag.IsValid()) SelectedVolumeTag = ChosenUtterance.VolumeTag;
+            if (ChosenUtterance.BaseAudibleRadius > 0.0f) SelectedAudibleRadius = ChosenUtterance.BaseAudibleRadius;
+            TemplateText = ChosenUtterance.UtteranceText;
+            bResolved = true;
         }
     }
 
-    if (BehaviorDef.DialogueCategoryTag.IsValid())
+    if (!bResolved && BehaviorDef.DialogueCategoryTag.IsValid())
     {
         if (TryResolveFastPathDialogue(BehaviorDef.DialogueCategoryTag, TargetActor, OutUtterance, OutMontage, OutVoiceCueTag, CustomWildcards, BehaviorDef.DialogueProfileTag))
         {
@@ -953,15 +1300,56 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
         }
     }
 
-    if (BehaviorDef.UtteranceTemplates.Num() > 0)
+    if (!bResolved && BehaviorDef.UtteranceTemplates.Num() > 0)
     {
         const int32 RandIdx = FMath::RandRange(0, BehaviorDef.UtteranceTemplates.Num() - 1);
-        OutUtterance = FormatDialogueTokens(BehaviorDef.UtteranceTemplates[RandIdx], TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
-        OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
-        return true;
+        TemplateText = BehaviorDef.UtteranceTemplates[RandIdx];
+        bResolved = true;
     }
 
-    return false;
+    if (!bResolved) return false;
+
+    // 2. Dynamic Physiological Volume Modulation (Health / Stance overrides)
+    if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        if (const UDynamicAttributeSet* AttrSet = CharOwner->GetDynamicAttributeSet())
+        {
+            static const FGameplayTag HealthTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Resource.Health"), false);
+            if (HealthTag.IsValid())
+            {
+                const float CurHealth = AttrSet->GetDynamicAttributeValue(HealthTag, 0);
+                if (CurHealth > 0.0f && CurHealth <= 30.0f)
+                {
+                    SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Scream"), false);
+                    SelectedAudibleRadius = FMath::Max(SelectedAudibleRadius, 4500.0f);
+                }
+            }
+        }
+
+        static const FGameplayTag StanceCrouch = FGameplayTag::RequestGameplayTag(TEXT("State.Moving.Crouch"), false);
+        if (CharOwner->ActiveMovementStateTag.MatchesTag(StanceCrouch))
+        {
+            SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Whisper"), false);
+            SelectedAudibleRadius = FMath::Min(SelectedAudibleRadius, 300.0f);
+        }
+    }
+
+    // 3. Format Tokens and Formulate Speech (Handles Native or Non-Native Attempt automatically)
+    const FString FormattedEnglish = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
+    if (SpeakerLang)
+    {
+        OutUtterance = SpeakerLang->FormulateSpokenUtterance(SpokenLanguageTag, FormattedEnglish);
+    }
+    else
+    {
+        OutUtterance = FormattedEnglish;
+    }
+
+    OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
+
+    // 4. Acoustic Broadcast & Linguistic Exposure
+    BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag);
+    return true;
 }
 
 bool UDynamicSocialComponent::TriggerCalloutToTarget(AActor* TargetActor, float IgnoreTimeout)
@@ -974,11 +1362,6 @@ bool UDynamicSocialComponent::TriggerCalloutToTarget(AActor* TargetActor, float 
         World->GetTimerManager().SetTimer(TimerHandle_CalloutTimeout, this, &UDynamicSocialComponent::HandleCalloutIgnored, IgnoreTimeout, false);
     }
     return true;
-}
-
-void UDynamicSocialComponent::HandleCalloutIgnored()
-{
-    ClearActiveCallout();
 }
 
 void UDynamicSocialComponent::ClearActiveCallout()
@@ -1436,4 +1819,374 @@ FGameplayTag UDynamicSocialComponent::GetAuthorizedForceLevel(ADynamicCharacter*
     }
 
     return BestForceLevel;
+}
+
+void UDynamicSocialComponent::HandleHeardDialogueFromSpeaker(AActor* Speaker, const FString& UtteranceText, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag)
+{
+    AActor* OwnerActor = GetOwner();
+    if (!OwnerActor || !OwnerActor->HasAuthority() || !Speaker) return;
+
+    APawn* PawnOwner = Cast<APawn>(OwnerActor);
+    if (!PawnOwner || PawnOwner->IsPlayerControlled()) return;
+
+    AAIController* AICon = Cast<AAIController>(PawnOwner->GetController());
+    if (!AICon) return;
+
+    UBlackboardComponent* BB = AICon->GetBlackboardComponent();
+    if (!BB) return;
+
+    // 1. Assign Target Interlocutor & Heard Text to Blackboard
+    static const FName InterlocutorKeyName = TEXT("InterlocutorActor");
+    static const FName TargetActorKeyName = TEXT("TargetActor");
+    static const FName HeardTextKeyName = TEXT("LastHeardUtterance");
+
+    BB->SetValueAsObject(InterlocutorKeyName, Speaker);
+    BB->SetValueAsObject(TargetActorKeyName, Speaker);
+    BB->SetValueAsString(HeardTextKeyName, UtteranceText);
+
+    // 2. Clear Idle / Wander locks and trigger AI conversation behavior
+    if (UAbilitySystemComponent* ASC = OwnerActor->FindComponentByClass<UAbilitySystemComponent>())
+    {
+        static const FGameplayTag ChatActionTag = FGameplayTag::RequestGameplayTag(TEXT("Action.Interact.Chat"), false);
+        if (ChatActionTag.IsValid())
+        {
+            ASC->AddLooseGameplayTags(FGameplayTagContainer(ChatActionTag));
+        }
+    }
+}
+
+void UDynamicSocialComponent::ServerBroadcastStreamingDialogueChunk(const FString& FormulatedChunk, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag, float BaseAudibleRadius, bool bIsFinalChunk)
+{
+    AActor* Speaker = GetOwner();
+    UWorld* World = GetWorld();
+    if (!Speaker || !Speaker->HasAuthority() || FormulatedChunk.IsEmpty() || !World) return;
+
+    const float QueryRadius = FMath::Clamp(BaseAudibleRadius * 4.5f, 300.0f, 15000.0f);
+    TArray<FOverlapResult> Overlaps;
+    FCollisionShape Sphere = FCollisionShape::MakeSphere(QueryRadius);
+    
+    // We only care about hitting Pawns (Players) for the UI streaming effect
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(StreamingAcousticSweep), false, Speaker);
+
+    const FVector SpeakerLoc = Speaker->GetActorLocation();
+
+    if (World->OverlapMultiByChannel(Overlaps, SpeakerLoc, FQuat::Identity, ECC_Pawn, Sphere, QueryParams))
+    {
+        for (const FOverlapResult& Overlap : Overlaps)
+        {
+            AActor* Listener = Overlap.GetActor();
+            if (!Listener || Listener == Speaker) continue;
+
+            APawn* ListenerPawn = Cast<APawn>(Listener);
+            if (ListenerPawn && ListenerPawn->IsPlayerControlled())
+            {
+                if (UDynamicLanguageComponent* ListenerLang = Listener->FindComponentByClass<UDynamicLanguageComponent>())
+                {
+                    const float Distance = FVector::Dist(SpeakerLoc, Listener->GetActorLocation());
+
+                    // Evaluates listener hearing attributes, buffs, and wall occlusion dynamically
+                    if (ListenerLang->CanHearUtteranceAtDistance(Distance, BaseAudibleRadius, VolumeTag, SpeakerLoc))
+                    {
+                        // Send the RPC to the client for real-time UI typing
+                        ListenerLang->ClientReceiveHeardDialogueChunk(Speaker, FormulatedChunk, SpokenLanguageTag, BaseAudibleRadius, VolumeTag, bIsFinalChunk);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void UDynamicSocialComponent::ApplySocialReactionConsequences(const FDynamicDialogueReactionRule& Rule, AActor* TargetOffender)
+{
+    AActor* OwnerActor = GetOwner();
+    if (!OwnerActor || !OwnerActor->HasAuthority()) return;
+
+    // 1. Apply Self Attribute/Need changes (e.g. Mood gets Angry, Sad, Frustrated)
+    for (const auto& Pair : Rule.SelfAttributeDeltas.LocalLookupMap)
+    {
+        if (!Pair.Key.IsValid()) continue;
+
+        float CurrentNeedVal = 0.0f;
+        if (GetNeedValue(Pair.Key, CurrentNeedVal))
+        {
+            ServerSetNeedValue(Pair.Key, CurrentNeedVal + Pair.Value);
+        }
+        else if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(OwnerActor))
+        {
+            if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(CharOwner->GetDynamicAttributeSet()))
+            {
+                const float CurVal = AttrSet->GetDynamicAttributeValue(Pair.Key, 0);
+                AttrSet->SetDynamicAttributeValue(Pair.Key, CurVal + Pair.Value, 0);
+            }
+        }
+    }
+
+    // 2. Apply Relational Metric changes towards the offender (e.g. Affinity decreases, Hostility increases)
+    if (TargetOffender && TargetOffender != OwnerActor && Rule.RelationalMetricDeltas.ReplicatedEntries.Num() > 0)
+    {
+        const UDynamicSocialComponent* OffenderSocial = TargetOffender->FindComponentByClass<UDynamicSocialComponent>();
+        if (OffenderSocial && OffenderSocial->CharacterPersistentGuid.IsValid())
+        {
+            ServerRecordSocialInteraction(
+                OffenderSocial->CharacterPersistentGuid,
+                TargetOffender,
+                ERelationshipTargetKind::Character,
+                FGameplayTag::RequestGameplayTag(TEXT("Relationship.Type.Rivalry"), false),
+                Rule.RelationalMetricDeltas.ReplicatedEntries,
+                FGameplayTagContainer()
+            );
+        }
+    }
+
+    // 3. Optional Reaction Dialogue (e.g. Scold, Grumble, Complain)
+    if (Rule.ReactionDialogueCategoryTag.IsValid())
+    {
+        FString OutUtterance;
+        TSoftObjectPtr<UAnimMontage> OutMontage;
+        FGameplayTag OutVoice;
+        TryResolveFastPathDialogue(Rule.ReactionDialogueCategoryTag, TargetOffender, OutUtterance, OutMontage, OutVoice);
+    }
+
+    // 4. Optional Reaction Behavior (e.g. Turn hostile, flee, confront)
+    if (Rule.ReactionBehaviorTag.IsValid())
+    {
+        if (UAbilitySystemComponent* ASC = OwnerActor->FindComponentByClass<UAbilitySystemComponent>())
+        {
+            ASC->AddLooseGameplayTags(FGameplayTagContainer(Rule.ReactionBehaviorTag));
+        }
+        if (APawn* PawnOwner = Cast<APawn>(OwnerActor))
+        {
+            if (AAIController* AICon = Cast<AAIController>(PawnOwner->GetController()))
+            {
+                if (UBlackboardComponent* BB = AICon->GetBlackboardComponent())
+                {
+                    if (TargetOffender) BB->SetValueAsObject(FName("ThreatActor"), TargetOffender);
+                }
+            }
+        }
+    }
+}
+
+void UDynamicSocialComponent::HandleCalloutIgnored()
+{
+    AActor* Offender = ActiveCalloutTarget.Get();
+    ClearActiveCallout();
+
+    if (!Offender) return;
+
+    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+    {
+        if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+        {
+            if (const UDynamicCustomizationComponent* Cust = CharOwner->GetCustomizationComponent())
+            {
+                FCharacterTemplateDef TemplateDef;
+                if (GS->GetCharacterTemplate(Cust->ActiveCharacterTemplateTag, TemplateDef))
+                {
+                    ApplySocialReactionConsequences(TemplateDef.PersonalityProfile.OnIgnoredReaction, Offender);
+                }
+            }
+        }
+    }
+}
+
+void UDynamicSocialComponent::ServerHandleSpeechInterrupted(AActor* Interrupter)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !Interrupter || Interrupter == GetOwner()) return;
+
+    ClearActiveCallout();
+
+    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+    {
+        if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+        {
+            if (const UDynamicCustomizationComponent* Cust = CharOwner->GetCustomizationComponent())
+            {
+                FCharacterTemplateDef TemplateDef;
+                if (GS->GetCharacterTemplate(Cust->ActiveCharacterTemplateTag, TemplateDef))
+                {
+                    ApplySocialReactionConsequences(TemplateDef.PersonalityProfile.OnInterruptedReaction, Interrupter);
+                }
+            }
+        }
+    }
+}
+
+void UDynamicSocialComponent::TriggerMemoryConsolidation(const FGuid& TargetEntityGuid, const TArray<FDynamicDialogueTurn>& TurnsToCompress)
+{
+    if (!GetOwner()->HasAuthority() || TurnsToCompress.Num() == 0 || !TargetEntityGuid.IsValid()) return;
+
+    UWorld* World = GetWorld();
+    UDynamicCloudAISubsystem* CloudSubsystem = World ? World->GetSubsystem<UDynamicCloudAISubsystem>() : nullptr;
+    if (!CloudSubsystem) return;
+
+    FDynamicRelationshipEdgeItem* Edge = nullptr;
+    for (FDynamicRelationshipEdgeItem& ExistingEdge : ReplicatedRelationships.Items)
+    {
+        if (ExistingEdge.TargetEntityGuid == TargetEntityGuid)
+        {
+            Edge = &ExistingEdge;
+            break;
+        }
+    }
+
+    FString CurrentSummary = Edge ? Edge->LongTermMemorySummary : TEXT("");
+
+    // Package the summarization prompt payload
+    TSharedRef<FJsonObject> RootObj = MakeShareable(new FJsonObject());
+    RootObj->SetStringField(TEXT("SystemInstruction"), 
+        TEXT("You are a memory consolidation core. Condense the 'RecentConversation' and the 'OldMemorySummary' into a new, updated 'OldMemorySummary'. ")
+        TEXT("Write EXACTLY 1 to 3 concise sentences summarizing what you know about this person. Return ONLY a JSON object matching: {\"NewMemorySummary\":\"<summary>\"}")
+    );
+    RootObj->SetStringField(TEXT("OldMemorySummary"), CurrentSummary);
+
+    TArray<TSharedPtr<FJsonValue>> HistoryArray;
+    for (const FDynamicDialogueTurn& Turn : TurnsToCompress)
+    {
+        TSharedPtr<FJsonObject> TurnObj = MakeShareable(new FJsonObject());
+        TurnObj->SetStringField(TEXT("Actor"), Turn.SpeakerName);
+        TurnObj->SetStringField(TEXT("ActionOrSpeech"), Turn.UtteranceText);
+        HistoryArray.Add(MakeShareable(new FJsonValueObject(TurnObj)));
+    }
+    RootObj->SetArrayField(TEXT("RecentConversation"), HistoryArray);
+
+    FString PromptJson;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&PromptJson);
+    FJsonSerializer::Serialize(RootObj, Writer);
+
+    // Define the async callback to apply the newly minted memory summary directly to the relationship edge
+    FOnCloudAIResponseDirectCallback ConsolidationCallback;
+    ConsolidationCallback.BindLambda([this, TargetEntityGuid](const TArray<FCloudAICommandOutput>& Commands)
+    {
+        if (Commands.Num() > 0 && !Commands[0].UtteranceText.IsEmpty())
+        {
+            // We overloaded UtteranceText in the command output to hold the new memory string for this specific task
+            for (FDynamicRelationshipEdgeItem& EdgeItem : ReplicatedRelationships.Items)
+            {
+                if (EdgeItem.TargetEntityGuid == TargetEntityGuid)
+                {
+                    EdgeItem.LongTermMemorySummary = Commands[0].UtteranceText;
+                    ReplicatedRelationships.MarkItemDirty(EdgeItem);
+                    break;
+                }
+            }
+        }
+    });
+
+    // Dispatch a Low-Priority background LLM task (doesn't steal fast miners from real-time chat)
+    CloudSubsystem->DispatchDistributedAIRequest(
+        Cast<APawn>(GetOwner()),
+        ECloudAIRequestType::MemoryConsolidation,
+        ECloudAITaskPriority::Low, // Let background miners handle this to keep chat fast
+        PromptJson,
+        30.0f, // 30-second generous timeout for background tasks
+        FOnCloudAITokenStream(),
+        ConsolidationCallback,
+        FOnCloudAITaskAssigned()
+    );
+}
+
+void FDynamicTopicMemoryItem::PostReplicatedAdd(const FFastTopicMemoryArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildTopicCache();
+}
+
+void FDynamicTopicMemoryItem::PostReplicatedChange(const FFastTopicMemoryArray& InArrayOwner)
+{
+    if (InArrayOwner.OwningSocialComp) InArrayOwner.OwningSocialComp->RebuildTopicCache();
+}
+
+void UDynamicSocialComponent::OnRep_ReplicatedTopics()
+{
+    RebuildTopicCache();
+}
+
+void UDynamicSocialComponent::HandleSingleTopicReplicated(const FDynamicTopicMemoryItem& Item)
+{
+    RebuildTopicCache();
+}
+
+void UDynamicSocialComponent::RebuildTopicCache()
+{
+    CachedTopicIndices.Empty(ReplicatedTopics.Items.Num());
+    for (int32 i = 0; i < ReplicatedTopics.Items.Num(); ++i)
+    {
+        if (ReplicatedTopics.Items[i].TopicTag.IsValid())
+        {
+            CachedTopicIndices.Add(ReplicatedTopics.Items[i].TopicTag, i);
+        }
+    }
+}
+
+void UDynamicSocialComponent::OnRep_ActiveTurnState()
+{
+    OnConversationalLockStateChanged.Broadcast(ActiveTurnState, ActiveInterlocutor.Get());
+}
+
+bool UDynamicSocialComponent::ServerAcquireConversationalLock(AActor* InterlocutorActor, bool bPondering)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !InterlocutorActor) return false;
+
+    // If currently talking to someone else, reject lock acquisition unless it's the same partner
+    if (ActiveTurnState != EConversationalTurnState::Idle && ActiveInterlocutor.IsValid() && ActiveInterlocutor.Get() != InterlocutorActor)
+    {
+        return false;
+    }
+
+    ActiveInterlocutor = InterlocutorActor;
+    ActiveTurnState = bPondering ? EConversationalTurnState::Pondering : EConversationalTurnState::Engaged;
+    OnRep_ActiveTurnState();
+    return true;
+}
+
+void UDynamicSocialComponent::ServerReleaseConversationalLock()
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    ActiveTurnState = EConversationalTurnState::Idle;
+    ActiveInterlocutor.Reset();
+    OnRep_ActiveTurnState();
+}
+
+void UDynamicSocialComponent::ServerRecordOverheardTopic(
+    FGameplayTag TopicTag, 
+    const FString& TopicSummary, 
+    const FGuid& OriginatorGuid, 
+    float Credibility)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !TopicTag.IsValid() || TopicSummary.IsEmpty()) return;
+
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+    if (const int32* FoundIdx = CachedTopicIndices.Find(TopicTag))
+    {
+        if (ReplicatedTopics.Items.IsValidIndex(*FoundIdx))
+        {
+            FDynamicTopicMemoryItem& Existing = ReplicatedTopics.Items[*FoundIdx];
+            Existing.TopicSummary = TopicSummary;
+            Existing.CredibilityScore = FMath::Clamp(Credibility, 0.0f, 1.0f);
+            Existing.OverheardWorldTime = Now;
+            ReplicatedTopics.MarkItemDirty(Existing);
+            return;
+        }
+    }
+
+    FDynamicTopicMemoryItem NewTopic;
+    NewTopic.TopicTag = TopicTag;
+    NewTopic.TopicSummary = TopicSummary;
+    NewTopic.OriginatorGuid = OriginatorGuid;
+    NewTopic.CredibilityScore = FMath::Clamp(Credibility, 0.0f, 1.0f);
+    NewTopic.OverheardWorldTime = Now;
+
+    FDynamicTopicMemoryItem& Added = ReplicatedTopics.Items.Add_GetRef(NewTopic);
+    ReplicatedTopics.MarkItemDirty(Added);
+
+    // Keep active topic memory bounded to top 8 most recent rumors
+    while (ReplicatedTopics.Items.Num() > 8)
+    {
+        ReplicatedTopics.Items.RemoveAt(0);
+        ReplicatedTopics.MarkArrayDirty();
+    }
+
+    RebuildTopicCache();
 }

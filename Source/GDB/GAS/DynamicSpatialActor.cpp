@@ -13,8 +13,6 @@ ADynamicSpatialActor::ADynamicSpatialActor()
     PrimaryActorTick.bCanEverTick = true;
     PrimaryActorTick.bStartWithTickEnabled = false;
     bReplicates = true;
-    
-    // Smooth fast-moving projectiles over network
     SetReplicateMovement(true);
 
     MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SpatialMesh"));
@@ -29,6 +27,24 @@ void ADynamicSpatialActor::BeginPlay()
     Super::BeginPlay();
 }
 
+void ADynamicSpatialActor::ClearAllPassiveEffects()
+{
+    for (auto& Pair : ActivePassiveEffects)
+    {
+        if (UAbilitySystemComponent* TargetASC = Pair.Key.Get())
+        {
+            for (const FActiveGameplayEffectHandle& Handle : Pair.Value)
+            {
+                if (Handle.IsValid())
+                {
+                    TargetASC->RemoveActiveGameplayEffect(Handle);
+                }
+            }
+        }
+    }
+    ActivePassiveEffects.Empty();
+}
+
 void ADynamicSpatialActor::ResetToDefaultPoolState()
 {
     bIsActive = false;
@@ -38,9 +54,12 @@ void ADynamicSpatialActor::ResetToDefaultPoolState()
     ElapsedLifetime = 0.0f;
     CurrentVelocity = FVector::ZeroVector;
 
+    ClearAllPassiveEffects();
+
     SourceASC.Reset();
     HomingTargetActor.Reset();
     ImpactedActors.Empty();
+    ActorTickTimers.Empty();
     PassBackRules.Empty();
     DeliveryDef = FDynamicSpatialDeliveryDef();
 
@@ -99,14 +118,28 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         return;
     }
 
-    // 1. Evaluate Trajectory Physics (Straight, Homing, Ballistic)
+    // 1. Evaluate Trajectory Physics
     if (DeliveryDef.MotionType == ESpatialDeliveryMotion::StraightVelocity)
     {
         AddActorWorldOffset(CurrentVelocity * DeltaSeconds, true);
     }
+    else if (DeliveryDef.MotionType == ESpatialDeliveryMotion::Ballistic)
+    {
+        UWorld* World = GetWorld();
+        if (World)
+        {
+            CurrentVelocity.Z += (World->GetGravityZ() * DeliveryDef.GravityScale * DeltaSeconds);
+            FHitResult MoveHit;
+            AddActorWorldOffset(CurrentVelocity * DeltaSeconds, true, &MoveHit);
+            if (MoveHit.bBlockingHit)
+            {
+                if (DeliveryDef.bDetonateOnBounce) ElapsedLifetime = DeliveryDef.Duration; 
+                else CurrentVelocity = FMath::GetReflectionVector(CurrentVelocity, MoveHit.ImpactNormal) * DeliveryDef.Bounciness;
+            }
+        }
+    }
     else if (DeliveryDef.MotionType == ESpatialDeliveryMotion::SourceGuided && HomingTargetActor.IsValid())
     {
-        // SourceGuided tracks toward the guidance actor
         const FVector ToTarget = (HomingTargetActor->GetActorLocation() - GetActorLocation()).GetSafeNormal();
         CurrentVelocity = FMath::VInterpTo(CurrentVelocity, ToTarget * CurrentSpeed, DeltaSeconds, DeliveryDef.HomingTurnRate);
         SetActorRotation(CurrentVelocity.Rotation());
@@ -120,7 +153,7 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         AddActorWorldOffset(CurrentVelocity * DeltaSeconds, true);
     }
 
-    // 2. Evaluate Dynamic Shape Expansion (e.g. Frost Nova, Exploding Meteor)
+    // 2. Evaluate Dynamic Shape Expansion
     float ActiveRadius = DeliveryDef.MinRadius;
     if (DeliveryDef.ShapeBehavior == ESpatialShapeBehavior::ExpandOut)
     {
@@ -132,6 +165,11 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         ActiveRadius = DeliveryDef.MaxRadius;
     }
 
+    if (MeshComponent)
+    {
+        MeshComponent->SetWorldScale3D(FVector(ActiveRadius / 50.0f)); // Assuming base sphere is 100 units
+    }
+
     // 3. Handle Overlaps & Validations
     UWorld* World = GetWorld();
     if (!World) return;
@@ -141,33 +179,62 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
     FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(SpatialActorOverlap), false, this);
     if (GetInstigator()) QueryParams.AddIgnoredActor(GetInstigator());
 
+    TSet<TWeakObjectPtr<AActor>> CurrentFrameOverlaps;
+
     if (World->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity, ECC_Pawn, SphereShape, QueryParams))
     {
         ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
         for (const FOverlapResult& Result : Overlaps)
         {
             AActor* HitActor = Result.GetActor();
-            if (!HitActor || ImpactedActors.Contains(HitActor)) continue;
+            if (!HitActor) continue;
 
-            if (SourceASC.IsValid())
+            UAbilitySystemComponent* TargetASC = HitActor->FindComponentByClass<UAbilitySystemComponent>();
+            if (!TargetASC) continue;
+
+            FGameplayTagContainer TargetTags;
+            TargetASC->GetOwnedGameplayTags(TargetTags);
+
+            static const FGameplayTag DeadTag = FGameplayTag::RequestGameplayTag(TEXT("State.Dead"), false);
+            static const FGameplayTag InvulnerableTag = FGameplayTag::RequestGameplayTag(TEXT("State.Invulnerable"), false);
+
+            if (DeadTag.IsValid() && TargetTags.HasTag(DeadTag)) continue;
+            if (InvulnerableTag.IsValid() && TargetTags.HasTag(InvulnerableTag)) continue;
+
+            if (DeliveryDef.BlockedTargetTags.Num() > 0 && TargetTags.HasAny(DeliveryDef.BlockedTargetTags)) continue;
+            if (DeliveryDef.RequiredTargetTags.Num() > 0 && !TargetTags.HasAll(DeliveryDef.RequiredTargetTags)) continue;
+
+            CurrentFrameOverlaps.Add(HitActor);
+
+            bool bShouldApplyEffects = false;
+
+            // Application Logic evaluation
+            if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::SingleHit)
             {
-                UAbilitySystemComponent* TargetASC = HitActor->FindComponentByClass<UAbilitySystemComponent>();
-                if (!TargetASC) continue;
-
-                FGameplayTagContainer TargetTags;
-                TargetASC->GetOwnedGameplayTags(TargetTags);
-
-                static const FGameplayTag DeadTag = FGameplayTag::RequestGameplayTag(TEXT("State.Dead"), false);
-                static const FGameplayTag InvulnerableTag = FGameplayTag::RequestGameplayTag(TEXT("State.Invulnerable"), false);
-
-                if (DeadTag.IsValid() && TargetTags.HasTag(DeadTag)) continue;
-                if (InvulnerableTag.IsValid() && TargetTags.HasTag(InvulnerableTag)) continue;
-
-                if (DeliveryDef.BlockedTargetTags.Num() > 0 && TargetTags.HasAny(DeliveryDef.BlockedTargetTags)) continue;
-                if (DeliveryDef.RequiredTargetTags.Num() > 0 && !TargetTags.HasAll(DeliveryDef.RequiredTargetTags)) continue;
-
+                if (ImpactedActors.Contains(HitActor)) continue;
                 ImpactedActors.Add(HitActor);
+                bShouldApplyEffects = true;
+            }
+            else if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::TickInterval)
+            {
+                float& Timer = ActorTickTimers.FindOrAdd(HitActor);
+                Timer += DeltaSeconds;
+                if (Timer >= DeliveryDef.TickInterval)
+                {
+                    Timer = 0.0f;
+                    bShouldApplyEffects = true;
+                }
+            }
+            else if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::PassiveWhileIn)
+            {
+                if (!ActivePassiveEffects.Contains(TargetASC))
+                {
+                    bShouldApplyEffects = true;
+                }
+            }
 
+            if (bShouldApplyEffects)
+            {
                 ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(HitActor);
                 const FName BoneName = FName("pelvis"); 
                 const FVector OutwardNormal = (GetActorLocation() - HitActor->GetActorLocation()).GetSafeNormal();
@@ -190,7 +257,8 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
                     ProjectileImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Physical.Blunt"), false));
                 }
 
-                if (HitChar && GS)
+                // Apply physics impulse (TickInterval and SingleHit only; pure Passives shouldn't shove constantly)
+                if (HitChar && GS && DeliveryDef.ApplicationType != EAuraEffectApplicationType::PassiveWhileIn)
                 {
                     HitChar->ServerProcessAuthoritativeLimbHit(
                         HitChar, 
@@ -204,20 +272,36 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
                     );
                 }
 
-                for (const FGameplayTag& EffTag : DeliveryDef.EffectsToApply)
+                if (SourceASC.IsValid())
                 {
-                    FGameplayEffectSpecHandle SpecHandle = UDynamicEffectFactory::CreateDynamicEffectSpec(SourceASC.Get(), EffTag, 1);
-                    if (SpecHandle.IsValid())
+                    TArray<FActiveGameplayEffectHandle> AppliedHandles;
+                    const uint8 LimbId = GS ? GS->GetLimbIdForBone(BoneName) : 0;
+
+                    for (const FGameplayTag& EffTag : DeliveryDef.EffectsToApply)
                     {
-                        FDynamicGameplayEffectContext* DynCtx = static_cast<FDynamicGameplayEffectContext*>(SpecHandle.Data->GetContext().Get());
-                        if (DynCtx && GS)
+                        FGameplayEffectSpecHandle SpecHandle = UDynamicEffectFactory::CreateDynamicEffectSpec(SourceASC.Get(), EffTag, 1);
+                        if (SpecHandle.IsValid())
                         {
-                            const uint8 LimbId = GS->GetLimbIdForBone(BoneName);
-                            DynCtx->SetAuthoritativePhysicsPayload(LimbId, ScaledImpulse, PowerMultiplier, OutwardNormal, HitActor->GetActorLocation());
-                            DynCtx->SourcePassBackRules = PassBackRules;
-                            DynCtx->ContextPayloadTags = ProjectileImpactTags;
+                            FDynamicGameplayEffectContext* DynCtx = static_cast<FDynamicGameplayEffectContext*>(SpecHandle.Data->GetContext().Get());
+                            if (DynCtx)
+                            {
+                                DynCtx->SetAuthoritativePhysicsPayload(LimbId, ScaledImpulse, PowerMultiplier, OutwardNormal, HitActor->GetActorLocation());
+                                DynCtx->SourcePassBackRules = PassBackRules;
+                                DynCtx->ContextPayloadTags = ProjectileImpactTags;
+                            }
+                            
+                            FActiveGameplayEffectHandle ActiveHandle = SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+                            
+                            if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::PassiveWhileIn)
+                            {
+                                AppliedHandles.Add(ActiveHandle);
+                            }
                         }
-                        SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+                    }
+
+                    if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::PassiveWhileIn)
+                    {
+                        ActivePassiveEffects.Add(TargetASC, AppliedHandles);
                     }
                 }
 
@@ -226,6 +310,36 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
                     DeactivateAndReturnToPool();
                     return;
                 }
+            }
+        }
+    }
+
+    // 4. Cleanup Passives and Timers for actors that exited the Aura
+    if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::TickInterval)
+    {
+        for (auto It = ActorTickTimers.CreateIterator(); It; ++It)
+        {
+            if (!CurrentFrameOverlaps.Contains(It.Key()))
+            {
+                It.RemoveCurrent();
+            }
+        }
+    }
+    else if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::PassiveWhileIn)
+    {
+        for (auto It = ActivePassiveEffects.CreateIterator(); It; ++It)
+        {
+            UAbilitySystemComponent* TargetASC = It.Key().Get();
+            if (!TargetASC || !CurrentFrameOverlaps.Contains(TargetASC->GetOwner()))
+            {
+                if (TargetASC)
+                {
+                    for (const FActiveGameplayEffectHandle& Handle : It.Value())
+                    {
+                        if (Handle.IsValid()) TargetASC->RemoveActiveGameplayEffect(Handle);
+                    }
+                }
+                It.RemoveCurrent();
             }
         }
     }

@@ -1,0 +1,18 @@
+﻿{
+  "FactionMasterRegistry": {
+    "Faction.Kingdom.HighKing": {
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "The High King's Guard" }
+        ]
+      },
+      "BaseInfluence": 5000.0,
+      "AlliedFactions": [ "Faction.Guild.Merchant" ],
+      "RivalFactions": [ "Faction.Syndicate.RavenRidge", "Faction.Monster.UndeadHorde" ],
+      "FactionColorTheme": {
+        "PrimaryColor": { "R": 0.1, "G": 0.2, "B": 0.8, "A": 1.0 },
+        "SecondaryColor": { "R": 0.9, "G": 0.8, "B": 0.1, "A": 1.0 }
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "DynamicGASTypes.h"
+#include "GameplayEffectTypes.h"
 #include "DynamicSpatialActor.generated.h"
 
 class UAbilitySystemComponent;
@@ -56,5 +57,15 @@ protected:
     UPROPERTY()
     TWeakObjectPtr<AActor> HomingTargetActor;
 
+    // Tracks actors that have already been hit (for SingleHit application)
     TSet<TWeakObjectPtr<AActor>> ImpactedActors;
+
+    // Tracks elapsed time per actor for TickInterval application
+    TMap<TWeakObjectPtr<AActor>, float> ActorTickTimers;
+
+    // Tracks active gameplay effect handles for PassiveWhileIn application
+    TMap<TWeakObjectPtr<UAbilitySystemComponent>, TArray<FActiveGameplayEffectHandle>> ActivePassiveEffects;
+
+private:
+    void ClearAllPassiveEffects();
 };

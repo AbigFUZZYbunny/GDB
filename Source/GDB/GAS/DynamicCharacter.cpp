@@ -207,7 +207,6 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
             }
         }
     }
-
     if (CapsuleComponent && CachedTargetCapsuleHalfHeight > 0.0f)
     {
         const float CurrentHeight = CapsuleComponent->GetUnscaledCapsuleHalfHeight();
@@ -221,6 +220,7 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
     {
         UpdateRagdollHyperextension(DeltaSeconds);
     }
+    ApplyEnvironmentalForces(DeltaSeconds);
 }
 
 // ----------------------------------------------------------------------------
@@ -229,94 +229,18 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
 
 float ADynamicCharacter::CalculateTotalInventoryAndEquipmentMass() const
 {
-    UWorld* World = GetWorld();
-    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    if ((Now - LastMassCalculateTime) < 0.5) return CachedTotalMass;
 
-    const double Now = World ? World->GetTimeSeconds() : 0.0;
+    FVector CoMOffset;
+    EvaluatePhysicalEncumbrance(CachedTotalMass, CoMOffset);
     
-    // OPTIMIZATION: Debounce the expensive spatial physics sweep to 2 Hz.
-    if ((Now - LastMassCalculateTime) < 0.5)
+    // Apply physical COM shift to the character mesh/capsule for procedural leaning
+    if (MeshComponent)
     {
-        return CachedTotalMass;
+        MeshComponent->SetCenterOfMass(CoMOffset, NAME_None);
     }
 
-    const float BaselineMass = GS ? FMath::Max(1.0f, GS->GetCalculationSettings().BaselineCharacterMassKg) : 80.0f;
-    const float ProximityRadius = GS ? FMath::Max(50.0f, GS->GetCalculationSettings().CarriedMassProximityRadius) : 300.0f;
-    const FGameplayTag WeightTag = (GS && GS->GetCalculationSettings().ObjectWeightAttributeTag.IsValid())
-        ? GS->GetCalculationSettings().ObjectWeightAttributeTag
-        : FGameplayTag::RequestGameplayTag(TEXT("Attribute.Object.Weight"), false);
-
-    float TotalMassKg = BaselineMass;
-
-    if (const UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
-    {
-        for (const FDynamicEquipmentSlotItem& Slot : EquipComp->ReplicatedEquipmentSlots.Items)
-        {
-            if (Slot.EquippedItemArchetypeTag.IsValid())
-            {
-                for (const FDynamicAttributeItem& Attr : Slot.SavedItemAttributeState)
-                {
-                    if (Attr.AttributeTag == WeightTag)
-                    {
-                        TotalMassKg += Attr.Value;
-                    }
-                }
-            }
-        }
-    }
-
-    if (const UDynamicContainerComponent* Container = FindComponentByClass<UDynamicContainerComponent>())
-    {
-        TotalMassKg += Container->GetCurrentTotalWeight();
-    }
-
-    TSet<const ADynamicPhysicsActor*> ProcessedPhysicsActors;
-
-    TArray<AActor*> AttachedActors;
-    GetAttachedActors(AttachedActors, true);
-    for (AActor* Attached : AttachedActors)
-    {
-        if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Attached))
-        {
-            if (!PhysActor->IsPendingKillPending())
-            {
-                ProcessedPhysicsActors.Add(PhysActor);
-                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
-                {
-                    TotalMassKg += Prim->GetMass();
-                }
-            }
-        }
-    }
-
-    if (World)
-    {
-        TArray<FOverlapResult> Overlaps;
-        FCollisionObjectQueryParams ObjParams;
-        ObjParams.AddObjectTypesToQuery(ECC_PhysicsBody);
-        ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-        FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CharacterMassOverlap), false, this);
-
-        if (World->OverlapMultiByObjectType(Overlaps, GetActorLocation(), FQuat::Identity, ObjParams, FCollisionShape::MakeSphere(ProximityRadius), QueryParams))
-        {
-            for (const FOverlapResult& Overlap : Overlaps)
-            {
-                if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Overlap.GetActor()))
-                {
-                    if (!PhysActor->IsPendingKillPending() && !ProcessedPhysicsActors.Contains(PhysActor))
-                    {
-                        ProcessedPhysicsActors.Add(PhysActor);
-                        if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
-                        {
-                            TotalMassKg += Prim->GetMass();
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    CachedTotalMass = TotalMassKg;
     LastMassCalculateTime = Now;
     return CachedTotalMass;
 }
@@ -1813,4 +1737,371 @@ void ADynamicCharacter::UpdateNetworkDormancy(float DeltaSeconds)
             FlushNetDormancy();
         }
     }
+}
+
+void ADynamicCharacter::OnRep_MountState()
+{
+    if (!CurrentMount.IsValid())
+    {
+        RecoverFromRagdoll(); // Auto-recover if unmounted gracefully
+    }
+}
+
+void ADynamicCharacter::OnPhysicsConstraintBroken(int32 ConstraintIndex)
+{
+    if (HasAuthority())
+    {
+        // If the mount/tether snaps due to massive impact force, the character violently ragdolls
+        ServerDismount();
+        StartRagdoll();
+        
+        if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+        {
+            ASC->AddLooseGameplayTags(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(TEXT("State.Debuff.Stunned"), false)));
+        }
+    }
+}
+
+void ADynamicCharacter::ServerSetMount(AActor* MountActor, FGameplayTag SaddlePointTag, float BreakForce, float SaddleSlop)
+{
+    if (!HasAuthority() || !MountActor) return;
+    
+    CurrentMount = MountActor;
+    
+    FTransform SaddleTransform;
+    USceneComponent* SaddleComp = nullptr;
+    if (UDynamicInteractableComponent* MountInteractable = MountActor->FindComponentByClass<UDynamicInteractableComponent>())
+    {
+        MountInteractable->ResolveKinematicTargetTransform(SaddlePointTag, SaddleTransform, SaddleComp);
+    }
+    if (!SaddleComp) SaddleComp = MountActor->GetRootComponent();
+
+    // Position Rider
+    SetActorLocationAndRotation(SaddleTransform.GetLocation(), SaddleTransform.GetRotation(), false, nullptr, ETeleportType::TeleportPhysics);
+    
+    if (USkeletalMeshComponent* MountMesh = Cast<USkeletalMeshComponent>(SaddleComp))
+    {
+        MeshComponent->IgnoreComponentWhenMoving(MountMesh, true);
+        CapsuleComponent->IgnoreComponentWhenMoving(MountMesh, true);
+    }
+
+    ServerSetMovementState(FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Mounted"), false));
+
+    if (!ActivePhysicsConstraint)
+    {
+        ActivePhysicsConstraint = NewObject<UPhysicsConstraintComponent>(this);
+        ActivePhysicsConstraint->RegisterComponent();
+        ActivePhysicsConstraint->OnConstraintBroken.AddDynamic(this, &ADynamicCharacter::OnPhysicsConstraintBroken);
+    }
+
+    ActivePhysicsConstraint->SetWorldLocation(SaddleTransform.GetLocation());
+    
+    // Soft lock allows dynamic leaning/bouncing in the saddle
+    ActivePhysicsConstraint->SetAngularSwing1Limit(ACM_Limited, 20.0f);
+    ActivePhysicsConstraint->SetAngularSwing2Limit(ACM_Limited, 20.0f);
+    ActivePhysicsConstraint->SetAngularTwistLimit(ACM_Limited, 10.0f);
+    
+    // Linear slop dictates how much the rider bounces vertically/horizontally
+    ActivePhysicsConstraint->SetLinearXLimit(LCM_Limited, SaddleSlop);
+    ActivePhysicsConstraint->SetLinearYLimit(LCM_Limited, SaddleSlop);
+    ActivePhysicsConstraint->SetLinearZLimit(LCM_Limited, SaddleSlop * 2.0f);
+    
+    ActivePhysicsConstraint->SetLinearPositionDrive(true, true, true);
+    ActivePhysicsConstraint->SetLinearDriveParams(1500.0f, 150.0f, 0.0f);
+
+    if (BreakForce > 0.0f)
+    {
+        ActivePhysicsConstraint->SetLinearBreakable(true, BreakForce);
+        ActivePhysicsConstraint->SetAngularBreakable(true, BreakForce);
+    }
+    
+    ActivePhysicsConstraint->SetConstrainedComponents(MeshComponent, FName("pelvis"), Cast<UPrimitiveComponent>(SaddleComp), NAME_None);
+}
+
+void ADynamicCharacter::ServerDismount()
+{
+    if (!HasAuthority()) return;
+    
+    if (CurrentMount.IsValid())
+    {
+        if (USkeletalMeshComponent* MountMesh = Cast<USkeletalMeshComponent>(CurrentMount->GetRootComponent()))
+        {
+            MeshComponent->IgnoreComponentWhenMoving(MountMesh, false);
+            CapsuleComponent->IgnoreComponentWhenMoving(MountMesh, false);
+        }
+    }
+
+    CurrentMount.Reset();
+    
+    if (ActivePhysicsConstraint)
+    {
+        ActivePhysicsConstraint->BreakConstraint();
+        ActivePhysicsConstraint->DestroyComponent();
+        ActivePhysicsConstraint = nullptr;
+    }
+
+    ServerSetMovementState(DefaultMovementStateTag);
+}
+
+void ADynamicCharacter::ServerEstablishTether(AActor* TargetActor, FName EffectorBone, FGameplayTag TargetPointTag, float MaxLength, float BreakForce)
+{
+    if (!HasAuthority() || !TargetActor) return;
+
+    FTransform AnchorTransform;
+    USceneComponent* AnchorComp = nullptr;
+    if (UDynamicInteractableComponent* TargetInteractable = TargetActor->FindComponentByClass<UDynamicInteractableComponent>())
+    {
+        TargetInteractable->ResolveKinematicTargetTransform(TargetPointTag, AnchorTransform, AnchorComp);
+    }
+    if (!AnchorComp) AnchorComp = TargetActor->GetRootComponent();
+
+    if (!ActivePhysicsConstraint)
+    {
+        ActivePhysicsConstraint = NewObject<UPhysicsConstraintComponent>(this);
+        ActivePhysicsConstraint->RegisterComponent();
+        ActivePhysicsConstraint->OnConstraintBroken.AddDynamic(this, &ADynamicCharacter::OnPhysicsConstraintBroken);
+    }
+
+    ActivePhysicsConstraint->SetWorldLocation(MeshComponent->GetSocketLocation(EffectorBone));
+    
+    // Free rotation, limited distance
+    ActivePhysicsConstraint->SetAngularSwing1Limit(ACM_Free, 0.0f);
+    ActivePhysicsConstraint->SetAngularSwing2Limit(ACM_Free, 0.0f);
+    ActivePhysicsConstraint->SetAngularTwistLimit(ACM_Free, 0.0f);
+    
+    ActivePhysicsConstraint->SetLinearXLimit(LCM_Limited, MaxLength);
+    ActivePhysicsConstraint->SetLinearYLimit(LCM_Limited, MaxLength);
+    ActivePhysicsConstraint->SetLinearZLimit(LCM_Limited, MaxLength);
+
+    if (BreakForce > 0.0f)
+    {
+        ActivePhysicsConstraint->SetLinearBreakable(true, BreakForce);
+    }
+    
+    ActivePhysicsConstraint->SetConstrainedComponents(MeshComponent, EffectorBone, Cast<UPrimitiveComponent>(AnchorComp), NAME_None);
+}
+
+void ADynamicCharacter::ApplyEnvironmentalForces(float DeltaSeconds)
+{
+    if (!HasAuthority() || IsPendingKillPending() || IsHidden()) return;
+
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    // Fetch live wind/weather metric from the global Voxel/Environment cells
+    static const FGameplayTag WindSpeedTag = FGameplayTag::RequestGameplayTag(TEXT("Env.Metric.WindSpeed"), false);
+    const float WindSpeed = GS->GetEnvironmentMetricAtLocation(GetActorLocation(), WindSpeedTag);
+
+    if (WindSpeed > 10.0f) // Minimum wind threshold to affect characters (10 m/s)
+    {
+        const int32 CellIdx = GS->GetEnvironmentCellIndexAtLocation(GetActorLocation());
+        if (GS->GetEnvironmentReadBuffer().IsValidIndex(CellIdx))
+        {
+            const FVector WindDir = FVector(GS->GetEnvironmentReadBuffer()[CellIdx].WindDirection);
+            
+            // Physics characters (ragdolling, falling, or flying) catch wind
+            static const FGameplayTag FallModeTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Fall"), false);
+            static const FGameplayTag FlyModeTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Fly"), false);
+
+            const bool bIsAirborne = ActiveMovementStateTag.MatchesTag(FallModeTag) ||
+                                     ActiveMovementStateTag.MatchesTag(FlyModeTag);
+
+            if (bIsRagdolling || bIsAirborne)
+            {
+                // Surface Area approximation (standing up catches more wind than prone)
+                const float SurfaceAreaMult = bIsRagdolling ? 0.5f : 1.25f; 
+                
+                // Wind Force = Speed * Area * Constant
+                const FVector WindForce = WindDir * (WindSpeed * 15.0f * SurfaceAreaMult);
+                
+                if (bIsRagdolling && MeshComponent)
+                {
+                    MeshComponent->AddForce(WindForce, NAME_None, true); // true = acceleration (mass independent)
+                }
+                else if (bIsAirborne && MoverComponent)
+                {
+                    // For Mover 2.0, queue an instantaneous velocity layer
+                    if (UDynamicForceComponent* ForceComp = FindComponentByClass<UDynamicForceComponent>())
+                    {
+                        ForceComp->QueueInstantMovementImpulse(WindDir, WindSpeed * 2.0f);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ADynamicCharacter::EvaluatePhysicalEncumbrance(float& OutTotalMass, FVector& OutCoMOffset) const
+{
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    
+    const float BaselineMass = GS ? FMath::Max(1.0f, GS->GetCalculationSettings().BaselineCharacterMassKg) : 80.0f;
+    const float ProximityRadius = GS ? FMath::Max(50.0f, GS->GetCalculationSettings().CarriedMassProximityRadius) : 300.0f;
+    const FGameplayTag WeightTag = (GS && GS->GetCalculationSettings().ObjectWeightAttributeTag.IsValid())
+        ? GS->GetCalculationSettings().ObjectWeightAttributeTag
+        : FGameplayTag::RequestGameplayTag(TEXT("Attribute.Object.Weight"), false);
+
+    OutTotalMass = BaselineMass;
+    OutCoMOffset = FVector::ZeroVector;
+
+    float WeightedCoMOffsetForward = 0.0f;
+    float WeightedCoMOffsetRight = 0.0f;
+    float WeightedCoMOffsetUp = 0.0f;
+
+    // 1. Evaluate Equipped Items & Slot Directional Mass Offsets
+    if (const UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
+    {
+        for (const FDynamicEquipmentSlotItem& Slot : EquipComp->ReplicatedEquipmentSlots.Items)
+        {
+            if (Slot.EquippedItemArchetypeTag.IsValid())
+            {
+                float ItemMass = 0.0f;
+
+                // Priority A: Saved dynamic attributes on the item instance
+                for (const FDynamicAttributeItem& Attr : Slot.SavedItemAttributeState)
+                {
+                    if (Attr.LimbId == 0 && Attr.AttributeTag == WeightTag)
+                    {
+                        ItemMass += Attr.Value;
+                    }
+                }
+
+                // Priority B: Master Registry Archetype Defaults
+                if (ItemMass <= 0.0f && GS)
+                {
+                    if (const FDynamicPhysicsActorDef* Def = GS->MasterPhysicsActorRegistry.Find(Slot.EquippedItemArchetypeTag))
+                    {
+                        if (WeightTag.IsValid())
+                        {
+                            if (const float* FoundWeight = Def->DefaultGlobalAttributes.LocalLookupMap.Find(WeightTag))
+                            {
+                                ItemMass = *FoundWeight;
+                            }
+                        }
+                        if (ItemMass <= 0.0f)
+                        {
+                            ItemMass = Def->MassOverride;
+                        }
+                    }
+                }
+
+                OutTotalMass += ItemMass;
+
+                // Center of Mass physical bias based on slot location
+                const FString SlotStr = Slot.SlotTag.ToString();
+                if (SlotStr.Contains(TEXT("Back")) || SlotStr.Contains(TEXT("Shoulder.Over")))
+                {
+                    WeightedCoMOffsetForward -= (ItemMass * 0.25f);
+                    WeightedCoMOffsetUp += (ItemMass * 0.15f);
+                }
+                else if (SlotStr.Contains(TEXT("Chest.Outer")) || SlotStr.Contains(TEXT("Chest.Main")))
+                {
+                    WeightedCoMOffsetForward += (ItemMass * 0.10f);
+                    WeightedCoMOffsetUp += (ItemMass * 0.10f);
+                }
+                else if (SlotStr.Contains(TEXT("Hand.Right")))
+                {
+                    WeightedCoMOffsetForward += (ItemMass * 0.20f);
+                    WeightedCoMOffsetRight += (ItemMass * 0.20f);
+                }
+                else if (SlotStr.Contains(TEXT("Hand.Left")))
+                {
+                    WeightedCoMOffsetForward += (ItemMass * 0.20f);
+                    WeightedCoMOffsetRight -= (ItemMass * 0.20f);
+                }
+                else if (SlotStr.Contains(TEXT("Waist")) || SlotStr.Contains(TEXT("Pelvis")))
+                {
+                    WeightedCoMOffsetUp -= (ItemMass * 0.10f);
+                }
+            }
+        }
+    }
+
+    // 2. Evaluate Internal Container Inventory Mass
+    if (const UDynamicContainerComponent* Container = FindComponentByClass<UDynamicContainerComponent>())
+    {
+        const float ContainerMass = Container->GetCurrentTotalWeight();
+        OutTotalMass += ContainerMass;
+
+        // Container items typically sit in a backpack or belt pouches (shift CoM slightly backward/downward)
+        WeightedCoMOffsetForward -= (ContainerMass * 0.20f);
+        WeightedCoMOffsetUp += (ContainerMass * 0.05f);
+    }
+
+    // 3. Evaluate Physically Attached Actors (e.g. Carried items, hitched trailers, weapons in hand)
+    TSet<const ADynamicPhysicsActor*> ProcessedPhysicsActors;
+
+    TArray<AActor*> AttachedActors;
+    GetAttachedActors(AttachedActors, true);
+    for (AActor* Attached : AttachedActors)
+    {
+        if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Attached))
+        {
+            if (!PhysActor->IsPendingKillPending())
+            {
+                ProcessedPhysicsActors.Add(PhysActor);
+                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                {
+                    const float AttachedMass = Prim->GetMass();
+                    OutTotalMass += AttachedMass;
+
+                    // Compute local offset relative to character transform
+                    const FVector LocalAttachPos = GetTransform().InverseTransformPosition(PhysActor->GetActorLocation());
+                    WeightedCoMOffsetForward += LocalAttachPos.X * (AttachedMass / FMath::Max(1.0f, OutTotalMass));
+                    WeightedCoMOffsetRight += LocalAttachPos.Y * (AttachedMass / FMath::Max(1.0f, OutTotalMass));
+                    WeightedCoMOffsetUp += LocalAttachPos.Z * (AttachedMass / FMath::Max(1.0f, OutTotalMass));
+                }
+            }
+        }
+    }
+
+    // 4. Evaluate Nearby Proximity Dragged/Tethered Physics Bodies
+    if (World)
+    {
+        TArray<FOverlapResult> Overlaps;
+        FCollisionObjectQueryParams ObjParams;
+        ObjParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+        ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+        FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(EvaluatePhysicalEncumbranceSweep), false, this);
+
+        if (World->OverlapMultiByObjectType(Overlaps, GetActorLocation(), FQuat::Identity, ObjParams, FCollisionShape::MakeSphere(ProximityRadius), QueryParams))
+        {
+            for (const FOverlapResult& Overlap : Overlaps)
+            {
+                if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(Overlap.GetActor()))
+                {
+                    if (!PhysActor->IsPendingKillPending() && !ProcessedPhysicsActors.Contains(PhysActor))
+                    {
+                        // Check if the physics actor is physically carried or dragged
+                        if (const UDynamicInteractableComponent* Interactable = PhysActor->GetInteractableComponent())
+                        {
+                            static const FGameplayTag CarriedTag = FGameplayTag::RequestGameplayTag(TEXT("State.Interactable.Carried"), false);
+                            if (CarriedTag.IsValid() && Interactable->HasStateTag(CarriedTag))
+                            {
+                                ProcessedPhysicsActors.Add(PhysActor);
+                                if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
+                                {
+                                    const float TetheredMass = Prim->GetMass();
+                                    OutTotalMass += TetheredMass;
+
+                                    const FVector LocalTetherPos = GetTransform().InverseTransformPosition(PhysActor->GetActorLocation());
+                                    WeightedCoMOffsetForward += LocalTetherPos.X * (TetheredMass / FMath::Max(1.0f, OutTotalMass));
+                                    WeightedCoMOffsetRight += LocalTetherPos.Y * (TetheredMass / FMath::Max(1.0f, OutTotalMass));
+                                    WeightedCoMOffsetUp += LocalTetherPos.Z * (TetheredMass / FMath::Max(1.0f, OutTotalMass));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Normalize CoM shift by total mass and clamp to realistic physiological envelope
+    const float SafeTotalMass = FMath::Max(1.0f, OutTotalMass);
+    OutCoMOffset.X = FMath::Clamp(WeightedCoMOffsetForward / SafeTotalMass, -45.0f, 45.0f);
+    OutCoMOffset.Y = FMath::Clamp(WeightedCoMOffsetRight / SafeTotalMass, -30.0f, 30.0f);
+    OutCoMOffset.Z = FMath::Clamp(WeightedCoMOffsetUp / SafeTotalMass, -50.0f, 50.0f);
 }

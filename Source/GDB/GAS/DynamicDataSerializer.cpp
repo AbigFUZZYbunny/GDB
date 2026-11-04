@@ -333,6 +333,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             {
                 TSharedPtr<FJsonObject> InteractionObj = AbilityObj->GetObjectField(TEXT("InteractionConfig"));
                 DeserializeMapWrapper(InteractionObj, TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
+                
                 if (InteractionObj->HasField(TEXT("ImpactTypeTags")))
                 {
                     for (const auto& TagVal : InteractionObj->GetArrayField(TEXT("ImpactTypeTags")))
@@ -341,6 +342,18 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                         if (Tag.IsValid()) AbilityDef.InteractionConfig.ImpactTypeTags.AddTag(Tag);
                     }
                 }
+
+                AbilityDef.InteractionConfig.PhysicsMode = InteractionObj->HasField(TEXT("PhysicsMode")) 
+                    ? StringToEnum<EInteractionPhysicsMode>(InteractionObj->GetStringField(TEXT("PhysicsMode"))) 
+                    : EInteractionPhysicsMode::None;
+
+                AbilityDef.InteractionConfig.TetherMaxLength = InteractionObj->HasField(TEXT("TetherMaxLength")) 
+                    ? static_cast<float>(InteractionObj->GetNumberField(TEXT("TetherMaxLength"))) 
+                    : 500.0f;
+
+                AbilityDef.InteractionConfig.TetherBreakForce = InteractionObj->HasField(TEXT("TetherBreakForce")) 
+                    ? static_cast<float>(InteractionObj->GetNumberField(TEXT("TetherBreakForce"))) 
+                    : 0.0f;
             }
             if (AbilityObj->HasField(TEXT("ChainConfig")))
             {
@@ -1543,6 +1556,45 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             }
 
             OutStaging.MarketMasterRegistry.Add(KeyTag, MarketDef);
+        }
+    }
+    
+    if (RootObject->HasField(TEXT("FactionMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("FactionMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> FacObj = Pair.Value->AsObject();
+            FDynamicFactionDef FacDef;
+            
+            FacDef.FactionTag = KeyTag;
+            DeserializeLocalizationMap(FacObj, TEXT("Localization"), FacDef.Localization);
+            FacDef.BaseInfluence = FacObj->HasField(TEXT("BaseInfluence")) ? static_cast<float>(FacObj->GetNumberField(TEXT("BaseInfluence"))) : 100.0f;
+            
+            if (FacObj->HasField(TEXT("AlliedFactions")))
+            {
+                for (const auto& TagVal : FacObj->GetArrayField(TEXT("AlliedFactions")))
+                {
+                    FacDef.AlliedFactions.AddTag(FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false));
+                }
+            }
+            if (FacObj->HasField(TEXT("RivalFactions")))
+            {
+                for (const auto& TagVal : FacObj->GetArrayField(TEXT("RivalFactions")))
+                {
+                    FacDef.RivalFactions.AddTag(FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false));
+                }
+            }
+
+            if (FacObj->HasField(TEXT("FactionColorTheme")))
+            {
+                TSharedPtr<FJsonObject> ColObj = FacObj->GetObjectField(TEXT("FactionColorTheme"));
+                // Fallback struct parsing for the color gradient
+                FJsonObjectConverter::JsonObjectToUStruct(ColObj.ToSharedRef(), &FacDef.FactionColorTheme, 0, 0);
+            }
+
+            OutStaging.FactionMasterRegistry.Add(KeyTag, FacDef);
         }
     }
 

@@ -341,6 +341,33 @@
         "BypassGateMasteryAttributeTag": "Attribute.Mastery.Element.Fire",
         "BypassGateMasteryThreshold": 85.0
       }
+    },
+    "Ability.Magic.Destruction.Blizzard": {
+      "ExecutionType": "SpatialDelivery",
+      "SpatialDelivery": {
+        "MotionType": "StationaryGround",
+        "ShapeBehavior": "StayFullSize",
+        "ApplicationType": "TickInterval",
+        "MinRadius": 800.0,
+        "MaxRadius": 800.0,
+        "Duration": 10.0,
+        "TickInterval": 1.0,
+        "ImpactTypeTags": [ "Impact.Type.Magic.Frost" ],
+        "EffectsToApply": [ "Effect.Magic.Frost.Chilled" ]
+      }
+    },
+    "Ability.Magic.Restoration.HealingRain": {
+      "ExecutionType": "SpatialDelivery",
+      "SpatialDelivery": {
+        "MotionType": "StationaryGround",
+        "ShapeBehavior": "ExpandOut",
+        "ApplicationType": "PassiveWhileIn",
+        "MinRadius": 100.0,
+        "MaxRadius": 1200.0,
+        "Duration": 15.0,
+        "ImpactTypeTags": [ "Impact.Type.Magic.Restoration" ],
+        "EffectsToApply": [ "Effect.Magic.Support.RegenAura" ]
+      }
     }
   }
 }

@@ -137,6 +137,28 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Combat")
     virtual void ServerProcessDeath(AActor* KillerActor);
+    
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Mount")
+    void ServerSetMount(AActor* MountActor, FGameplayTag SaddlePointTag, float BreakForce, float SaddleSlop);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Mount")
+    void ServerDismount();
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Tether")
+    void ServerEstablishTether(AActor* TargetActor, FName EffectorBone, FGameplayTag TargetPointTag, float MaxLength, float BreakForce);
+
+    UPROPERTY(ReplicatedUsing=OnRep_MountState, BlueprintReadOnly, Category = "DynamicGAS|Mount")
+    TWeakObjectPtr<AActor> CurrentMount;
+
+    UFUNCTION()
+    void OnRep_MountState();
+
+    UFUNCTION()
+    void OnPhysicsConstraintBroken(int32 ConstraintIndex);
+
+    // O(1) single-pass iteration evaluates total mass and the aggregate center of mass offset
+    void EvaluatePhysicalEncumbrance(float& OutTotalMass, FVector& OutCoMOffset) const;
+    void ApplyEnvironmentalForces(float DeltaSeconds);
 
 protected:
     virtual void BeginPlay() override;
@@ -195,6 +217,9 @@ protected:
     void UpdateRagdollHyperextension(float DeltaSeconds);
     
     void UpdateNetworkDormancy(float DeltaSeconds);
+    
+    UPROPERTY(Transient)
+    TObjectPtr<UPhysicsConstraintComponent> ActivePhysicsConstraint;
 
 private:
     void InitializeAbilitySystem();

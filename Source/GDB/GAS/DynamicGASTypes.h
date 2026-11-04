@@ -259,7 +259,9 @@ enum class EInteractionPhysicsMode : uint8
     None,
     PushAwayFromCaster,
     PullTowardCaster,
-    AngularHingeTorque
+    AngularHingeTorque,
+    Tether,         // NEW: Creates a rope/spring constraint between caster and target
+    Mount           // NEW: Creates a riding soft-constraint between caster pelvis and target saddle
 };
 
 UENUM(BlueprintType)
@@ -1380,6 +1382,14 @@ struct FDynamicInteractionProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Lore")
     FGameplayTag ReadableLanguageTag;
+
+    // Defines the max length of a tether, or the allowed slop in a mount constraint
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction|Physics")
+    float TetherMaxLength = 500.0f;
+
+    // Force required to snap the tether/knock a rider off the mount. 0 = unbreakable.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction|Physics")
+    float TetherBreakForce = 0.0f;
 };
 
 // ============================================================================
@@ -3898,6 +3908,39 @@ struct FDynamicColorGradient
     FLinearColor SecondaryColor = FLinearColor::White;
 };
 
+
+
+// ----------------------------------------------------------------------------
+// Factions & Territory Control
+// ----------------------------------------------------------------------------
+
+USTRUCT(BlueprintType)
+struct FDynamicFactionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Faction")
+    FGameplayTag FactionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Faction")
+    FDynamicLocalizationProfile Localization;
+
+    // Factions that share vision, do not trigger bounties against each other, and assist in combat
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Faction")
+    FGameplayTagContainer AlliedFactions;
+
+    // Factions that are hostile on sight
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Faction")
+    FGameplayTagContainer RivalFactions;
+
+    // Starting macro-influence for dynamic world generation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Faction")
+    float BaseInfluence = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Faction")
+    FDynamicColorGradient FactionColorTheme;
+};
+
 USTRUCT(BlueprintType)
 struct FCharacterAttributeRangeDef
 {
@@ -6026,6 +6069,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
     TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
     TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
+    TMap<FGameplayTag, FDynamicFactionDef> FactionMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

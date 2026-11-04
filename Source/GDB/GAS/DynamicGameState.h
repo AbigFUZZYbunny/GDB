@@ -66,6 +66,7 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicFactionDef> FactionMasterRegistry;
 
     // Immersion Voice & Viseme Registries
     UPROPERTY() TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;

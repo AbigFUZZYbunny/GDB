@@ -4,6 +4,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "AbilitySystemComponent.h"
+#include "DynamicCharacter.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
 
@@ -203,6 +204,7 @@ bool UDynamicInteractableComponent::ServerExecuteInteraction(AActor* InstigatorA
         return false;
     }
 
+    // 1. Remove and Add Data-Driven Target State Tags
     for (const FGameplayTag& TagToRemove : Profile.TagsToRemoveFromTarget)
     {
         RemoveStateTag(TagToRemove);
@@ -212,6 +214,7 @@ bool UDynamicInteractableComponent::ServerExecuteInteraction(AActor* InstigatorA
         AddStateTag(TagToAdd);
     }
 
+    // 2. Physical Interaction Dispatch
     if (Profile.PhysicsMode != EInteractionPhysicsMode::None && InstigatorActor)
     {
         FTransform TargetPointTransform = OwnerActor->GetActorTransform();
@@ -219,29 +222,79 @@ bool UDynamicInteractableComponent::ServerExecuteInteraction(AActor* InstigatorA
         ResolveKinematicTargetTransform(Profile.KinematicTargetTag, TargetPointTransform, TargetSceneComp);
 
         UPrimitiveComponent* TargetPrim = Cast<UPrimitiveComponent>(TargetSceneComp);
-        if (!TargetPrim) TargetPrim = Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent());
-
-        if (TargetPrim && TargetPrim->IsSimulatingPhysics())
+        if (!TargetPrim)
         {
-            const float ForceMag = (Profile.ForceMetricTag.IsValid()
-        ? Profile.InteractionMetrics.LocalLookupMap.FindRef(Profile.ForceMetricTag)
-        : 0.0f) * ChargeAlpha;
-            const FVector DirFromCaster = (TargetPointTransform.GetLocation() - InstigatorActor->GetActorLocation()).GetSafeNormal();
+            TargetPrim = Cast<UPrimitiveComponent>(OwnerActor->GetRootComponent());
+        }
 
-            switch (Profile.PhysicsMode)
+        const float ForceMag = (Profile.ForceMetricTag.IsValid()
+            ? Profile.InteractionMetrics.LocalLookupMap.FindRef(Profile.ForceMetricTag)
+            : 0.0f) * ChargeAlpha;
+
+        const FVector DirFromCaster = (TargetPointTransform.GetLocation() - InstigatorActor->GetActorLocation()).GetSafeNormal();
+
+        switch (Profile.PhysicsMode)
+        {
+            case EInteractionPhysicsMode::PushAwayFromCaster:
             {
-                case EInteractionPhysicsMode::PushAwayFromCaster:
+                if (TargetPrim && TargetPrim->IsSimulatingPhysics())
+                {
                     TargetPrim->AddImpulseAtLocation(DirFromCaster * ForceMag, TargetPointTransform.GetLocation());
-                    break;
-                case EInteractionPhysicsMode::PullTowardCaster:
-                    TargetPrim->AddImpulseAtLocation((-DirFromCaster) * ForceMag, TargetPointTransform.GetLocation());
-                    break;
-                case EInteractionPhysicsMode::AngularHingeTorque:
-                    TargetPrim->AddAngularImpulseInRadians(FVector::UpVector * ForceMag);
-                    break;
-                default:
-                    break;
+                }
+                break;
             }
+
+            case EInteractionPhysicsMode::PullTowardCaster:
+            {
+                if (TargetPrim && TargetPrim->IsSimulatingPhysics())
+                {
+                    TargetPrim->AddImpulseAtLocation((-DirFromCaster) * ForceMag, TargetPointTransform.GetLocation());
+                }
+                break;
+            }
+
+            case EInteractionPhysicsMode::AngularHingeTorque:
+            {
+                if (TargetPrim && TargetPrim->IsSimulatingPhysics())
+                {
+                    TargetPrim->AddAngularImpulseInRadians(FVector::UpVector * ForceMag);
+                }
+                break;
+            }
+
+            case EInteractionPhysicsMode::Mount:
+            {
+                if (ADynamicCharacter* Rider = Cast<ADynamicCharacter>(InstigatorActor))
+                {
+                    // TetherMaxLength serves as the allowable saddle slop/bounce distance
+                    Rider->ServerSetMount(
+                        OwnerActor, 
+                        Profile.KinematicTargetTag, 
+                        Profile.TetherBreakForce, 
+                        Profile.TetherMaxLength
+                    );
+                }
+                break;
+            }
+
+            case EInteractionPhysicsMode::Tether:
+            {
+                if (ADynamicCharacter* Caster = Cast<ADynamicCharacter>(InstigatorActor))
+                {
+                    Caster->ServerEstablishTether(
+                        OwnerActor, 
+                        Profile.CasterEffectorBone, 
+                        Profile.KinematicTargetTag, 
+                        Profile.TetherMaxLength, 
+                        Profile.TetherBreakForce
+                    );
+                }
+                break;
+            }
+
+            case EInteractionPhysicsMode::None:
+            default:
+                break;
         }
     }
 

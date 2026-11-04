@@ -1,6 +1,33 @@
 ﻿{
   "_comment": "Generic World Interaction & Combat Abilities Schema: Updated to include open, close, lock, unlock, grab, drop, and throw.",
   "AbilityMasterRegistry": {
+    "Ability.Interaction.MountBeast": {
+      "ExecutionType": "Interaction",
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Mount",
+        "PhysicsMode": "Mount",
+        "KinematicTargetTag": "KinematicTarget.Saddle",
+        "MaxInteractionDistance": 250.0,
+        "TargetSweepRadius": 80.0,
+        "TetherMaxLength": 15.0,
+        "TetherBreakForce": 150000.0,
+        "RequiredTargetTags": [ "State.Interactable.Mountable" ],
+        "EffectsToApplyToTarget": []
+      }
+    },
+    "Ability.Interaction.TetherDrag": {
+      "ExecutionType": "Interaction",
+      "InteractionConfig": {
+        "InteractionActionTag": "Interaction.Action.Tether",
+        "PhysicsMode": "Tether",
+        "CasterEffectorBone": "hand_r",
+        "KinematicTargetTag": "KinematicTarget.TowHitch",
+        "MaxInteractionDistance": 300.0,
+        "TetherMaxLength": 250.0,
+        "TetherBreakForce": 50000.0,
+        "RequiredTargetTags": [ "State.Interactable.Moveable" ]
+      }
+    },
     "Ability.Interaction.Open": {
       "RequiredMasteryAttributeTag": "Attribute.Stat.Intelligence",
       "RequiredMasteryPointsAttributeTag": "Attribute.Stat.Experience",

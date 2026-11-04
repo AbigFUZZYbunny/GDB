@@ -1,5 +1,6 @@
 ﻿// DynamicBuildingSubsystem.cpp
 #include "DynamicBuildingSubsystem.h"
+#include "Sound/ReverbEffect.h"
 #include "DynamicGameState.h"
 #include "GameFramework/PlayerController.h"
 #include "DynamicLogicEvaluator.h"
@@ -806,4 +807,26 @@ bool UDynamicBuildingSubsystem::GetPropertyOwnedByCharacter(FGuid CharacterGuid,
         }
     }
     return false;
+}
+
+UReverbEffect* UDynamicBuildingSubsystem::GetAcousticReverbAtLocation(const FVector& WorldLocation) const
+{
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS) return nullptr;
+
+    for (const FDynamicRoomInstance& Room : ActiveRooms)
+    {
+        if (Room.WorldBounds.IsInsideOrOn(WorldLocation))
+        {
+            if (const FDynamicRoomTypeDef* RoomDef = GS->RoomTypeRegistry.Find(Room.ClassifiedRoomTypeTag))
+            {
+                if (!RoomDef->AcousticReverbAsset.IsNull())
+                {
+                    return Cast<UReverbEffect>(RoomDef->AcousticReverbAsset.LoadSynchronous());
+                }
+            }
+        }
+    }
+    return nullptr;
 }

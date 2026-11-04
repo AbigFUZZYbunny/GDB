@@ -7,6 +7,8 @@
 #include "DynamicBuildingChunkActor.h"
 #include "DynamicBuildingSubsystem.generated.h"
 
+class UReverbEffect;
+
 UCLASS()
 class GDB_API UDynamicBuildingSubsystem : public UTickableWorldSubsystem
 {
@@ -33,6 +35,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Building|Environment")
     float EvaluateShelterInsulationAtLocation(const FVector& WorldLocation) const;
 
+    // NEW: Retrieves the configured Reverb Effect for the room enclosing the location
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Building|Acoustics")
+    UReverbEffect* GetAcousticReverbAtLocation(const FVector& WorldLocation) const;
+
     void RequestAsynchronousRoomEvaluation();
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Building|Rooms")
@@ -50,7 +56,6 @@ private:
     UPROPERTY()
     TMap<FIntPoint, ADynamicBuildingChunkActor*> ActiveBuildingChunks;
 
-    // NEW: Off-world mathematical cache for chunks outside player streaming radii
     UPROPERTY()
     TMap<FIntPoint, FBuildingChunkSnapshot> VirtualizedBuildingChunks;
 
@@ -63,9 +68,8 @@ private:
     float StreamingTimer = 0.0f;
     float TransitionTimer = 0.0f;
 
-    // Standardized load radii to align with dynamic voxel streaming
-    float LoadRadius = 40000.0f;   // 400m
-    float UnloadRadius = 45000.0f; // 450m (Hysteresis prevents border-thrashing hitches)
+    float LoadRadius = 40000.0f;   
+    float UnloadRadius = 45000.0f; 
     
     bool bRoomEvaluationPending = false;
 
@@ -73,7 +77,5 @@ private:
     void ProcessBuildingStreaming();
     void ExecuteRoomFloodFillAsync();
     FGameplayTag ClassifyRoomByContents(const FBox& RoomBounds, float RoomVolume) const;
-
-    // Evaluates all active characters via O(1) GameState GUID map to detect structural entry/exit
     void ProcessCharacterRoomTransitions();
 };

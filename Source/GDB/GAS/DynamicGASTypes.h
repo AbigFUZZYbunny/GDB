@@ -2441,6 +2441,73 @@ struct FDynamicBountyRecord
 };
 
 // ============================================================================
+// DIALECTS, ACCENTS & MULTI-PARTY DISCOURSE
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct GDB_API FDialectPhoneticShift
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    FString OriginalPhoneme = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    FString ShiftedPhoneme = TEXT("");
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicDialectDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    FGameplayTag DialectTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    FGameplayTag ParentLanguageTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    FString DialectDisplayName = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    float PitchModifier = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    float TempoModifier = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    TArray<FString> ColloquialPrefixes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    TArray<FString> ColloquialSuffixes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    TArray<FDialectPhoneticShift> PhoneticShifts;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Dialect")
+    TMap<FString, FString> SlangSubstitutions;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FConversationalCircleParticipant
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TWeakObjectPtr<AActor> ParticipantActor = nullptr;
+
+    UPROPERTY()
+    FGuid CharacterGuid;
+
+    UPROPERTY()
+    double LastSpokenTimestamp = 0.0;
+
+    UPROPERTY()
+    float AttentionWeight = 1.0f;
+};
+
+// ============================================================================
 // DYNAMIC ROOM CLASSIFICATION & ENVIRONMENT INTEGRATION
 // ============================================================================
 
@@ -2459,26 +2526,26 @@ struct FDynamicRoomRequirement
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicRoomTypeDef
+struct GDB_API FDynamicRoomTypeDef
 {
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag RoomTypeTag; // e.g., "Room.Type.Kitchen"
+    FGameplayTag RoomTypeTag;
 
-    // Priority for classification if a room meets multiple definitions (Highest wins)
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float ClassificationPriority = 0.0f;
 
-    // Minimum enclosed volume (in cubic Unreal Units) to qualify
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float MinimumVolume = 100000.0f; 
 
-    // What furniture/items must be inside the enclosed space
+    // NEW: Spatial audio reverb applied to voices and sounds inside this room
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TSoftObjectPtr<class UReverbEffect> AcousticReverbAsset;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<FDynamicRoomRequirement> ContentRequirements;
 
-    // Environmental offsets applied to all environment grid cells within this room
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FDynamicTagFloatMapWrapper EnvironmentModifiers;
 };
@@ -5738,6 +5805,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, TArray<FWitnessReactionRule>> WitnessReactionRegistry;
     TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
     TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
+    TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

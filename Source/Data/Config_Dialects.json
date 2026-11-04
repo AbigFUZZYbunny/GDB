@@ -1,0 +1,72 @@
+﻿{
+  "_comment": "Master Dialect and Regional Accent Registry for linguistic variations and speech synthesis modulation.",
+  "DialectMasterRegistry": {
+    "Dialect.Orcish.Snow": {
+      "DialectTag": "Dialect.Orcish.Snow",
+      "ParentLanguageTag": "Language.Orcish",
+      "DialectDisplayName": "Frost-Bitten Orcish",
+      "PitchModifier": -0.08,
+      "TempoModifier": -0.05,
+      "ColloquialPrefixes": [ "Hark, frost-stranger! ", "By the cold tusk, " ],
+      "ColloquialSuffixes": [ ", under the ice.", ", by the frozen steppe." ],
+      "PhoneticShifts": [
+        { "OriginalPhoneme": "lok", "ShiftedPhoneme": "lukh" },
+        { "OriginalPhoneme": "tar", "ShiftedPhoneme": "tahr" },
+        { "OriginalPhoneme": "ogar", "ShiftedPhoneme": "o-gharr" }
+      ],
+      "SlangSubstitutions": {
+        "enemy": "warm-blood",
+        "friend": "clan-shield",
+        "gold": "hard-ore"
+      }
+    },
+    "Dialect.Orcish.Blood": {
+      "DialectTag": "Dialect.Orcish.Blood",
+      "ParentLanguageTag": "Language.Orcish",
+      "DialectDisplayName": "Warlord Chant Orcish",
+      "PitchModifier": 0.05,
+      "TempoModifier": 0.10,
+      "ColloquialPrefixes": [ "Blood rises! ", "Steel speaks: " ],
+      "ColloquialSuffixes": [ ", or bleed.", ", by the war-banner!" ],
+      "PhoneticShifts": [
+        { "OriginalPhoneme": "zug", "ShiftedPhoneme": "zzugg" }
+      ],
+      "SlangSubstitutions": {
+        "hello": "draw-steel",
+        "coward": "blade-breaker"
+      }
+    },
+    "Dialect.Elvish.High": {
+      "DialectTag": "Dialect.Elvish.High",
+      "ParentLanguageTag": "Language.Elvish",
+      "DialectDisplayName": "Archaic High Elven",
+      "PitchModifier": 0.08,
+      "TempoModifier": -0.08,
+      "ColloquialPrefixes": [ "Under the stars, ", "May the light find you: " ],
+      "ColloquialSuffixes": [ ", as the ancient verses foretell.", ", in timeless grace." ],
+      "PhoneticShifts": [
+        { "OriginalPhoneme": "mae", "ShiftedPhoneme": "maea" },
+        { "OriginalPhoneme": "govannen", "ShiftedPhoneme": "govanniel" }
+      ],
+      "SlangSubstitutions": {
+        "stranger": "star-wanderer",
+        "danger": "shadow-tide"
+      }
+    },
+    "Dialect.Common.Highland": {
+      "DialectTag": "Dialect.Common.Highland",
+      "ParentLanguageTag": "Language.Common",
+      "DialectDisplayName": "Highland Common",
+      "PitchModifier": -0.05,
+      "TempoModifier": 0.05,
+      "ColloquialPrefixes": [ "Aye, ", "Listen well, " ],
+      "ColloquialSuffixes": [ ", ya ken?", ", lad.", ", lass." ],
+      "PhoneticShifts": [],
+      "SlangSubstitutions": {
+        "yes": "aye",
+        "no": "nay",
+        "small": "wee"
+      }
+    }
+  }
+}

@@ -566,7 +566,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 DeserializeMapWrapper(PersObj, TEXT("FoodAndDrinkPreferences"), TempDef.PersonalityProfile.FoodAndDrinkPreferences);
                 DeserializeMapWrapper(PersObj, TEXT("ActivityPreferences"), TempDef.PersonalityProfile.ActivityPreferences);
 
-                // NEW: Emotion Morph Maps
                 if (PersObj->HasField(TEXT("EmotionMorphMap")))
                 {
                     const TSharedPtr<FJsonObject> EmotionMapObj = PersObj->GetObjectField(TEXT("EmotionMorphMap"));
@@ -788,7 +787,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
         OutStaging.bHasEnvironmentConfig = true;
         OutStaging.EnvironmentConfig = Config;
     }
-    // 1. Language Deserialization with Teaching Attributes
     if (RootObject->HasField(TEXT("Languages")))
     {
         for (const auto& LangVal : RootObject->GetArrayField(TEXT("Languages")))
@@ -832,11 +830,11 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 const TSharedPtr<FJsonObject> SubObj = LangObj->GetObjectField(TEXT("PidginSubstitutions"));
                 if (SubObj.IsValid())
                 {
-                    for (const TPair<FString, TSharedPtr<FJsonValue>>& SubPair : SubObj->Values)
+                    for (const auto& SubPair : SubObj->Values)
                     {
                         if (SubPair.Value.IsValid())
                         {
-                            const FString KeyStr = SubPair.Key;
+                            const FString KeyStr = *SubPair.Key;
                             const FString ValStr = SubPair.Value->AsString();
                             LangDef.PidginSubstitutions.FindOrAdd(KeyStr) = ValStr;
                         }
@@ -933,7 +931,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                     Entry.CategoryTag = FGameplayTag::RequestGameplayTag(FName(*EntryObj->GetStringField(TEXT("CategoryTag"))), false);
                     Entry.UtteranceTemplate = EntryObj->GetStringField(TEXT("UtteranceTemplate"));
                     
-                    // Parse rich UtteranceVariations with conditions and probability weights
                     ParseDialogueUtteranceArray(EntryObj, TEXT("UtteranceVariations"), Entry.UtteranceVariations);
 
                     if (EntryObj->HasField(TEXT("AllowedMoodTags")))
@@ -1071,7 +1068,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             DeserializeMapWrapper(DefObj, TEXT("PriorityAttributeScalars"), BehaviorDef.PriorityAttributeScalars);
             DeserializeMapWrapper(DefObj, TEXT("ExecutionMetrics"), BehaviorDef.ExecutionMetrics);
             
-            // Fast-Path Dialogue Category and Profile links
             if (DefObj->HasField(TEXT("DialogueCategoryTag")))
             {
                 BehaviorDef.DialogueCategoryTag = FGameplayTag::RequestGameplayTag(FName(*DefObj->GetStringField(TEXT("DialogueCategoryTag"))), false);
@@ -1092,10 +1088,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.AIBehaviorMasterRegistry.Add(KeyTag, BehaviorDef);
         }
     }
-    
-    // ============================================================================
-    // Voxel Terrain System
-    // ============================================================================
     if (RootObject->HasField(TEXT("VoxelMasterRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("VoxelMasterRegistry"))->Values)
@@ -1118,7 +1110,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.VoxelGenerationConfig = Config;
         }
     }
-
     if (RootObject->HasField(TEXT("StructureMaterialRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("StructureMaterialRegistry"))->Values)
@@ -1131,7 +1122,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.StructureMaterialRegistry.Add(KeyTag, MatDef);
         }
     }
-
     if (RootObject->HasField(TEXT("StructurePieceRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("StructurePieceRegistry"))->Values)
@@ -1144,7 +1134,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.StructurePieceRegistry.Add(KeyTag, PieceDef);
         }
     }
-
     if (RootObject->HasField(TEXT("StructurePrefabRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("StructurePrefabRegistry"))->Values)
@@ -1157,7 +1146,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.StructurePrefabRegistry.Add(KeyTag, PrefabDef);
         }
     }
-    
     if (RootObject->HasField(TEXT("RoomTypeRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("RoomTypeRegistry"))->Values)
@@ -1171,6 +1159,11 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             RoomDef.ClassificationPriority = RoomObj->HasField(TEXT("ClassificationPriority")) ? static_cast<float>(RoomObj->GetNumberField(TEXT("ClassificationPriority"))) : 0.0f;
             RoomDef.MinimumVolume = RoomObj->HasField(TEXT("MinimumVolume")) ? static_cast<float>(RoomObj->GetNumberField(TEXT("MinimumVolume"))) : 100000.0f;
             
+            if (RoomObj->HasField(TEXT("AcousticReverbAsset")))
+            {
+                RoomDef.AcousticReverbAsset = TSoftObjectPtr<UReverbEffect>(FSoftObjectPath(RoomObj->GetStringField(TEXT("AcousticReverbAsset"))));
+            }
+
             if (RoomObj->HasField(TEXT("ContentRequirements")))
             {
                 for (const auto& ReqVal : RoomObj->GetArrayField(TEXT("ContentRequirements")))
@@ -1186,7 +1179,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.RoomTypeRegistry.Add(KeyTag, RoomDef);
         }
     }
-    
     if (RootObject->HasField(TEXT("LawAndOrderConfig")))
     {
         TSharedPtr<FJsonObject> LawConfigObj = RootObject->GetObjectField(TEXT("LawAndOrderConfig"));
@@ -1242,7 +1234,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.CrimeMasterRegistry.Add(KeyTag, Def);
         }
     }
-
     if (RootObject->HasField(TEXT("JurisdictionMasterRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("JurisdictionMasterRegistry"))->Values)
@@ -1272,7 +1263,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 }
             }
 
-            // NEW: Parse Escalation of Force Rules
             if (JurObj->HasField(TEXT("EscalationOfForceRules")))
             {
                 for (const auto& RuleVal : JurObj->GetArrayField(TEXT("EscalationOfForceRules")))
@@ -1291,10 +1281,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.JurisdictionMasterRegistry.Add(KeyTag, Def);
         }
     }
-    
-    // ------------------------------------------------------------------------
-    // Voice Profiles Master Registry
-    // ------------------------------------------------------------------------
     if (RootObject->HasField(TEXT("VoiceProfileMasterRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("VoiceProfileMasterRegistry"))->Values)
@@ -1334,10 +1320,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.VoiceProfileMasterRegistry.Add(KeyTag, VoiceDef);
         }
     }
-    
-    // ------------------------------------------------------------------------
-    // Phoneme to Viseme Lip-Sync Registry
-    // ------------------------------------------------------------------------
     if (RootObject->HasField(TEXT("PhonemeVisemeRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("PhonemeVisemeRegistry"))->Values)
@@ -1366,6 +1348,70 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             }
 
             OutStaging.PhonemeVisemeRegistry.Add(KeyTag, RegDef);
+        }
+    }
+    if (RootObject->HasField(TEXT("DialectMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("DialectMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> DiaObj = Pair.Value->AsObject();
+            if (!DiaObj.IsValid()) continue;
+
+            FDynamicDialectDef DiaDef;
+            DiaDef.DialectTag = KeyTag;
+            DiaDef.ParentLanguageTag = FGameplayTag::RequestGameplayTag(FName(*DiaObj->GetStringField(TEXT("ParentLanguageTag"))), false);
+            DiaDef.DialectDisplayName = DiaObj->HasField(TEXT("DialectDisplayName")) ? DiaObj->GetStringField(TEXT("DialectDisplayName")) : TEXT("");
+            DiaDef.PitchModifier = DiaObj->HasField(TEXT("PitchModifier")) ? static_cast<float>(DiaObj->GetNumberField(TEXT("PitchModifier"))) : 0.0f;
+            DiaDef.TempoModifier = DiaObj->HasField(TEXT("TempoModifier")) ? static_cast<float>(DiaObj->GetNumberField(TEXT("TempoModifier"))) : 0.0f;
+
+            if (DiaObj->HasField(TEXT("ColloquialPrefixes")))
+            {
+                for (const auto& Val : DiaObj->GetArrayField(TEXT("ColloquialPrefixes")))
+                {
+                    DiaDef.ColloquialPrefixes.Add(Val->AsString());
+                }
+            }
+            if (DiaObj->HasField(TEXT("ColloquialSuffixes")))
+            {
+                for (const auto& Val : DiaObj->GetArrayField(TEXT("ColloquialSuffixes")))
+                {
+                    DiaDef.ColloquialSuffixes.Add(Val->AsString());
+                }
+            }
+            if (DiaObj->HasField(TEXT("PhoneticShifts")))
+            {
+                for (const auto& ShiftVal : DiaObj->GetArrayField(TEXT("PhoneticShifts")))
+                {
+                    TSharedPtr<FJsonObject> ShiftObj = ShiftVal->AsObject();
+                    if (ShiftObj.IsValid())
+                    {
+                        FDialectPhoneticShift Shift;
+                        Shift.OriginalPhoneme = ShiftObj->GetStringField(TEXT("OriginalPhoneme"));
+                        Shift.ShiftedPhoneme = ShiftObj->GetStringField(TEXT("ShiftedPhoneme"));
+                        DiaDef.PhoneticShifts.Add(Shift);
+                    }
+                }
+            }
+            if (DiaObj->HasField(TEXT("SlangSubstitutions")))
+            {
+                TSharedPtr<FJsonObject> SlangObj = DiaObj->GetObjectField(TEXT("SlangSubstitutions"));
+                if (SlangObj.IsValid())
+                {
+                    for (const auto& SlangPair : SlangObj->Values)
+                    {
+                        if (SlangPair.Value.IsValid())
+                        {
+                            const FString SlangKey = *SlangPair.Key;
+                            const FString SlangVal = SlangPair.Value->AsString();
+                            DiaDef.SlangSubstitutions.Add(SlangKey, SlangVal);
+                        }
+                    }
+                }
+            }
+
+            OutStaging.DialectMasterRegistry.Add(KeyTag, DiaDef);
         }
     }
 

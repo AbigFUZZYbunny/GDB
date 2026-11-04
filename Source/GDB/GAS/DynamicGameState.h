@@ -64,6 +64,7 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
 
     // Immersion Voice & Viseme Registries
     UPROPERTY() TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;

@@ -12,6 +12,7 @@ class UAnimMontage;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnFastPathDialogueSpokenSignature, AActor*, Speaker, AActor*, Listener, const FString&, SpokenText);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnConversationalLockStateChangedSignature, EConversationalTurnState, NewState, AActor*, Interlocutor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnConversationalGazeUpdatedSignature, const FVector&, GazeTargetLocation);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class GDB_API UDynamicSocialComponent : public UActorComponent
@@ -24,6 +25,7 @@ public:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_CharacterPersistentGuid, Category = "Dynamic GAS|Social")
     FGuid CharacterPersistentGuid;
@@ -50,6 +52,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Social|Conversation")
     FOnConversationalLockStateChangedSignature OnConversationalLockStateChanged;
 
+    UPROPERTY(BlueprintAssignable, Category = "Dynamic GAS|Social|Conversation")
+    FOnConversationalGazeUpdatedSignature OnConversationalGazeUpdated;
+
     UFUNCTION()
     void OnRep_ActiveTurnState();
 
@@ -58,6 +63,22 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
     void ServerReleaseConversationalLock();
+
+    // Multi-Party Conversational Circles
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
+    FGuid ActiveConversationalCircleGuid;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
+    TArray<FConversationalCircleParticipant> CircleParticipants;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
+    void ServerJoinConversationalCircle(const FGuid& CircleGuid, AActor* ParticipantActor);
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
+    void ServerLeaveConversationalCircle(AActor* ParticipantActor);
+
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Conversation")
+    void UpdateConversationalGaze(float DeltaSeconds);
 
     // Memory & Dialogue Buffers
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|Conversation")
@@ -95,7 +116,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|AI")
     void HandleHeardDialogueFromSpeaker(AActor* Speaker, const FString& UtteranceText, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag);
 
-    // Added EmotionTag default argument
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Language")
     void ServerBroadcastStreamingDialogueChunk(
         const FString& FormulatedChunk, 
@@ -252,4 +272,7 @@ private:
     TWeakObjectPtr<AActor> ActiveCalloutTarget;
     FTimerHandle TimerHandle_CalloutTimeout;
     mutable double LastContextSerializationTime = 0.0;
+
+    FVector CurrentGazeLocation = FVector::ZeroVector;
+    float GazeSwitchTimer = 0.0f;
 };

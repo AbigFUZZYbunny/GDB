@@ -330,7 +330,18 @@ void UDynamicSocialComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
     DOREPLIFETIME(UDynamicSocialComponent, bCloudAISuspended);
     DOREPLIFETIME(UDynamicSocialComponent, ActiveTurnState);
     DOREPLIFETIME(UDynamicSocialComponent, ActiveInterlocutor);
-    DOREPLIFETIME(UDynamicSocialComponent, ReplicatedTopics);   
+    DOREPLIFETIME(UDynamicSocialComponent, ReplicatedTopics);
+    DOREPLIFETIME(UDynamicSocialComponent, ActiveConversationalCircleGuid);
+}
+
+void UDynamicSocialComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    if (ActiveTurnState != EConversationalTurnState::Idle)
+    {
+        UpdateConversationalGaze(DeltaTime);
+    }
 }
 
 void UDynamicSocialComponent::OnRep_Relationships() { RebuildRelationshipCache(); }
@@ -339,6 +350,100 @@ void UDynamicSocialComponent::OnRep_KnownPlaces() { RebuildPlaceCache(); }
 void UDynamicSocialComponent::OnRep_Professions() {}
 void UDynamicSocialComponent::OnRep_CrimeMemories() {}
 void UDynamicSocialComponent::HandleSingleCrimeMemoryReplicated(const FCrimeMemoryItem& Item) {}
+
+void UDynamicSocialComponent::UpdateConversationalGaze(float DeltaSeconds)
+{
+    AActor* OwnerActor = GetOwner();
+    if (!OwnerActor) return;
+
+    AActor* TargetActor = ActiveInterlocutor.Get();
+
+    // In a multi-party circle, alternate gaze periodically to simulate natural eye contact
+    if (CircleParticipants.Num() > 1)
+    {
+        GazeSwitchTimer += DeltaSeconds;
+        if (GazeSwitchTimer >= 4.5f)
+        {
+            GazeSwitchTimer = 0.0f;
+            const int32 NextIdx = FMath::RandRange(0, CircleParticipants.Num() - 1);
+            if (CircleParticipants[NextIdx].ParticipantActor.IsValid())
+            {
+                TargetActor = CircleParticipants[NextIdx].ParticipantActor.Get();
+            }
+        }
+    }
+
+    if (!TargetActor) return;
+
+    const FVector HeadTargetLocation = TargetActor->GetActorLocation() + FVector(0.0f, 0.0f, 65.0f);
+    CurrentGazeLocation = FMath::VInterpTo(CurrentGazeLocation, HeadTargetLocation, DeltaSeconds, 4.0f);
+
+    OnConversationalGazeUpdated.Broadcast(CurrentGazeLocation);
+
+    // Physical look-at drive via PhysicsControlComponent
+    ADynamicCharacter* DynChar = Cast<ADynamicCharacter>(OwnerActor);
+    if (!DynChar) return;
+
+    UPhysicsControlComponent* PCC = DynChar->GetPhysicsControlComponent();
+    if (!PCC) return;
+
+    const FVector LookVector = (CurrentGazeLocation - (OwnerActor->GetActorLocation() + FVector(0.0f, 0.0f, 60.0f))).GetSafeNormal();
+    const FRotator TargetLookRot = LookVector.Rotation();
+
+    // Smoothly orient head control toward the speaker
+    static const FName HeadControlName = TEXT("Control_head");
+    PCC->SetControlTargetOrientation(HeadControlName, TargetLookRot, 35.0f);
+}
+
+void UDynamicSocialComponent::ServerJoinConversationalCircle(const FGuid& CircleGuid, AActor* ParticipantActor)
+{
+    if (!GetOwner()->HasAuthority() || !CircleGuid.IsValid() || !ParticipantActor) return;
+
+    ActiveConversationalCircleGuid = CircleGuid;
+
+    // Check if participant already recorded
+    for (FConversationalCircleParticipant& P : CircleParticipants)
+    {
+        if (P.ParticipantActor.Get() == ParticipantActor)
+        {
+            P.LastSpokenTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+            P.AttentionWeight = 1.0f;
+            return;
+        }
+    }
+
+    FConversationalCircleParticipant NewP;
+    NewP.ParticipantActor = ParticipantActor;
+    if (UDynamicSocialComponent* PSocial = ParticipantActor->FindComponentByClass<UDynamicSocialComponent>())
+    {
+        NewP.CharacterGuid = PSocial->CharacterPersistentGuid;
+    }
+    NewP.LastSpokenTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    NewP.AttentionWeight = 1.0f;
+    CircleParticipants.Add(NewP);
+
+    // If an NPC joined, face the newest participant
+    ActiveInterlocutor = ParticipantActor;
+}
+
+void UDynamicSocialComponent::ServerLeaveConversationalCircle(AActor* ParticipantActor)
+{
+    if (!GetOwner()->HasAuthority() || !ParticipantActor) return;
+
+    CircleParticipants.RemoveAll([ParticipantActor](const FConversationalCircleParticipant& P) {
+        return P.ParticipantActor.Get() == ParticipantActor;
+    });
+
+    if (CircleParticipants.Num() == 0)
+    {
+        ActiveConversationalCircleGuid.Invalidate();
+        ServerReleaseConversationalLock();
+    }
+    else if (ActiveInterlocutor.Get() == ParticipantActor)
+    {
+        ActiveInterlocutor = CircleParticipants[0].ParticipantActor.Get();
+    }
+}
 
 void UDynamicSocialComponent::RebuildRelationshipCache()
 {
@@ -2035,6 +2140,16 @@ void UDynamicSocialComponent::ServerHandleSpeechInterrupted(AActor* Interrupter)
 
     ClearActiveCallout();
 
+    // 1. Instantly abort current Audio, TTS Queue, and Lip Sync
+    if (UDynamicLanguageComponent* LangComp = GetOwner()->FindComponentByClass<UDynamicLanguageComponent>())
+    {
+        LangComp->InterruptActiveSpeech();
+    }
+
+    // 2. Clear Conversational Lock
+    ServerReleaseConversationalLock();
+
+    // 3. Process Psychological/Relational Consequences (Affinity loss, Hostility gain)
     if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
     {
         if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))

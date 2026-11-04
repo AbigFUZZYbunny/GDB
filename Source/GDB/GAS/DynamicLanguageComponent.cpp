@@ -8,18 +8,14 @@
 #include "DynamicCharacter.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicBuildingSubsystem.h"
-#include "DynamicSocialEntity.h"
 #include "DynamicLanguageSubsystem.h"
 #include "DynamicSocialComponent.h"
 #include "Interfaces/IHttpResponse.h"
 #include "AbilitySystemComponent.h"
 #include "Engine/OverlapResult.h"
 #include "Net/UnrealNetwork.h"
-#include "Components/AudioComponent.h"
 #include "Containers/Ticker.h"
 #include "GameFramework/PlayerController.h"
-#include "DynamicSocialComponent.h"
-#include "DynamicCloudAISubsystem.h"
 #include "Runtime/Online/Voice/Public/VoiceModule.h"
 
 UDynamicLanguageComponent::UDynamicLanguageComponent()
@@ -52,11 +48,7 @@ void UDynamicLanguageComponent::BeginPlay()
 
 void UDynamicLanguageComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    if (VisemeTickerHandle.IsValid())
-    {
-        FTSTicker::GetCoreTicker().RemoveTicker(VisemeTickerHandle);
-        VisemeTickerHandle.Reset();
-    }
+    InterruptActiveSpeech();
     Super::EndPlay(EndPlayReason);
 }
 
@@ -64,7 +56,6 @@ void UDynamicLanguageComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-    // Pull uncompressed PCM data from the microphone if Voice Capture is actively recording
     if (VoiceCapture.IsValid() && VoiceCapture->IsCapturing())
     {
         uint32 AvailableVoiceData = 0;
@@ -79,6 +70,21 @@ void UDynamicLanguageComponent::TickComponent(float DeltaTime, ELevelTick TickTy
             if (ProcessedBytes > 0)
             {
                 RecordedVoiceBuffer.Append(LocalBuffer.GetData(), ProcessedBytes);
+
+                // Calculate RMS Amplitude to determine in-game acoustic volume
+                int64 SumSquares = 0;
+                const int16* PCM16 = reinterpret_cast<const int16*>(LocalBuffer.GetData());
+                const int32 SampleCount = ProcessedBytes / sizeof(int16);
+                
+                for (int32 i = 0; i < SampleCount; ++i)
+                {
+                    SumSquares += PCM16[i] * PCM16[i];
+                }
+                
+                if (SampleCount > 0)
+                {
+                    CurrentMicAmplitudeRMS = FMath::Sqrt(static_cast<float>(SumSquares) / SampleCount);
+                }
             }
         }
     }
@@ -90,6 +96,8 @@ void UDynamicLanguageComponent::GetLifetimeReplicatedProps(TArray<FLifetimePrope
     DOREPLIFETIME(UDynamicLanguageComponent, ActiveSpokenLanguageTag);
     DOREPLIFETIME(UDynamicLanguageComponent, NativeLanguageTag);
     DOREPLIFETIME(UDynamicLanguageComponent, KnownLanguageTags);
+    DOREPLIFETIME(UDynamicLanguageComponent, ActiveDialectTag);
+    DOREPLIFETIME(UDynamicLanguageComponent, AssignedVoiceProfileTag);
     DOREPLIFETIME(UDynamicLanguageComponent, ReplicatedKnownWords);
 }
 
@@ -105,6 +113,242 @@ void UDynamicLanguageComponent::InitializeFromTemplate(const FCharacterTemplateD
     if (NativeLanguageTag.IsValid())
     {
         KnownLanguageTags.AddUnique(NativeLanguageTag);
+    }
+}
+
+FString UDynamicLanguageComponent::ApplyDialectModifications(const FString& BaseSentence, FGameplayTag DialectTag) const
+{
+    if (BaseSentence.IsEmpty() || !DialectTag.IsValid()) return BaseSentence;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return BaseSentence;
+
+    const FDynamicDialectDef* DialectDef = GS->DialectMasterRegistry.Find(DialectTag);
+    if (!DialectDef) return BaseSentence;
+
+    FString Modified = BaseSentence;
+
+    // 1. Slang Substitutions
+    for (const auto& SlangPair : DialectDef->SlangSubstitutions)
+    {
+        Modified = Modified.Replace(*SlangPair.Key, *SlangPair.Value, ESearchCase::IgnoreCase);
+    }
+
+    // 2. Phonetic Shifts
+    for (const FDialectPhoneticShift& Shift : DialectDef->PhoneticShifts)
+    {
+        Modified = Modified.Replace(*Shift.OriginalPhoneme, *Shift.ShiftedPhoneme, ESearchCase::IgnoreCase);
+    }
+
+    // 3. Colloquial Prefix / Suffix Idioms
+    if (DialectDef->ColloquialPrefixes.Num() > 0)
+    {
+        const int32 Pick = FMath::RandRange(0, DialectDef->ColloquialPrefixes.Num() - 1);
+        Modified = DialectDef->ColloquialPrefixes[Pick] + Modified;
+    }
+    if (DialectDef->ColloquialSuffixes.Num() > 0)
+    {
+        const int32 Pick = FMath::RandRange(0, DialectDef->ColloquialSuffixes.Num() - 1);
+        Modified.RemoveFromEnd(TEXT("."));
+        Modified.RemoveFromEnd(TEXT("!"));
+        Modified = Modified + DialectDef->ColloquialSuffixes[Pick];
+    }
+
+    return Modified;
+}
+
+FGameplayTag UDynamicLanguageComponent::EvaluateMicVolumeTag(float RMSValue) const
+{
+    if (RMSValue > ShoutAmplitudeThreshold)
+    {
+        return FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Shout"), false);
+    }
+    if (RMSValue < WhisperAmplitudeThreshold)
+    {
+        return FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Whisper"), false);
+    }
+    return FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
+}
+
+void UDynamicLanguageComponent::StopVoiceCaptureAndSubmit(AActor* ConversationalTarget)
+{
+    if (!VoiceCapture.IsValid() || GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
+
+    VoiceCapture->Stop();
+
+    if (RecordedVoiceBuffer.Num() > 0)
+    {
+        ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+        if (!GS || GS->CloudAIConfig.SttEndpointUrl.IsEmpty()) return;
+
+        const FGameplayTag CapturedVolumeTag = EvaluateMicVolumeTag(CurrentMicAmplitudeRMS);
+
+        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+        HttpRequest->SetVerb(TEXT("POST"));
+        HttpRequest->SetURL(GS->CloudAIConfig.SttEndpointUrl);
+        HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/octet-stream"));
+        HttpRequest->SetContent(RecordedVoiceBuffer);
+        
+        TWeakObjectPtr<AActor> WeakTarget(ConversationalTarget);
+        TWeakObjectPtr<UDynamicLanguageComponent> WeakThis(this);
+
+        HttpRequest->OnProcessRequestComplete().BindLambda([WeakThis, WeakTarget, CapturedVolumeTag](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnected)
+        {
+            if (!WeakThis.IsValid() || !bConnected || !Response.IsValid() || Response->GetResponseCode() != 200) return;
+
+            TSharedPtr<FJsonObject> RootObj;
+            TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+            if (FJsonSerializer::Deserialize(Reader, RootObj) && RootObj.IsValid())
+            {
+                FVoiceInputTranscript Transcript;
+                Transcript.TranscribedText = RootObj->GetStringField(TEXT("text"));
+                Transcript.Timestamp = WeakThis->GetWorld() ? WeakThis->GetWorld()->GetTimeSeconds() : 0.0;
+                
+                if (!Transcript.TranscribedText.IsEmpty())
+                {
+                    WeakThis->ServerSubmitSpeechRecognitionInput(Transcript, CapturedVolumeTag, WeakTarget.Get());
+                }
+            }
+        });
+        
+        HttpRequest->ProcessRequest();
+    }
+    
+    RecordedVoiceBuffer.Empty();
+    CurrentMicAmplitudeRMS = 0.0f;
+}
+
+bool UDynamicLanguageComponent::ServerSubmitSpeechRecognitionInput_Validate(const FVoiceInputTranscript& Transcript, FGameplayTag DetectedVolumeTag, AActor* ConversationalTarget)
+{
+    return !Transcript.TranscribedText.IsEmpty() && Transcript.TranscribedText.Len() <= 500;
+}
+
+void UDynamicLanguageComponent::ServerSubmitSpeechRecognitionInput_Implementation(const FVoiceInputTranscript& Transcript, FGameplayTag DetectedVolumeTag, AActor* ConversationalTarget)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    OnSpeechRecognitionProcessed.Broadcast(Transcript);
+
+    // Apply the detected physical mic volume (Whisper, Normal, Shout)
+    FGameplayTag FinalVolTag = DetectedVolumeTag.IsValid() ? DetectedVolumeTag : FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
+    ServerBroadcastSpokenUtterance(Transcript.TranscribedText, FinalVolTag, ConversationalTarget);
+
+    if (ConversationalTarget)
+    {
+        if (UDynamicSocialComponent* TargetSocial = ConversationalTarget->FindComponentByClass<UDynamicSocialComponent>())
+        {
+            FGuid SpeakerGuid;
+            FString SpeakerDisplayName = GetOwner()->GetName();
+
+            if (const UDynamicSocialComponent* SpeakerSocial = GetOwner()->FindComponentByClass<UDynamicSocialComponent>())
+            {
+                SpeakerGuid = SpeakerSocial->CharacterPersistentGuid;
+                SpeakerDisplayName = SpeakerSocial->ResolveActorDisplayName(GetOwner());
+            }
+
+            TargetSocial->RecordDialogueTurn(
+                SpeakerGuid, 
+                SpeakerDisplayName, 
+                Transcript.DetectedLanguageTag.IsValid() ? Transcript.DetectedLanguageTag : ActiveSpokenLanguageTag, 
+                Transcript.TranscribedText
+            );
+
+            TargetSocial->ServerAcquireConversationalLock(GetOwner(), true);
+
+            if (UAbilitySystemComponent* ASC = ConversationalTarget->FindComponentByClass<UAbilitySystemComponent>())
+            {
+                static const FGameplayTag ChatActionTag = FGameplayTag::RequestGameplayTag(TEXT("Action.Interact.Chat"), false);
+                if (ChatActionTag.IsValid())
+                {
+                    ASC->AddLooseGameplayTags(FGameplayTagContainer(ChatActionTag));
+                }
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Procedural Phoneme-to-Viseme Interpolation
+// ----------------------------------------------------------------------------
+
+void UDynamicLanguageComponent::ProcessLipSyncForWord(const FString& WordToken, float DurationSeconds)
+{
+    if (WordToken.IsEmpty() || DurationSeconds <= 0.0f) return;
+
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    UDynamicLanguageSubsystem* LangSub = World ? World->GetSubsystem<UDynamicLanguageSubsystem>() : nullptr;
+    if (!GS || !LangSub) return;
+
+    static const FGameplayTag DefaultVisemeRegTag = FGameplayTag::RequestGameplayTag(TEXT("Phoneme.Viseme.Default"), false);
+    const FPhonemeVisemeRegistryDef* RegDef = GS->PhonemeVisemeRegistry.Find(DefaultVisemeRegTag);
+    if (!RegDef) return;
+
+    TArray<FString> Words;
+    WordToken.ParseIntoArrayWS(Words);
+    if (Words.Num() == 0) return;
+
+    const float SecondsPerWord = DurationSeconds / static_cast<float>(Words.Num());
+    TArray<FActiveViseme> ScheduledVisemes;
+
+    for (const FString& IndividualWord : Words)
+    {
+        const FString Lower = IndividualWord.ToLower();
+        TArray<FVisemeMorphMapping> MatchedMappings;
+
+        // Extract multiple phonemes sequentially
+        for (const FVisemeMorphMapping& Mapping : RegDef->VisemeMappings)
+        {
+            if (Lower.Contains(Mapping.PhonemePattern))
+            {
+                MatchedMappings.Add(Mapping);
+            }
+        }
+
+        if (MatchedMappings.Num() > 0)
+        {
+            const float PhonemeDuration = SecondsPerWord / static_cast<float>(MatchedMappings.Num());
+            for (const FVisemeMorphMapping& M : MatchedMappings)
+            {
+                FActiveViseme Vis;
+                Vis.MorphTargetName = M.MorphTargetName;
+                Vis.TargetWeight = M.WeightMultiplier;
+                Vis.CurrentWeight = 0.0f;
+                Vis.TimeRemaining = FMath::Clamp(PhonemeDuration, 0.08f, 0.35f);
+                ScheduledVisemes.Add(Vis);
+            }
+        }
+    }
+
+    if (ScheduledVisemes.Num() > 0)
+    {
+        LangSub->RegisterActiveVisemes(this, ScheduledVisemes);
+    }
+}
+
+void UDynamicLanguageComponent::InterruptActiveSpeech()
+{
+    TTSPlaybackQueue.Empty();
+
+    if (ActiveVoiceAudioComponent && ActiveVoiceAudioComponent->IsPlaying())
+    {
+        ActiveVoiceAudioComponent->Stop();
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UDynamicLanguageSubsystem* Sub = World->GetSubsystem<UDynamicLanguageSubsystem>())
+        {
+            Sub->UnregisterSpeaker(this);
+        }
+    }
+
+    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        if (USkeletalMeshComponent* Mesh = CharOwner->GetMeshComponent())
+        {
+            Mesh->ClearMorphTargets();
+        }
     }
 }
 
@@ -1042,18 +1286,23 @@ FString UDynamicLanguageComponent::FormulateSpokenUtterance(FGameplayTag TargetL
 
     static const FGameplayTag CommonLangTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false);
 
-    // Native Speaker Path
+    FString Formulated;
     if (TargetLanguageTag == NativeLanguageTag)
     {
-        if (TargetLanguageTag == CommonLangTag)
-        {
-            return IntendedEnglishText;
-        }
-        return TranslateToNativeTongue(TargetLanguageTag, IntendedEnglishText);
+        Formulated = (TargetLanguageTag == CommonLangTag) ? IntendedEnglishText : TranslateToNativeTongue(TargetLanguageTag, IntendedEnglishText);
+    }
+    else
+    {
+        Formulated = GenerateNonNativeSpeakingAttempt(TargetLanguageTag, IntendedEnglishText);
     }
 
-    // Non-Native Speaker Attempt Path (Broken / Pidgin Phrasing)
-    return GenerateNonNativeSpeakingAttempt(TargetLanguageTag, IntendedEnglishText);
+    // Apply Regional Dialects & Slang if configured
+    if (ActiveDialectTag.IsValid())
+    {
+        Formulated = ApplyDialectModifications(Formulated, ActiveDialectTag);
+    }
+
+    return Formulated;
 }
 
 bool UDynamicLanguageComponent::ServerBroadcastSpokenUtterance_Validate(
@@ -1566,33 +1815,35 @@ void UDynamicLanguageComponent::CalculateAcousticVoiceModifiers(FGameplayTag Emo
         }
     }
 
-    // Physiological Modulation: Character scale, age, and disease alter pitch
+    // Layer in Dialect Acoustic Shifts
+    if (GS && ActiveDialectTag.IsValid())
+    {
+        if (const FDynamicDialectDef* DialectDef = GS->DialectMasterRegistry.Find(ActiveDialectTag))
+        {
+            OutPitchMultiplier += DialectDef->PitchModifier;
+            OutTempoMultiplier += DialectDef->TempoModifier;
+        }
+    }
+
+    // Physiological Modulation
     if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
     {
         if (const UDynamicCustomizationComponent* CustComp = CharOwner->GetCustomizationComponent())
         {
-            // Larger/Taller characters have deeper voices
             const float HeightSlider = CustComp->GetMorphSliderValue(FGameplayTag::RequestGameplayTag(TEXT("Slider.Body.Height"), false));
             OutPitchMultiplier *= FMath::Lerp(1.15f, 0.85f, HeightSlider);
         }
 
         if (const UDynamicLifeComponent* LifeComp = CharOwner->FindComponentByClass<UDynamicLifeComponent>())
         {
-            // Children have higher pitch
             const float NormAge = LifeComp->GetNormalizedAge();
-            if (NormAge < 0.25f)
-            {
-                OutPitchMultiplier *= 1.35f;
-            }
-            else if (NormAge > 0.75f)
-            {
-                OutPitchMultiplier *= 0.90f;
-            }
+            if (NormAge < 0.25f) OutPitchMultiplier *= 1.35f;
+            else if (NormAge > 0.75f) OutPitchMultiplier *= 0.90f;
         }
     }
 
-    OutPitchMultiplier = FMath::Clamp(OutPitchMultiplier, 0.5f, 2.0f);
-    OutTempoMultiplier = FMath::Clamp(OutTempoMultiplier, 0.5f, 2.0f);
+    OutPitchMultiplier = FMath::Clamp(OutPitchMultiplier, 0.4f, 2.2f);
+    OutTempoMultiplier = FMath::Clamp(OutTempoMultiplier, 0.4f, 2.2f);
 }
 
 // ----------------------------------------------------------------------------
@@ -1609,59 +1860,6 @@ void UDynamicLanguageComponent::ServerNotifyVoiceActivityStarted_Implementation(
         TargetSocial->ServerHandleSpeechInterrupted(GetOwner());
         // Face the player and wait
         TargetSocial->ServerAcquireConversationalLock(GetOwner(), true);
-    }
-}
-
-bool UDynamicLanguageComponent::ServerSubmitSpeechRecognitionInput_Validate(const FVoiceInputTranscript& Transcript, AActor* ConversationalTarget)
-{
-    return !Transcript.TranscribedText.IsEmpty() && Transcript.TranscribedText.Len() <= 500;
-}
-
-void UDynamicLanguageComponent::ServerSubmitSpeechRecognitionInput_Implementation(const FVoiceInputTranscript& Transcript, AActor* ConversationalTarget)
-{
-    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
-
-    OnSpeechRecognitionProcessed.Broadcast(Transcript);
-
-    // 1. Broadcast the player's speech acoustically so bystanders react
-    static const FGameplayTag NormalVolTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
-    ServerBroadcastSpokenUtterance(Transcript.TranscribedText, NormalVolTag, ConversationalTarget);
-
-    // 2. Direct LLM Injection: Route transcription into the target interlocutor's memory
-    if (ConversationalTarget)
-    {
-        if (UDynamicSocialComponent* TargetSocial = ConversationalTarget->FindComponentByClass<UDynamicSocialComponent>())
-        {
-            // Resolve the speaker's Persistent GUID and Display Name from local social component
-            FGuid SpeakerGuid;
-            FString SpeakerDisplayName = GetOwner()->GetName();
-
-            if (const UDynamicSocialComponent* SpeakerSocial = GetOwner()->FindComponentByClass<UDynamicSocialComponent>())
-            {
-                SpeakerGuid = SpeakerSocial->CharacterPersistentGuid;
-                SpeakerDisplayName = SpeakerSocial->ResolveActorDisplayName(GetOwner());
-            }
-
-            TargetSocial->RecordDialogueTurn(
-                SpeakerGuid, 
-                SpeakerDisplayName, 
-                Transcript.DetectedLanguageTag.IsValid() ? Transcript.DetectedLanguageTag : ActiveSpokenLanguageTag, 
-                Transcript.TranscribedText
-            );
-
-            // Re-acquire lock to process the immediate reply
-            TargetSocial->ServerAcquireConversationalLock(GetOwner(), true);
-
-            if (UAbilitySystemComponent* ASC = ConversationalTarget->FindComponentByClass<UAbilitySystemComponent>())
-            {
-                // Assign the chat tag to trigger the BT dynamically
-                static const FGameplayTag ChatActionTag = FGameplayTag::RequestGameplayTag(TEXT("Action.Interact.Chat"), false);
-                if (ChatActionTag.IsValid())
-                {
-                    ASC->AddLooseGameplayTags(FGameplayTagContainer(ChatActionTag));
-                }
-            }
-        }
     }
 }
 
@@ -1696,8 +1894,6 @@ void UDynamicLanguageComponent::EnqueueTTSAudioChunk(USoundBase* AudioAsset, con
 
 void UDynamicLanguageComponent::HandleAudioFinished()
 {
-    // Clear Visemes gracefully
-    ActiveVisemeQueue.Empty();
     if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
     {
         if (USkeletalMeshComponent* Mesh = CharOwner->GetMeshComponent())
@@ -1707,98 +1903,6 @@ void UDynamicLanguageComponent::HandleAudioFinished()
     }
 
     PlayNextTTSChunk();
-}
-
-// ----------------------------------------------------------------------------
-// Procedural Phoneme-to-Viseme Interpolation
-// ----------------------------------------------------------------------------
-
-void UDynamicLanguageComponent::ProcessLipSyncForWord(const FString& WordToken, float DurationSeconds)
-{
-    if (WordToken.IsEmpty() || DurationSeconds <= 0.0f) return;
-
-    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-    if (!GS) return;
-
-    static const FGameplayTag DefaultVisemeRegTag = FGameplayTag::RequestGameplayTag(TEXT("Phoneme.Viseme.Default"), false);
-    const FPhonemeVisemeRegistryDef* RegDef = GS->PhonemeVisemeRegistry.Find(DefaultVisemeRegTag);
-    if (!RegDef) return;
-
-    const FString LowerToken = WordToken.ToLower();
-    
-    // Deconstruct the word into sequential viseme mappings
-    TArray<FActiveViseme> ScheduledVisemes;
-    for (const FVisemeMorphMapping& Mapping : RegDef->VisemeMappings)
-    {
-        if (LowerToken.Contains(Mapping.PhonemePattern))
-        {
-            FActiveViseme Vis;
-            Vis.MorphTargetName = Mapping.MorphTargetName;
-            Vis.TargetWeight = Mapping.WeightMultiplier;
-            Vis.CurrentWeight = 0.0f;
-            // Distribute duration roughly among matched phonemes
-            Vis.TimeRemaining = FMath::Clamp(DurationSeconds / 2.0f, 0.1f, 0.4f); 
-            ScheduledVisemes.Add(Vis);
-        }
-    }
-
-    if (ScheduledVisemes.Num() > 0)
-    {
-        ActiveVisemeQueue.Append(ScheduledVisemes);
-        ManageVisemeInterpolationTick();
-    }
-}
-
-void UDynamicLanguageComponent::ManageVisemeInterpolationTick()
-{
-    if (VisemeTickerHandle.IsValid()) return;
-
-    TWeakObjectPtr<UDynamicLanguageComponent> WeakThis(this);
-    VisemeTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis](float DeltaTime) -> bool
-    {
-        if (!WeakThis.IsValid()) return false;
-        UDynamicLanguageComponent* StrongThis = WeakThis.Get();
-        ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(StrongThis->GetOwner());
-        USkeletalMeshComponent* Mesh = CharOwner ? CharOwner->GetMeshComponent() : nullptr;
-
-        bool bHasActiveBlends = false;
-
-        for (int32 i = StrongThis->ActiveVisemeQueue.Num() - 1; i >= 0; --i)
-        {
-            FActiveViseme& Vis = StrongThis->ActiveVisemeQueue[i];
-            Vis.TimeRemaining -= DeltaTime;
-
-            // Interpolate Up while time remains, Interpolate Down when expired
-            const float Target = (Vis.TimeRemaining > 0.0f) ? Vis.TargetWeight : 0.0f;
-            const float Speed = (Vis.TimeRemaining > 0.0f) ? 15.0f : 20.0f; 
-
-            Vis.CurrentWeight = FMath::FInterpTo(Vis.CurrentWeight, Target, DeltaTime, Speed);
-
-            if (Mesh)
-            {
-                Mesh->SetMorphTarget(Vis.MorphTargetName, Vis.CurrentWeight);
-            }
-
-            StrongThis->OnVisemeFrameGenerated.Broadcast(Vis.MorphTargetName, Vis.CurrentWeight);
-
-            if (Vis.TimeRemaining <= 0.0f && FMath::IsNearlyZero(Vis.CurrentWeight, 0.05f))
-            {
-                if (Mesh) Mesh->SetMorphTarget(Vis.MorphTargetName, 0.0f);
-                StrongThis->ActiveVisemeQueue.RemoveAt(i);
-            }
-            else
-            {
-                bHasActiveBlends = true;
-            }
-        }
-
-        if (!bHasActiveBlends)
-        {
-            StrongThis->VisemeTickerHandle.Reset();
-            return false; // Stop ticking
-        }
-        return true;
-    }));
 }
 
 // ----------------------------------------------------------------------------
@@ -1817,53 +1921,6 @@ void UDynamicLanguageComponent::StartVoiceCapture()
     {
         RecordedVoiceBuffer.Empty();
         VoiceCapture->Start();
-    }
-}
-
-void UDynamicLanguageComponent::StopVoiceCaptureAndSubmit(AActor* ConversationalTarget)
-{
-    if (!VoiceCapture.IsValid() || GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
-
-    VoiceCapture->Stop();
-
-    if (RecordedVoiceBuffer.Num() > 0)
-    {
-        ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
-        if (!GS || GS->CloudAIConfig.SttEndpointUrl.IsEmpty()) return;
-
-        // Dispatch raw audio bytes to local/remote whisper API
-        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
-        HttpRequest->SetVerb(TEXT("POST"));
-        HttpRequest->SetURL(GS->CloudAIConfig.SttEndpointUrl);
-        HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/octet-stream"));
-        HttpRequest->SetContent(RecordedVoiceBuffer);
-        
-        TWeakObjectPtr<AActor> WeakTarget(ConversationalTarget);
-        HttpRequest->OnProcessRequestComplete().BindUObject(this, &UDynamicLanguageComponent::OnSTTHttpResponse, WeakTarget.Get());
-        HttpRequest->ProcessRequest();
-    }
-    
-    RecordedVoiceBuffer.Empty();
-}
-
-void UDynamicLanguageComponent::OnSTTHttpResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully, AActor* TargetInterlocutor)
-{
-    if (!bConnectedSuccessfully || !Response.IsValid() || Response->GetResponseCode() != 200) return;
-
-    // Parse JSON transcript from STT API (e.g. Whisper)
-    TSharedPtr<FJsonObject> RootObj;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
-    if (FJsonSerializer::Deserialize(Reader, RootObj) && RootObj.IsValid())
-    {
-        FVoiceInputTranscript Transcript;
-        Transcript.TranscribedText = RootObj->GetStringField(TEXT("text"));
-        Transcript.Timestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-        
-        if (!Transcript.TranscribedText.IsEmpty())
-        {
-            // Submit recognized text securely back to the server
-            ServerSubmitSpeechRecognitionInput(Transcript, TargetInterlocutor);
-        }
     }
 }
 
@@ -1939,6 +1996,7 @@ void UDynamicLanguageComponent::PlayNextTTSChunk()
         ActiveVoiceAudioComponent->SetupAttachment(GetOwner()->GetRootComponent());
         ActiveVoiceAudioComponent->bAllowSpatialization = true;
         ActiveVoiceAudioComponent->bOverrideAttenuation = true;
+        ActiveVoiceAudioComponent->bEnableLowPassFilter = true;
         ActiveVoiceAudioComponent->RegisterComponent();
         ActiveVoiceAudioComponent->OnAudioFinished.AddDynamic(this, &UDynamicLanguageComponent::HandleAudioFinished);
     }
@@ -1946,27 +2004,46 @@ void UDynamicLanguageComponent::PlayNextTTSChunk()
     FTTSAudioChunk NextChunk = TTSPlaybackQueue[0];
     TTSPlaybackQueue.RemoveAt(0);
 
-    // Apply environmental acoustics and spatialization
     if (UWorld* World = GetWorld())
     {
         if (UDynamicLanguageSubsystem* LangSub = World->GetSubsystem<UDynamicLanguageSubsystem>())
         {
             APlayerController* PC = World->GetFirstPlayerController();
             AActor* ListenerActor = PC ? PC->GetPawn() : nullptr;
+            
             if (ListenerActor)
             {
-                const float LowPassFreq = LangSub->CalculateAcousticLowPassFilterFrequency(GetOwner()->GetActorLocation(), ListenerActor->GetActorLocation(), ListenerActor);
-                
+                // 1. Calculate Physical Wall Occlusion (Low Pass Filter)
+                const float LowPassFreq = LangSub->CalculateAcousticLowPassFilterFrequency(
+                    GetOwner()->GetActorLocation(), 
+                    ListenerActor->GetActorLocation(), 
+                    ListenerActor
+                );
+                ActiveVoiceAudioComponent->SetLowPassFilterFrequency(LowPassFreq);
+
+                // 2. Setup Spatial Attenuation & Reverb Settings
                 FSoundAttenuationSettings AttenSettings;
                 AttenSettings.bAttenuate = true;
                 AttenSettings.bSpatialize = true;
                 AttenSettings.bAttenuateWithLPF = true;
                 AttenSettings.LPFRadiusMin = 400.0f;
                 AttenSettings.LPFRadiusMax = 3000.0f;
-                
-                // Dynamically squeeze frequency based on wall occlusion calculation
-                ActiveVoiceAudioComponent->SetLowPassFilterFrequency(LowPassFreq);
+
+                // 3. Apply Local Dynamic Reverb if inside a classified room
+                if (UDynamicBuildingSubsystem* BuildSub = World->GetSubsystem<UDynamicBuildingSubsystem>())
+                {
+                    if (UReverbEffect* Reverb = BuildSub->GetAcousticReverbAtLocation(GetOwner()->GetActorLocation()))
+                    {
+                        AttenSettings.bEnableReverbSend = true;
+                    }
+                    else
+                    {
+                        AttenSettings.bEnableReverbSend = false;
+                    }
+                }
+
                 ActiveVoiceAudioComponent->AttenuationOverrides = AttenSettings;
+                ActiveVoiceAudioComponent->AdjustAttenuation(AttenSettings);
             }
         }
     }
@@ -1974,6 +2051,6 @@ void UDynamicLanguageComponent::PlayNextTTSChunk()
     ActiveVoiceAudioComponent->SetSound(NextChunk.AudioAsset);
     ActiveVoiceAudioComponent->Play();
 
+    // Trigger Lip-Sync for the duration of the audio chunk
     ProcessLipSyncForWord(NextChunk.SpokenText, NextChunk.Duration);
 }
-

@@ -73,6 +73,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Language")
     TArray<FGameplayTag> KnownLanguageTags;
 
+    // Regional Dialect & Accent
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Language|Dialect")
+    FGameplayTag ActiveDialectTag;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Dynamic GAS|Voice")
     FGameplayTag AssignedVoiceProfileTag;
 
@@ -93,6 +97,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Language")
     FString FormulateSpokenUtterance(FGameplayTag TargetLanguageTag, const FString& IntendedEnglishText) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Language|Dialect")
+    FString ApplyDialectModifications(const FString& BaseSentence, FGameplayTag DialectTag) const;
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Language")
     float GetLanguageFluency(FGameplayTag LanguageTag) const;
@@ -158,9 +165,11 @@ public:
     void ServerNotifyVoiceActivityStarted(AActor* ConversationalTarget);
 
     UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category = "Dynamic GAS|Voice|STT")
-    void ServerSubmitSpeechRecognitionInput(const FVoiceInputTranscript& Transcript, AActor* ConversationalTarget = nullptr);
+    void ServerSubmitSpeechRecognitionInput(const FVoiceInputTranscript& Transcript, FGameplayTag DetectedVolumeTag, AActor* ConversationalTarget = nullptr);
 
-    // Client-Side Async Synthesis HTTP Request
+    UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Voice|TTS")
+    void InterruptActiveSpeech();
+
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Voice|TTS")
     void RequestTextToSpeechSynthesis(const FString& TextToSynthesize, FGameplayTag VoiceProfileTag);
 
@@ -176,21 +185,29 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Voice|LipSync")
     void ProcessLipSyncForWord(const FString& WordToken, float DurationSeconds);
 
-    // --- Microphone Capture & VAD ---
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Voice|STT")
     void StartVoiceCapture();
 
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Voice|STT")
     void StopVoiceCaptureAndSubmit(AActor* ConversationalTarget);
 
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Voice|STT")
+    float CurrentMicAmplitudeRMS = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Voice|STT")
+    float WhisperAmplitudeThreshold = 500.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Voice|STT")
+    float ShoutAmplitudeThreshold = 8000.0f;
+
 private:
     void CheckAndApplyLanguageBreakthrough(FGameplayTag LanguageTag, float OldComprehension, float NewComprehension);
+    FGameplayTag EvaluateMicVolumeTag(float RMSValue) const;
 
     TMap<FGuid, FString> ServerSecretAnswers;
     TMap<FGuid, FGameplayTag> ServerChallengeLanguages;
     TMap<FGuid, FString> ServerChallengeNativeWords;
 
-    // Audio & Viseme Subsystems
     UPROPERTY()
     TArray<FTTSAudioChunk> TTSPlaybackQueue;
 
@@ -199,15 +216,10 @@ private:
 
     UFUNCTION()
     void HandleAudioFinished();
+
     void PlayNextTTSChunk();
     void OnTTSHttpResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully, FString SpokenText);
-    void OnSTTHttpResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully, AActor* TargetInterlocutor);
 
-    TArray<FActiveViseme> ActiveVisemeQueue;
-    FTSTicker::FDelegateHandle VisemeTickerHandle;
-    void ManageVisemeInterpolationTick();
-
-    // Voice Capture
-    TSharedPtr<class IVoiceCapture> VoiceCapture;
+    TSharedPtr<IVoiceCapture> VoiceCapture;
     TArray<uint8> RecordedVoiceBuffer;
 };

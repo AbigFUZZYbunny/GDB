@@ -4,6 +4,7 @@
       "RoomTypeTag": "Room.Type.Kitchen",
       "ClassificationPriority": 10.0,
       "MinimumVolume": 250000.0,
+      "AcousticReverbAsset": "/Engine/Sounds/ReverbSettings/Room.Room",
       "ContentRequirements": [
         { "RequiredContentTag": "Item.Furniture.Oven", "MinimumCount": 1 },
         { "RequiredContentTag": "Item.Container.FoodStorage", "MinimumCount": 1 }
@@ -19,6 +20,7 @@
       "RoomTypeTag": "Room.Type.Bedroom",
       "ClassificationPriority": 15.0,
       "MinimumVolume": 200000.0,
+      "AcousticReverbAsset": "/Engine/Sounds/ReverbSettings/Room.Room",
       "ContentRequirements": [
         { "RequiredContentTag": "Item.Furniture.Bed", "MinimumCount": 1 }
       ],
@@ -26,6 +28,33 @@
         "ReplicatedEntries": [
           { "KeyTag": "Environment.Metric.Restfulness", "Value": 25.0 },
           { "KeyTag": "Environment.Metric.Comfort", "Value": 15.0 }
+        ]
+      }
+    },
+    "Room.Type.Tavern": {
+      "RoomTypeTag": "Room.Type.Tavern",
+      "ClassificationPriority": 20.0,
+      "MinimumVolume": 500000.0,
+      "AcousticReverbAsset": "/Engine/Sounds/ReverbSettings/Room.Room",
+      "ContentRequirements": [
+        { "RequiredContentTag": "Item.Furniture.Bar", "MinimumCount": 1 },
+        { "RequiredContentTag": "Item.Furniture.Stool", "MinimumCount": 4 }
+      ],
+      "EnvironmentModifiers": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Environment.Metric.Comfort", "Value": 25.0 }
+        ]
+      }
+    },
+    "Room.Type.Cave": {
+      "RoomTypeTag": "Room.Type.Cave",
+      "ClassificationPriority": 5.0,
+      "MinimumVolume": 1000000.0,
+      "AcousticReverbAsset": "/Engine/Sounds/ReverbSettings/Cave.Cave",
+      "ContentRequirements": [],
+      "EnvironmentModifiers": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Environment.Metric.Temperature", "Value": -5.0 }
         ]
       }
     }

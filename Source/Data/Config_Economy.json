@@ -1,0 +1,26 @@
+﻿{
+  "_comment": "Master Economic Market Registry for dynamic pricing and NPC work orders.",
+  "MarketMasterRegistry": {
+    "Market.Region.HighKingCity": {
+      "MarketTag": "Market.Region.HighKingCity",
+      "GoverningJurisdictionTag": "Jurisdiction.HighKingCity",
+      "BaseInflationRate": 1.02,
+      "BaselineCommodities": [
+        {
+          "ItemArchetypeTag": "Actor.Survival.Material.IronIngot",
+          "BasePrice": 15.0,
+          "PriceElasticity": 0.8,
+          "CurrentSupply": 500.0,
+          "CurrentDemand": 550.0
+        },
+        {
+          "ItemArchetypeTag": "Actor.Survival.Material.WoodLog",
+          "BasePrice": 2.0,
+          "PriceElasticity": 1.2,
+          "CurrentSupply": 2000.0,
+          "CurrentDemand": 1800.0
+        }
+      ]
+    }
+  }
+}

@@ -17,7 +17,6 @@ FGameplayEffectSpecHandle UDynamicEffectFactory::CreateDynamicEffectSpec(UAbilit
     const FDynamicEffectDef* FoundDef = GS->MasterEffectRegistry.Find(EffectDataTag);
     if (!FoundDef) return FGameplayEffectSpecHandle();
 
-    // OPTIMIZATION: Resolves zero-allocation generic pre-warmed effects based purely on structural duration policy
     UGameplayEffect* BaseEffect = nullptr;
     switch (FoundDef->DurationPolicy)
     {
@@ -29,14 +28,13 @@ FGameplayEffectSpecHandle UDynamicEffectFactory::CreateDynamicEffectSpec(UAbilit
 
     FDynamicGameplayEffectContext* CustomContext = new FDynamicGameplayEffectContext();
     CustomContext->CustomConditionTreeName = FoundDef->ConditionTreeLinkName;
-    CustomContext->ContextPayloadTag = EffectDataTag;
+    CustomContext->ContextPayloadTags.AddTag(EffectDataTag);
     CustomContext->SourcePassBackRules = FoundDef->SourcePassBackRules;
     CustomContext->AddInstigator(SourceASC->GetOwner(), SourceASC->GetOwner());
 
     FGameplayEffectContextHandle ContextHandle(CustomContext);
     FGameplayEffectSpec* NewRawSpec = new FGameplayEffectSpec(BaseEffect, ContextHandle, Level);
     
-    // Map magnitudes dynamically onto the spec
     if (FoundDef->DurationPolicy == EEffectDurationPolicy::HasDuration)
     {
         NewRawSpec->SetDuration(FoundDef->DurationMagnitude, true);

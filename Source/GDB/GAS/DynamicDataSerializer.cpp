@@ -310,10 +310,50 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             FJsonObjectConverter::JsonObjectToUStruct(AbilityObj.ToSharedRef(), &AbilityDef, 0, 0);
             DeserializeLocalizationMap(AbilityObj, TEXT("Localization"), AbilityDef.Localization);
             DeserializeMapWrapper(AbilityObj, TEXT("NumericParams"), AbilityDef.NumericParams);
+            
             if (AbilityObj->HasField(TEXT("SpatialDelivery")))
-                DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("SpatialDelivery")), TEXT("RuntimeMetricModifiers"), AbilityDef.SpatialDelivery.RuntimeMetricModifiers);
+            {
+                TSharedPtr<FJsonObject> SpatialObj = AbilityObj->GetObjectField(TEXT("SpatialDelivery"));
+                DeserializeMapWrapper(SpatialObj, TEXT("RuntimeMetricModifiers"), AbilityDef.SpatialDelivery.RuntimeMetricModifiers);
+                
+                AbilityDef.SpatialDelivery.GravityScale = SpatialObj->HasField(TEXT("GravityScale")) ? static_cast<float>(SpatialObj->GetNumberField(TEXT("GravityScale"))) : 1.0f;
+                AbilityDef.SpatialDelivery.Bounciness = SpatialObj->HasField(TEXT("Bounciness")) ? static_cast<float>(SpatialObj->GetNumberField(TEXT("Bounciness"))) : 0.3f;
+                AbilityDef.SpatialDelivery.bDetonateOnBounce = SpatialObj->HasField(TEXT("bDetonateOnBounce")) ? SpatialObj->GetBoolField(TEXT("bDetonateOnBounce")) : true;
+
+                if (SpatialObj->HasField(TEXT("ImpactTypeTags")))
+                {
+                    for (const auto& TagVal : SpatialObj->GetArrayField(TEXT("ImpactTypeTags")))
+                    {
+                        FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                        if (Tag.IsValid()) AbilityDef.SpatialDelivery.ImpactTypeTags.AddTag(Tag);
+                    }
+                }
+            }
             if (AbilityObj->HasField(TEXT("InteractionConfig")))
-                DeserializeMapWrapper(AbilityObj->GetObjectField(TEXT("InteractionConfig")), TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
+            {
+                TSharedPtr<FJsonObject> InteractionObj = AbilityObj->GetObjectField(TEXT("InteractionConfig"));
+                DeserializeMapWrapper(InteractionObj, TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
+                if (InteractionObj->HasField(TEXT("ImpactTypeTags")))
+                {
+                    for (const auto& TagVal : InteractionObj->GetArrayField(TEXT("ImpactTypeTags")))
+                    {
+                        FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                        if (Tag.IsValid()) AbilityDef.InteractionConfig.ImpactTypeTags.AddTag(Tag);
+                    }
+                }
+            }
+            if (AbilityObj->HasField(TEXT("ChainConfig")))
+            {
+                TSharedPtr<FJsonObject> ChainObj = AbilityObj->GetObjectField(TEXT("ChainConfig"));
+                if (ChainObj->HasField(TEXT("ImpactTypeTags")))
+                {
+                    for (const auto& TagVal : ChainObj->GetArrayField(TEXT("ImpactTypeTags")))
+                    {
+                        FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                        if (Tag.IsValid()) AbilityDef.ChainConfig.ImpactTypeTags.AddTag(Tag);
+                    }
+                }
+            }
             if (AbilityObj->HasField(TEXT("MovementConfig")))
             {
                 TSharedPtr<FJsonObject> MovObj = AbilityObj->GetObjectField(TEXT("MovementConfig"));
@@ -335,6 +375,16 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             FJsonObjectConverter::JsonObjectToUStruct(ActorObj.ToSharedRef(), &ActorDef, 0, 0);
             DeserializeLocalizationMap(ActorObj, TEXT("Localization"), ActorDef.Localization);
             DeserializeMapWrapper(ActorObj, TEXT("DefaultGlobalAttributes"), ActorDef.DefaultGlobalAttributes);
+
+            if (ActorObj->HasField(TEXT("ImpactTypeTags")))
+            {
+                for (const auto& TagVal : ActorObj->GetArrayField(TEXT("ImpactTypeTags")))
+                {
+                    FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                    if (Tag.IsValid()) ActorDef.ImpactTypeTags.AddTag(Tag);
+                }
+            }
+
             if (ActorObj->HasField(TEXT("CustomLimbs")))
             {
                 const TArray<TSharedPtr<FJsonValue>>& LimbsArr = ActorObj->GetArrayField(TEXT("CustomLimbs"));
@@ -629,6 +679,37 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             FDynamicSkeletonDef SkelDef;
             FJsonObjectConverter::JsonObjectToUStruct(SkelObj.ToSharedRef(), &SkelDef, 0, 0);
             DeserializeLocalizationMap(SkelObj, TEXT("Localization"), SkelDef.Localization);
+            
+            // PARSE RAGDOLL JOINT LIMITS
+            if (SkelObj->HasField(TEXT("JointLimits")))
+            {
+                for (const auto& JointVal : SkelObj->GetArrayField(TEXT("JointLimits")))
+                {
+                    TSharedPtr<FJsonObject> JointObj = JointVal->AsObject();
+                    if (!JointObj.IsValid()) continue;
+                    
+                    FDynamicJointLimitProfile LimitProf;
+                    LimitProf.BoneName = FName(*JointObj->GetStringField(TEXT("BoneName")));
+                    LimitProf.BaseSwing1Limit = static_cast<float>(JointObj->GetNumberField(TEXT("BaseSwing1Limit")));
+                    LimitProf.BaseSwing2Limit = static_cast<float>(JointObj->GetNumberField(TEXT("BaseSwing2Limit")));
+                    LimitProf.BaseTwistLimit = static_cast<float>(JointObj->GetNumberField(TEXT("BaseTwistLimit")));
+                    LimitProf.HyperextensionThresholdAngle = static_cast<float>(JointObj->GetNumberField(TEXT("HyperextensionThresholdAngle")));
+                    
+                    DeserializeMapWrapper(JointObj, TEXT("RangeOfMotionAttributeScalars"), LimitProf.RangeOfMotionAttributeScalars);
+                    DeserializeMapWrapper(JointObj, TEXT("ResistanceAttributeScalars"), LimitProf.ResistanceAttributeScalars);
+                    
+                    if (JointObj->HasField(TEXT("HyperextensionEffects")))
+                    {
+                        for (const auto& EffVal : JointObj->GetArrayField(TEXT("HyperextensionEffects")))
+                        {
+                            FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName(*EffVal->AsString()), false);
+                            if (Tag.IsValid()) LimitProf.HyperextensionEffects.Add(Tag);
+                        }
+                    }
+                    SkelDef.JointLimits.Add(LimitProf);
+                }
+            }
+            
             OutStaging.SkeletonMasterRegistry.Add(KeyTag, SkelDef);
         }
     }
@@ -1414,9 +1495,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.DialectMasterRegistry.Add(KeyTag, DiaDef);
         }
     }
-    // ------------------------------------------------------------------------
-    // Macro-Economy & Market Pricing Registry
-    // ------------------------------------------------------------------------
     if (RootObject->HasField(TEXT("MarketMasterRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("MarketMasterRegistry"))->Values)
@@ -1444,6 +1522,21 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                         Commodity.PriceElasticity = ComObj->HasField(TEXT("PriceElasticity")) ? static_cast<float>(ComObj->GetNumberField(TEXT("PriceElasticity"))) : 1.0f;
                         Commodity.CurrentSupply = ComObj->HasField(TEXT("CurrentSupply")) ? static_cast<float>(ComObj->GetNumberField(TEXT("CurrentSupply"))) : 100.0f;
                         Commodity.CurrentDemand = ComObj->HasField(TEXT("CurrentDemand")) ? static_cast<float>(ComObj->GetNumberField(TEXT("CurrentDemand"))) : 100.0f;
+                        
+                        if (ComObj->HasField(TEXT("ConsumingProfessions")))
+                        {
+                            for (const auto& ProfVal : ComObj->GetArrayField(TEXT("ConsumingProfessions")))
+                            {
+                                Commodity.ConsumingProfessions.Add(FGameplayTag::RequestGameplayTag(FName(*ProfVal->AsString()), false));
+                            }
+                        }
+                        if (ComObj->HasField(TEXT("ProducingProfessions")))
+                        {
+                            for (const auto& ProfVal : ComObj->GetArrayField(TEXT("ProducingProfessions")))
+                            {
+                                Commodity.ProducingProfessions.Add(FGameplayTag::RequestGameplayTag(FName(*ProfVal->AsString()), false));
+                            }
+                        }
                         MarketDef.BaselineCommodities.Add(Commodity);
                     }
                 }
@@ -2051,8 +2144,10 @@ void UDynamicDataSerializer::DeserializeImpactReactionRule(const TSharedPtr<FJso
     OutRule.BaseImpactVelocityThreshold = InObject->HasField(TEXT("BaseImpactVelocityThreshold")) ? static_cast<float>(InObject->GetNumberField(TEXT("BaseImpactVelocityThreshold"))) : 750.0f;
     OutRule.BaseStabilityLossThreshold = InObject->HasField(TEXT("BaseStabilityLossThreshold")) ? static_cast<float>(InObject->GetNumberField(TEXT("BaseStabilityLossThreshold"))) : 30.0f;
     OutRule.MassImpactMultiplier = InObject->HasField(TEXT("MassImpactMultiplier")) ? static_cast<float>(InObject->GetNumberField(TEXT("MassImpactMultiplier"))) : 0.015f;
+    OutRule.BaseRecoilMultiplier = InObject->HasField(TEXT("BaseRecoilMultiplier")) ? static_cast<float>(InObject->GetNumberField(TEXT("BaseRecoilMultiplier"))) : 1.0f;
     OutRule.bTriggersRagdollOnInstability = InObject->HasField(TEXT("bTriggersRagdollOnInstability")) ? InObject->GetBoolField(TEXT("bTriggersRagdollOnInstability")) : true;
 
+    DeserializeMapWrapper(InObject, TEXT("StaggerResistanceScalars"), OutRule.StaggerResistanceScalars);
     DeserializeMapWrapper(InObject, TEXT("VelocityMitigationScalars"), OutRule.VelocityMitigationScalars);
     DeserializeMapWrapper(InObject, TEXT("DamageMitigationScalars"), OutRule.DamageMitigationScalars);
     DeserializeMapWrapper(InObject, TEXT("StabilityRetentionScalars"), OutRule.StabilityRetentionScalars);
@@ -2079,6 +2174,39 @@ void UDynamicDataSerializer::DeserializeImpactReactionRule(const TSharedPtr<FJso
                 }
             }
             OutRule.Consequences.Add(Conseq);
+        }
+    }
+
+    if (InObject->HasField(TEXT("OverpowerRules")))
+    {
+        for (const auto& RuleVal : InObject->GetArrayField(TEXT("OverpowerRules")))
+        {
+            TSharedPtr<FJsonObject> RuleObj = RuleVal->AsObject();
+            if (!RuleObj.IsValid()) continue;
+
+            FDynamicOverpowerRule OverpowerRule;
+            OverpowerRule.BasePenetrationThreshold = RuleObj->HasField(TEXT("BasePenetrationThreshold")) ? static_cast<float>(RuleObj->GetNumberField(TEXT("BasePenetrationThreshold"))) : 5000.0f;
+            OverpowerRule.bIgnoreCollisionOnOverpower = RuleObj->HasField(TEXT("bIgnoreCollisionOnOverpower")) ? RuleObj->GetBoolField(TEXT("bIgnoreCollisionOnOverpower")) : false;
+            
+            // NEW PIERCING RULES
+            OverpowerRule.bIsPiercing = RuleObj->HasField(TEXT("bIsPiercing")) ? RuleObj->GetBoolField(TEXT("bIsPiercing")) : false;
+            OverpowerRule.MaxPiercingDepth = RuleObj->HasField(TEXT("MaxPiercingDepth")) ? static_cast<float>(RuleObj->GetNumberField(TEXT("MaxPiercingDepth"))) : 45.0f;
+            
+            OverpowerRule.IgnoreCollisionDuration = RuleObj->HasField(TEXT("IgnoreCollisionDuration")) ? static_cast<float>(RuleObj->GetNumberField(TEXT("IgnoreCollisionDuration"))) : 0.45f;
+            OverpowerRule.bHyperextendLimbOnOverpower = RuleObj->HasField(TEXT("bHyperextendLimbOnOverpower")) ? RuleObj->GetBoolField(TEXT("bHyperextendLimbOnOverpower")) : false;
+            OverpowerRule.bForceRagdollOnOverpower = RuleObj->HasField(TEXT("bForceRagdollOnOverpower")) ? RuleObj->GetBoolField(TEXT("bForceRagdollOnOverpower")) : false;
+
+            DeserializeMapWrapper(RuleObj, TEXT("ResistanceAttributeScalars"), OverpowerRule.ResistanceAttributeScalars);
+
+            if (RuleObj->HasField(TEXT("StatusEffectsToApply")))
+            {
+                for (const auto& EffectVal : RuleObj->GetArrayField(TEXT("StatusEffectsToApply")))
+                {
+                    FGameplayTag EffectTag = FGameplayTag::RequestGameplayTag(FName(*EffectVal->AsString()), false);
+                    if (EffectTag.IsValid()) OverpowerRule.StatusEffectsToApply.Add(EffectTag);
+                }
+            }
+            OutRule.OverpowerRules.Add(OverpowerRule);
         }
     }
 }

@@ -780,6 +780,8 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
     {
         PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
         GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+        
+        // --- Pass Multi-Impact Tags to Context ---
         if (AbilityConfig.InteractionConfig.EffectsToApplyToTarget.Num() > 0 && TargetOwnerActor)
         {
             UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
@@ -791,6 +793,11 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
                     FGameplayEffectSpecHandle Spec = UDynamicEffectFactory::CreateDynamicEffectSpec(SourceASC, EffTag, 1);
                     if (Spec.IsValid())
                     {
+                        FDynamicGameplayEffectContext* DynCtx = static_cast<FDynamicGameplayEffectContext*>(Spec.Data->GetContext().Get());
+                        if (DynCtx)
+                        {
+                            DynCtx->ContextPayloadTags = AbilityConfig.InteractionConfig.ImpactTypeTags;
+                        }
                         SourceASC->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), TargetASC);
                     }
                 }
@@ -876,7 +883,6 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
     const FDynamicSpatialDeliveryDef& Delivery = AbilityConfig.SpatialDelivery;
     UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
 
-    // Instant Attached Nova Sweep
     if (Delivery.MotionType == ESpatialDeliveryMotion::AttachedToCaster &&
         Delivery.ApplicationType == EAuraEffectApplicationType::SingleHit &&
         Delivery.Duration <= 0.25f)
@@ -894,20 +900,26 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                 if (!HitActor || ProcessedActors.Contains(HitActor)) continue;
                 ProcessedActors.Add(HitActor);
 
-                // Target Liveness & GAS Tag / Condition Validation
-                if (!IsValidTargetForSpatialDelivery(Delivery, HitActor))
-                {
-                    continue;
-                }
+                if (!IsValidTargetForSpatialDelivery(Delivery, HitActor)) continue;
 
                 ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(HitActor);
                 const FName BoneName = (Hit.BoneName != NAME_None) ? Hit.BoneName : FName("pelvis");
                 const FVector OutwardNormal = (Avatar->GetActorLocation() - HitActor->GetActorLocation()).GetSafeNormal();
                 const float ScaledImpulse = Delivery.KineticImpulseOnHit * ChargeAlpha;
 
+                // Send the full tag container to the limb hit function
                 if (HitChar)
                 {
-                    HitChar->ServerProcessAuthoritativeLimbHit(HitChar, BoneName, ScaledImpulse, ChargeAlpha, HitChar->GetActorLocation(), OutwardNormal, Avatar);
+                    HitChar->ServerProcessAuthoritativeLimbHit(
+                        HitChar, 
+                        BoneName, 
+                        ScaledImpulse, 
+                        ChargeAlpha, 
+                        HitChar->GetActorLocation(), 
+                        OutwardNormal, 
+                        Avatar, 
+                        Delivery.ImpactTypeTags
+                    );
                 }
 
                 if (UAbilitySystemComponent* TargetASC = HitActor->FindComponentByClass<UAbilitySystemComponent>())
@@ -923,6 +935,7 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                             {
                                 DynCtx->SetAuthoritativePhysicsPayload(LimbId, ScaledImpulse, ChargeAlpha, OutwardNormal, HitActor->GetActorLocation());
                                 DynCtx->SourcePassBackRules = AbilityConfig.SourcePassBackRules;
+                                DynCtx->ContextPayloadTags = Delivery.ImpactTypeTags;
                             }
                             SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
                         }
@@ -950,6 +963,16 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
     const FVector BaseLoc = bIsAttached ? Avatar->GetActorLocation() : (Avatar->GetActorLocation() + Avatar->GetActorForwardVector() * 80.0f);
     const FRotator BaseRot = Avatar->GetActorRotation();
 
+    // NEW: Resolve Homing Target from Social / AI Brain
+    AActor* HomingTarget = nullptr;
+    if (Delivery.MotionType == ESpatialDeliveryMotion::Homing)
+    {
+        if (UDynamicSocialComponent* SocialComp = Avatar->FindComponentByClass<UDynamicSocialComponent>())
+        {
+            HomingTarget = SocialComp->ActiveInterlocutor.Get();
+        }
+    }
+
     for (int32 i = 0; i < Count; ++i)
     {
         float YawOffset = 0.0f;
@@ -966,13 +989,19 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
             {
                 SpatialActor->AttachToComponent(Avatar->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
             }
+            
+            // Pass the derived forward vector as the direction
+            const FVector Direction = SpawnTM.GetRotation().GetForwardVector();
+
             SpatialActor->ActivateSpatialDelivery(
                 SourceASC,
                 Delivery,
                 AbilityConfig.SourcePassBackRules,
                 FinalSpeed,
                 PowerMultiplierPerInstance,
-                nullptr);
+                Direction,
+                HomingTarget
+            );
         }
     }
 }
@@ -991,6 +1020,12 @@ void UDynamicGameplayAbility::ExecuteChainBehavior(const FGameplayEventData* Tri
         ? AbilityConfig.NumericParams.LocalLookupMap.FindRef(AbilityConfig.ChainConfig.DamageParamTag)
         : 50.0f;
 
+    FGameplayTagContainer ChainImpactTags = AbilityConfig.ChainConfig.ImpactTypeTags;
+    if (ChainImpactTags.IsEmpty())
+    {
+        ChainImpactTags = AbilityConfig.SpatialDelivery.ImpactTypeTags;
+    }
+
     FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChainAbility), false);
     QueryParams.AddIgnoredActor(GetAvatarActorFromActorInfo());
 
@@ -1000,7 +1035,16 @@ void UDynamicGameplayAbility::ExecuteChainBehavior(const FGameplayEventData* Tri
 
         if (ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(CurrentTarget))
         {
-            HitChar->ServerProcessAuthoritativeLimbHit(HitChar, FName("pelvis"), ModdedDamage, 1.0f, HitChar->GetActorLocation(), FVector::UpVector, GetAvatarActorFromActorInfo());
+            HitChar->ServerProcessAuthoritativeLimbHit(
+                HitChar, 
+                FName("pelvis"), 
+                ModdedDamage, 
+                1.0f, 
+                HitChar->GetActorLocation(), 
+                FVector::UpVector, 
+                GetAvatarActorFromActorInfo(), 
+                ChainImpactTags
+            );
             GrantSourcePassBack(EPassBackTriggerEvent::OnDamageDealt, ModdedDamage);
         }
 

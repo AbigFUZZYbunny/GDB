@@ -58,7 +58,29 @@
           "TargetMorphTargets": [ "Horn_Curl", "Horn_Thickness" ]
         }
       ],
-      "Limbs": []
+      "Limbs": [],
+      "JointLimits": [
+        {
+          "BoneName": "upperarm_r",
+          "BaseSwing1Limit": 90.0,
+          "BaseSwing2Limit": 45.0,
+          "BaseTwistLimit": 60.0,
+          "RangeOfMotionAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Agility", "Value": 0.05 },
+              { "KeyTag": "Attribute.Stat.Strength", "Value": -0.01 }
+            ]
+          },
+          "ResistanceAttributeScalars": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Attribute.Stat.Strength", "Value": 1.5 },
+              { "KeyTag": "Attribute.Stat.Toughness", "Value": 0.5 }
+            ]
+          },
+          "HyperextensionThresholdAngle": 25.0,
+          "HyperextensionEffects": [ "State.Debuff.DislocatedShoulder", "State.Debuff.MuscleStrain" ]
+        }
+      ]
     },
     "Skeleton.Creature.Quadruped": {
       "SkeletonTypeTag": "Skeleton.Creature.Quadruped",

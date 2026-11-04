@@ -22,6 +22,7 @@
 #include "Engine/OverlapResult.h"
 #include "DynamicPhysicsActor.h"
 #include "Net/UnrealNetwork.h"
+#include "PhysicsEngine/PhysicsConstraintComponent.h"
 
 ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -148,6 +149,9 @@ void ADynamicCharacter::BeginPlay()
         {
             ServerSetMovementState(DefaultMovementStateTag);
         }
+        
+        // Force active on spawn, will evaluate dormancy in Tick
+        NetDormancy = DORM_Awake;
     }
 }
 
@@ -185,6 +189,8 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
                 HistoryBufferCount = FMath::Min(HistoryBufferCount + 1, HistoryRingBufferSize);
             }
         }
+        
+        UpdateNetworkDormancy(DeltaSeconds);
     }
 
     static const FGameplayTag CapabilityClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Movement.Climb"), false);
@@ -210,6 +216,10 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
             const float NewHeight = FMath::FInterpTo(CurrentHeight, CachedTargetCapsuleHalfHeight, DeltaSeconds, 12.0f);
             CapsuleComponent->SetCapsuleHalfHeight(NewHeight, true);
         }
+    }
+    if (bIsRagdolling && HasAuthority())
+    {
+        UpdateRagdollHyperextension(DeltaSeconds);
     }
 }
 
@@ -649,7 +659,7 @@ void ADynamicCharacter::ProcessDynamicImpact(const FGameplayTag& ImpactTypeTag, 
     const float MassFactor = 1.0f + ((TotalMass - BaselineMass) * Rule->MassImpactMultiplier);
 
     FDynamicGameplayEffectContext* CustomContext = new FDynamicGameplayEffectContext();
-    CustomContext->ContextPayloadTag = ImpactTypeTag;
+    CustomContext->ContextPayloadTags.AddTag(ImpactTypeTag);
     CustomContext->AddInstigator(this, this);
     CustomContext->SetAuthoritativePhysicsPayload(ResolvedLimbId, ImpactVelocity, MassFactor, Hit.ImpactNormal, Hit.ImpactPoint);
 
@@ -719,6 +729,7 @@ void ADynamicCharacter::StartRagdoll()
     {
         MeshComponent->SetCollisionProfileName(TEXT("Ragdoll"));
         MeshComponent->SetSimulatePhysics(true);
+        ConfigureRagdollJoints();
     }
 }
 
@@ -726,6 +737,7 @@ void ADynamicCharacter::RecoverFromRagdoll()
 {
     if (!bIsRagdolling) return;
     bIsRagdolling = false;
+    HyperextendedJoints.Empty();
 
     if (MeshComponent)
     {
@@ -954,7 +966,6 @@ void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_N
     ADynamicCharacter* HitCharacter = nullptr;
     FName HitBone = NAME_None;
 
-    // Evaluate mathematical bounding boxes on the server instead of animating rewound skeletal meshes
     for (const FOverlapResult& Overlap : CandidateOverlaps)
     {
         if (ADynamicCharacter* TargetChar = Cast<ADynamicCharacter>(Overlap.GetActor()))
@@ -991,8 +1002,40 @@ void ADynamicCharacter::Server_RequestAimedStrike_Implementation(const FVector_N
     if (bHit && HitCharacter)
     {
         const float AuthoritativeForce = CalculateAuthoritativeStrikeForce();
-        // Fallback impact point estimate on hit
-        ServerProcessAuthoritativeLimbHit(HitCharacter, HitBone, AuthoritativeForce, 1.0f, HitCharacter->GetActorLocation(), FVector(AimDirection) * -1.0f, this);
+
+        // 1. Gather combined impact tags from the active ability and the weapon
+        FGameplayTagContainer CombinedImpactTags;
+        if (const UDynamicEquipmentComponent* EquipComp = FindComponentByClass<UDynamicEquipmentComponent>())
+        {
+            static const FGameplayTag MainHandSlotTag = FGameplayTag::RequestGameplayTag(TEXT("Slot.Equipment.Hand.Right"), false);
+            const FGameplayTag WeaponTag = EquipComp->GetEquippedItemInSlot(MainHandSlotTag);
+            if (WeaponTag.IsValid())
+            {
+                if (ADynamicGameState* DynamicGS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+                {
+                    if (const FDynamicPhysicsActorDef* Def = DynamicGS->MasterPhysicsActorRegistry.Find(WeaponTag))
+                    {
+                        CombinedImpactTags.AppendTags(Def->ImpactTypeTags);
+                    }
+                }
+            }
+        }
+
+        if (CombinedImpactTags.IsEmpty())
+        {
+            CombinedImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Melee.Unarmed"), false));
+        }
+
+        ServerProcessAuthoritativeLimbHit(
+            HitCharacter, 
+            HitBone, 
+            AuthoritativeForce, 
+            1.0f, 
+            HitCharacter->GetActorLocation(), 
+            FVector(AimDirection) * -1.0f, 
+            this, 
+            CombinedImpactTags
+        );
     }
 }
 
@@ -1011,11 +1054,57 @@ void ADynamicCharacter::OnServerSkeletalMeshHit(UPrimitiveComponent* HitComponen
         MassRatio = FMath::Clamp(OtherMass / SelfMass, 0.25f, 4.0f);
     }
 
+    FGameplayTagContainer CollisionImpactTags;
+    if (ADynamicGameState* DynamicGS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+    {
+        if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(OtherActor))
+        {
+            if (const FDynamicPhysicsActorDef* Def = DynamicGS->MasterPhysicsActorRegistry.Find(PhysActor->GetActorArchetypeTag()))
+            {
+                CollisionImpactTags.AppendTags(Def->ImpactTypeTags);
+            }
+        }
+        else if (const ADynamicCharacter* OtherChar = Cast<ADynamicCharacter>(OtherActor))
+        {
+            if (const UDynamicEquipmentComponent* EquipComp = OtherChar->FindComponentByClass<UDynamicEquipmentComponent>())
+            {
+                static const FGameplayTag MainHandSlotTag = FGameplayTag::RequestGameplayTag(TEXT("Slot.Equipment.Hand.Right"), false);
+                const FGameplayTag WeaponTag = EquipComp->GetEquippedItemInSlot(MainHandSlotTag);
+                if (const FDynamicPhysicsActorDef* WeaponDef = DynamicGS->MasterPhysicsActorRegistry.Find(WeaponTag))
+                {
+                    CollisionImpactTags.AppendTags(WeaponDef->ImpactTypeTags);
+                }
+            }
+        }
+    }
+
+    if (CollisionImpactTags.IsEmpty())
+    {
+        CollisionImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Physical.Blunt"), false));
+    }
+
     const FName AuthoritativeBoneName = (Hit.MyBoneName != NAME_None) ? Hit.MyBoneName : Hit.BoneName;
-    ServerProcessAuthoritativeLimbHit(this, AuthoritativeBoneName, ImpulseMagnitude, MassRatio, Hit.ImpactPoint, Hit.ImpactNormal, OtherActor);
+    ServerProcessAuthoritativeLimbHit(
+        this, 
+        AuthoritativeBoneName, 
+        ImpulseMagnitude, 
+        MassRatio, 
+        Hit.ImpactPoint, 
+        Hit.ImpactNormal, 
+        OtherActor, 
+        CollisionImpactTags
+    );
 }
 
-void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(ADynamicCharacter* TargetCharacter, const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor)
+void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
+    ADynamicCharacter* TargetCharacter, 
+    const FName& HitBoneName, 
+    float RawImpulseMagnitude, 
+    float MassRatio, 
+    const FVector& HitLocation, 
+    const FVector& HitNormal, 
+    AActor* InstigatorActor,
+    const FGameplayTagContainer& ImpactTypeTags)
 {
     if (!HasAuthority() || !TargetCharacter) return;
 
@@ -1034,10 +1123,257 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(ADynamicCharacter* Tar
     }
     TargetCharacter->ServerLastLimbHitTimestamp.Add(ResolvedLimbId, CurrentTime);
 
-    const float ClampedImpulse = FMath::Min(RawImpulseMagnitude, Settings.MaxImpulseCap);
-    if (UDynamicForceComponent* TargetForceComp = TargetCharacter->FindComponentByClass<UDynamicForceComponent>())
+    FGameplayTagContainer EffectiveImpactTags = ImpactTypeTags;
+    if (InstigatorActor && EffectiveImpactTags.IsEmpty())
     {
-        TargetForceComp->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, ClampedImpulse, HitLocation, HitNormal);
+        if (const ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(InstigatorActor))
+        {
+            if (const FDynamicPhysicsActorDef* Def = DynamicGS->MasterPhysicsActorRegistry.Find(PhysActor->GetActorArchetypeTag()))
+            {
+                EffectiveImpactTags.AppendTags(Def->ImpactTypeTags);
+            }
+        }
+        else if (const ADynamicCharacter* AttackerChar = Cast<ADynamicCharacter>(InstigatorActor))
+        {
+            if (const UDynamicEquipmentComponent* EquipComp = AttackerChar->FindComponentByClass<UDynamicEquipmentComponent>())
+            {
+                static const FGameplayTag MainHandSlotTag = FGameplayTag::RequestGameplayTag(TEXT("Slot.Equipment.Hand.Right"), false);
+                const FGameplayTag WeaponTag = EquipComp->GetEquippedItemInSlot(MainHandSlotTag);
+                if (const FDynamicPhysicsActorDef* Def = DynamicGS->MasterPhysicsActorRegistry.Find(WeaponTag))
+                {
+                    EffectiveImpactTags.AppendTags(Def->ImpactTypeTags);
+                }
+            }
+        }
+    }
+
+    if (EffectiveImpactTags.IsEmpty())
+    {
+        EffectiveImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Physical.Blunt"), false));
+    }
+
+    const float WeaponMomentum = RawImpulseMagnitude * MassRatio;
+    const float TargetBaseMassResistance = TargetCharacter->CalculateTotalInventoryAndEquipmentMass() * 5.0f;
+    
+    UDynamicAttributeSet* TargetAttr = TargetCharacter->GetDynamicAttributeSet();
+    UAbilitySystemComponent* TargetASC = TargetCharacter->GetAbilitySystemComponent();
+
+    // Helper Lambda: Sums both Global Body Attributes and Local Limb Armor cleanly
+    auto GatherLocalResistance = [&](const FDynamicTagFloatMapWrapper& Scalars) -> float 
+    {
+        float AccumulatedResistance = 0.0f;
+        
+        if (TargetAttr)
+        {
+            for (const auto& Pair : Scalars.LocalLookupMap)
+            {
+                if (Pair.Key.IsValid())
+                {
+                    AccumulatedResistance += TargetAttr->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                    if (ResolvedLimbId > 0)
+                    {
+                        AccumulatedResistance += TargetAttr->GetDynamicAttributeValue(Pair.Key, ResolvedLimbId) * Pair.Value;
+                    }
+                }
+            }
+        }
+        
+        if (const UDynamicEquipmentComponent* TargetEquip = TargetCharacter->FindComponentByClass<UDynamicEquipmentComponent>())
+        {
+            for (const FDynamicEquipmentSlotItem& SlotItem : TargetEquip->ReplicatedEquipmentSlots.Items)
+            {
+                if (SlotItem.LinkedLimbId == ResolvedLimbId && SlotItem.EquippedItemArchetypeTag.IsValid())
+                {
+                    if (const FDynamicPhysicsActorDef* ArmorDef = DynamicGS->MasterPhysicsActorRegistry.Find(SlotItem.EquippedItemArchetypeTag))
+                    {
+                        for (const auto& Pair : Scalars.LocalLookupMap)
+                        {
+                            if (const float* ArmorAttrVal = ArmorDef->DefaultGlobalAttributes.LocalLookupMap.Find(Pair.Key))
+                            {
+                                AccumulatedResistance += (*ArmorAttrVal) * Pair.Value;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return AccumulatedResistance;
+    };
+
+    float HighestTargetImpulse = 0.0f;
+    float HighestRecoilImpulse = 0.0f;
+
+    for (const FGameplayTag& ImpactTag : EffectiveImpactTags)
+    {
+        if (const FDynamicImpactReactionRule* ImpactRule = Settings.ImpactReactionRules.Find(ImpactTag))
+        {
+            const float CurrentDefenderResistance = TargetBaseMassResistance + GatherLocalResistance(ImpactRule->StaggerResistanceScalars);
+
+            const float SafeTotalPower = FMath::Max(1.0f, WeaponMomentum + CurrentDefenderResistance);
+            const float TargetPowerRatio = FMath::Clamp(WeaponMomentum / SafeTotalPower, 0.0f, 1.0f);
+            
+            float RuleTargetImpulse = WeaponMomentum * TargetPowerRatio;
+            float RuleRecoilImpulse = (WeaponMomentum * (1.0f - TargetPowerRatio)) * ImpactRule->BaseRecoilMultiplier;
+
+            for (const FDynamicOverpowerRule& OverpowerRule : ImpactRule->OverpowerRules)
+            {
+                const float OverpowerResistance = OverpowerRule.BasePenetrationThreshold + GatherLocalResistance(OverpowerRule.ResistanceAttributeScalars);
+
+                // FIXED: Use OverpowerResistance consistently
+                if (WeaponMomentum > OverpowerResistance)
+                {
+                    UPrimitiveComponent* AttackerPrim = nullptr;
+                    if (ADynamicCharacter* Attacker = Cast<ADynamicCharacter>(InstigatorActor))
+                    {
+                        AttackerPrim = Attacker->GetMeshComponent();
+                    }
+                    else if (ADynamicPhysicsActor* PhysWeapon = Cast<ADynamicPhysicsActor>(InstigatorActor))
+                    {
+                        AttackerPrim = PhysWeapon->GetActivePhysicsPrimitive();
+                    }
+
+                    // A. PIERCE: Spawns a physical constraint locking penetration to the normal up to Max Depth
+                    if (OverpowerRule.bIsPiercing && OverpowerRule.MaxPiercingDepth > 0.0f)
+                    {
+                        RuleRecoilImpulse *= 0.25f;
+                        RuleTargetImpulse = WeaponMomentum;
+
+                        if (USkeletalMeshComponent* TargetMesh = TargetCharacter->GetMeshComponent())
+                        {
+                            if (AttackerPrim)
+                            {
+                                TargetMesh->IgnoreComponentWhenMoving(AttackerPrim, true);
+
+                                UPhysicsConstraintComponent* PierceConstraint = NewObject<UPhysicsConstraintComponent>(TargetCharacter);
+                                PierceConstraint->RegisterComponent();
+                                PierceConstraint->SetWorldLocation(HitLocation);
+                                
+                                const FRotator ConstraintRot = (-HitNormal).Rotation();
+                                PierceConstraint->SetWorldRotation(ConstraintRot);
+
+                                PierceConstraint->SetAngularSwing1Limit(ACM_Locked, 0.0f);
+                                PierceConstraint->SetAngularSwing2Limit(ACM_Locked, 0.0f);
+                                PierceConstraint->SetAngularTwistLimit(ACM_Locked, 0.0f);
+                                
+                                PierceConstraint->SetLinearXLimit(LCM_Limited, OverpowerRule.MaxPiercingDepth);
+                                PierceConstraint->SetLinearYLimit(LCM_Locked, 0.0f);
+                                PierceConstraint->SetLinearZLimit(LCM_Locked, 0.0f);
+                                
+                                PierceConstraint->SetLinearPositionDrive(true, true, true);
+                                PierceConstraint->SetLinearDriveParams(500.0f, 50.0f, 0.0f);
+                                
+                                PierceConstraint->SetConstrainedComponents(AttackerPrim, NAME_None, TargetMesh, HitBoneName);
+                                
+                                FTimerHandle PierceHandle;
+                                TargetCharacter->GetWorldTimerManager().SetTimer(PierceHandle, [PierceConstraint, TargetMesh, AttackerPrim]() {
+                                    if (IsValid(PierceConstraint))
+                                    {
+                                        PierceConstraint->BreakConstraint();
+                                        PierceConstraint->DestroyComponent();
+                                    }
+                                    if (IsValid(TargetMesh) && IsValid(AttackerPrim))
+                                    {
+                                        TargetMesh->IgnoreComponentWhenMoving(AttackerPrim, false);
+                                    }
+                                }, OverpowerRule.IgnoreCollisionDuration, false);
+                            }
+                        }
+                    }
+                    // B. CLEAVE: Phasing collision for slashing follow-through
+                    else if (OverpowerRule.bIgnoreCollisionOnOverpower)
+                    {
+                        RuleRecoilImpulse *= 0.15f; 
+                        RuleTargetImpulse = WeaponMomentum;
+
+                        if (USkeletalMeshComponent* TargetMesh = TargetCharacter->GetMeshComponent())
+                        {
+                            if (AttackerPrim)
+                            {
+                                TargetMesh->IgnoreComponentWhenMoving(AttackerPrim, true);
+
+                                FTimerHandle RestoreHandle;
+                                TargetCharacter->GetWorldTimerManager().SetTimer(RestoreHandle, [TargetMesh, AttackerPrim]() {
+                                    if (IsValid(TargetMesh) && IsValid(AttackerPrim))
+                                    {
+                                        TargetMesh->IgnoreComponentWhenMoving(AttackerPrim, false);
+                                    }
+                                }, OverpowerRule.IgnoreCollisionDuration, false);
+                            }
+                        }
+                    }
+
+                    // C. HYPEREXTENSION: Sever the physics control motor on the struck limb
+                    if (OverpowerRule.bHyperextendLimbOnOverpower)
+                    {
+                        RuleRecoilImpulse *= 0.3f;
+                        if (UPhysicsControlComponent* PCC = TargetCharacter->GetPhysicsControlComponent())
+                        {
+                            const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *HitBoneName.ToString()));
+                            FPhysicsControlMultiplier BrokenMult;
+                            BrokenMult.LinearStrengthMultiplier = FVector(0.0f);
+                            BrokenMult.AngularStrengthMultiplier = 0.0f;
+                            BrokenMult.LinearExtraDampingMultiplier = FVector(0.1f);
+                            BrokenMult.AngularExtraDampingMultiplier = 0.1f;
+                            PCC->SetControlMultiplier(ControlName, BrokenMult);
+                        }
+                    }
+
+                    // D. CRUSH: Force whole-body ragdoll collapse
+                    if (OverpowerRule.bForceRagdollOnOverpower)
+                    {
+                        TargetCharacter->StartRagdoll();
+                    }
+
+                    // E. Apply data-driven status debuff tags
+                    if (TargetASC && OverpowerRule.StatusEffectsToApply.Num() > 0)
+                    {
+                        FGameplayTagContainer DebuffContainer;
+                        for (const FGameplayTag& DebuffTag : OverpowerRule.StatusEffectsToApply)
+                        {
+                            if (DebuffTag.IsValid())
+                            {
+                                DebuffContainer.AddTag(DebuffTag);
+                            }
+                        }
+                        TargetASC->AddLooseGameplayTags(DebuffContainer);
+                    }
+                }
+            }
+
+            HighestTargetImpulse = FMath::Max(HighestTargetImpulse, RuleTargetImpulse);
+            HighestRecoilImpulse = FMath::Max(HighestRecoilImpulse, RuleRecoilImpulse);
+        }
+    }
+
+    // Apply Stagger / Reaction to Defender
+    HighestTargetImpulse = FMath::Min(HighestTargetImpulse, Settings.MaxImpulseCap);
+    if (HighestTargetImpulse > Settings.MinImpulseThreshold)
+    {
+        if (UDynamicForceComponent* TargetForceComp = TargetCharacter->FindComponentByClass<UDynamicForceComponent>())
+        {
+            TargetForceComp->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, HighestTargetImpulse, HitLocation, HitNormal);
+        }
+    }
+
+    // Apply Recoil / Deflection back to Attacker
+    HighestRecoilImpulse = FMath::Min(HighestRecoilImpulse, Settings.MaxImpulseCap);
+    if (HighestRecoilImpulse > Settings.MinImpulseThreshold && InstigatorActor && InstigatorActor != TargetCharacter)
+    {
+        if (ADynamicCharacter* AttackerChar = Cast<ADynamicCharacter>(InstigatorActor))
+        {
+            if (UDynamicForceComponent* AttackerForceComp = AttackerChar->FindComponentByClass<UDynamicForceComponent>())
+            {
+                const FName AttackerBone = FName("hand_r"); 
+                const uint8 AttackerLimbId = DynamicGS->GetLimbIdForBone(AttackerBone);
+                AttackerForceComp->ServerApplyLimbForce(AttackerLimbId, AttackerBone, HighestRecoilImpulse, InstigatorActor->GetActorLocation(), HitNormal);
+            }
+        }
+    }
+    
+    if (TargetCharacter->NetDormancy == DORM_DormantAll)
+    {
+        TargetCharacter->SetNetDormancy(DORM_Awake);
+        TargetCharacter->FlushNetDormancy();
     }
 }
 
@@ -1198,6 +1534,7 @@ void ADynamicCharacter::ResetToDefaultPoolState()
     {
         Interactable->ResetForPooling();
     }
+    HyperextendedJoints.Empty();
 }
 
 bool ADynamicCharacter::CalculatePseudoBoneIntersection(const FCharacterTransformHistorySnapshot& Snapshot, const FVector& StartTrace, const FVector& EndTrace, FName& OutHitBone)
@@ -1308,6 +1645,172 @@ void ADynamicCharacter::ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag,
                     );
                 }
             }
+        }
+    }
+}
+
+void ADynamicCharacter::ConfigureRagdollJoints()
+{
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS || !MeshComponent || !AttributeSet || !CustomizationComponent) return;
+    
+    const FGameplayTag TemplateTag = CustomizationComponent->ActiveCharacterTemplateTag;
+    FCharacterTemplateDef TemplateDef;
+    if (!GS->GetCharacterTemplate(TemplateTag, TemplateDef)) return;
+    
+    const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag);
+    if (!SkelDef) return;
+    
+    for (const FDynamicJointLimitProfile& JointProfile : SkelDef->JointLimits)
+    {
+        // Calculate Flexibility (Range of Motion)
+        float ROMScale = 1.0f;
+        for (const auto& Pair : JointProfile.RangeOfMotionAttributeScalars.LocalLookupMap)
+        {
+            if (Pair.Key.IsValid()) ROMScale += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+        }
+        ROMScale = FMath::Max(0.1f, ROMScale);
+        
+        // Calculate Physical Resistance (Soft Constraint Stiffness)
+        float ResistanceMult = 1.0f;
+        for (const auto& Pair : JointProfile.ResistanceAttributeScalars.LocalLookupMap)
+        {
+            if (Pair.Key.IsValid()) ResistanceMult += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+        }
+        ResistanceMult = FMath::Max(0.1f, ResistanceMult);
+        
+        // Configure specific bone constraint dynamically
+        if (FConstraintInstance* Constraint = MeshComponent->FindConstraintInstance(JointProfile.BoneName))
+        {
+            Constraint->SetAngularSwing1Limit(ACM_Limited, JointProfile.BaseSwing1Limit * ROMScale);
+            Constraint->SetAngularSwing2Limit(ACM_Limited, JointProfile.BaseSwing2Limit * ROMScale);
+            Constraint->SetAngularTwistLimit(ACM_Limited, JointProfile.BaseTwistLimit * ROMScale);
+            
+            // Soft limits prevent hard bouncing and simulate bodily resistance tearing
+            Constraint->ProfileInstance.ConeLimit.bSoftConstraint = true;
+            Constraint->ProfileInstance.ConeLimit.Stiffness = 500.0f * ResistanceMult;
+            Constraint->ProfileInstance.ConeLimit.Damping = 50.0f * ResistanceMult;
+            Constraint->UpdateAngularLimit();
+        }
+    }
+}
+
+void ADynamicCharacter::UpdateRagdollHyperextension(float DeltaSeconds)
+{
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS || !MeshComponent || !AttributeSet || !CustomizationComponent) return;
+    
+    const FGameplayTag TemplateTag = CustomizationComponent->ActiveCharacterTemplateTag;
+    FCharacterTemplateDef TemplateDef;
+    if (!GS->GetCharacterTemplate(TemplateTag, TemplateDef)) return;
+    
+    const FDynamicSkeletonDef* SkelDef = GS->SkeletonMasterRegistry.Find(TemplateDef.SkeletonTypeTag);
+    if (!SkelDef) return;
+    
+    for (const FDynamicJointLimitProfile& JointProfile : SkelDef->JointLimits)
+    {
+        if (HyperextendedJoints.Contains(JointProfile.BoneName)) continue;
+        
+        const FName ParentBone = MeshComponent->GetParentBone(JointProfile.BoneName);
+        if (ParentBone == NAME_None) continue;
+        
+        const FTransform ChildTransform = MeshComponent->GetSocketTransform(JointProfile.BoneName, RTS_World);
+        const FTransform ParentTransform = MeshComponent->GetSocketTransform(ParentBone, RTS_World);
+        
+        // Find the absolute angular divergence between parent and child segments in degrees
+        const FTransform RelativeTransform = ChildTransform.GetRelativeTransform(ParentTransform);
+        const float AngleDiff = FMath::RadiansToDegrees(RelativeTransform.GetRotation().GetAngle());
+        
+        float ROMScale = 1.0f;
+        for (const auto& Pair : JointProfile.RangeOfMotionAttributeScalars.LocalLookupMap)
+        {
+            if (Pair.Key.IsValid()) ROMScale += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+        }
+        
+        // Find the maximum allowed limit before injury occurs
+        const float MaxLimit = FMath::Max3(JointProfile.BaseSwing1Limit, JointProfile.BaseSwing2Limit, JointProfile.BaseTwistLimit) * ROMScale;
+        
+        // Evaluate Hyperextension
+        if (AngleDiff > (MaxLimit + JointProfile.HyperextensionThresholdAngle))
+        {
+            HyperextendedJoints.Add(JointProfile.BoneName);
+            
+            // Sever the physics control motor tension entirely, making the limb go limp
+            if (PhysicsControlComponent)
+            {
+                const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *JointProfile.BoneName.ToString()));
+                FPhysicsControlMultiplier BrokenMult;
+                BrokenMult.LinearStrengthMultiplier = FVector(0.0f);
+                BrokenMult.AngularStrengthMultiplier = 0.0f;
+                PhysicsControlComponent->SetControlMultiplier(ControlName, BrokenMult);
+            }
+
+            // Apply data-driven consequences (e.g. Muscle Tear, Broken Bone)
+            if (AbilitySystemComponent && JointProfile.HyperextensionEffects.Num() > 0)
+            {
+                FGameplayTagContainer DebuffContainer;
+                for (const FGameplayTag& EffTag : JointProfile.HyperextensionEffects)
+                {
+                    if (EffTag.IsValid()) DebuffContainer.AddTag(EffTag);
+                }
+                AbilitySystemComponent->AddLooseGameplayTags(DebuffContainer);
+            }
+        }
+    }
+}
+
+void ADynamicCharacter::UpdateNetworkDormancy(float DeltaSeconds)
+{
+    // Do not put possessed player characters to sleep
+    if (IsPlayerControlled()) return;
+
+    bool bCanSleep = true;
+
+    // 1. Ensure velocity is 0
+    if (GetVelocity().SizeSquared() > 10.0f)
+    {
+        bCanSleep = false;
+    }
+
+    // 2. Ensure they aren't engaged in conversation or processing an LLM response
+    if (SocialComponent)
+    {
+        if (SocialComponent->ActiveTurnState != EConversationalTurnState::Idle)
+        {
+            bCanSleep = false;
+        }
+    }
+
+    // 3. Ensure they aren't actively executing an ability
+    if (AbilitySystemComponent)
+    {
+        for (const FGameplayAbilitySpec& Spec : AbilitySystemComponent->GetActivatableAbilities())
+        {
+            if (Spec.IsActive())
+            {
+                bCanSleep = false;
+                break;
+            }
+        }
+    }
+
+    if (bCanSleep)
+    {
+        IdleDormancyTimer += DeltaSeconds;
+        // If idle for 5 seconds, shut down replication to all clients
+        if (IdleDormancyTimer >= 5.0f && NetDormancy != DORM_DormantAll)
+        {
+            SetNetDormancy(DORM_DormantAll);
+        }
+    }
+    else
+    {
+        IdleDormancyTimer = 0.0f;
+        if (NetDormancy == DORM_DormantAll)
+        {
+            // Instantly wake up the actor on the network to resume syncing movement/chat
+            SetNetDormancy(DORM_Awake);
+            FlushNetDormancy();
         }
     }
 }

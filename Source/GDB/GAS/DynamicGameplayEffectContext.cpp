@@ -22,7 +22,7 @@ bool FDynamicGameplayEffectContext::NetSerialize(FArchive& Ar, UPackageMap* Map,
     FGameplayEffectContext::NetSerialize(Ar, Map, bOutSuccess);
 
     Ar << CustomConditionTreeName;
-    ContextPayloadTag.NetSerialize(Ar, Map, bOutSuccess);
+    ContextPayloadTags.NetSerialize(Ar, Map, bOutSuccess);
 
     uint8 RepBits = 0;
     if (Ar.IsSaving())

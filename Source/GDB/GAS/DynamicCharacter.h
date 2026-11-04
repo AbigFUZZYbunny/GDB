@@ -49,7 +49,16 @@ public:
     UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category = "DynamicGAS|Combat")
     void Server_RequestAimedStrike(const FVector_NetQuantize10& AimOrigin, const FVector_NetQuantizeNormal& AimDirection, double ClientTargetTimestamp);
 
-    void ServerProcessAuthoritativeLimbHit(ADynamicCharacter* TargetCharacter, const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor);
+    void ServerProcessAuthoritativeLimbHit(
+        ADynamicCharacter* TargetCharacter, 
+        const FName& HitBoneName, 
+        float RawImpulseMagnitude, 
+        float MassRatio, 
+        const FVector& HitLocation, 
+        const FVector& HitNormal, 
+        AActor* InstigatorActor,
+        const FGameplayTagContainer& ImpactTypeTags = FGameplayTagContainer()
+    );
 
     UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
     void RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren = true);
@@ -178,6 +187,14 @@ protected:
     UDynamicGASManagerComponent* DynamicGASManager;
     
     void ServerBroadcastSensoryStimulus(FGameplayTag StimulusTag, float BaseMagnitudeOverride);
+    
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
+    void ConfigureRagdollJoints();
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Physics")
+    void UpdateRagdollHyperextension(float DeltaSeconds);
+    
+    void UpdateNetworkDormancy(float DeltaSeconds);
 
 private:
     void InitializeAbilitySystem();
@@ -216,9 +233,13 @@ private:
     float AccumulatedHoldSweepTime = 0.0;
     
     float HistorySaveAccumulator = 0.0f;
-    static constexpr float HistorySaveInterval = 1.0f / 20.0f; // 20 Hz Lag Compensation
+    static constexpr float HistorySaveInterval = 1.0f / 20.0f;
     
-    // Caching mass calculation to prevent spamming Physics Sweeps every frame during climbing
     mutable float CachedTotalMass = 80.0f;
     mutable double LastMassCalculateTime = -100.0;
+    
+    // Tracks joints that have already been broken to prevent log/effect spam during a single ragdoll
+    TSet<FName> HyperextendedJoints;
+    
+    float IdleDormancyTimer = 0.0f;
 };

@@ -220,7 +220,8 @@ enum class ESpatialDeliveryMotion : uint8
     AttachedToCaster,
     StraightVelocity,
     SourceGuided,
-    Homing
+    Homing,
+    Ballistic
 };
 
 UENUM(BlueprintType)
@@ -248,7 +249,8 @@ enum class EPassBackTriggerEvent : uint8
 {
     OnCast,
     OnCollision,
-    OnDamageDealt
+    OnDamageDealt,
+    OnEffectApplied
 };
 
 UENUM(BlueprintType)
@@ -1227,6 +1229,9 @@ struct FDynamicSpatialDeliveryDef
     FGameplayTag SpeedMetricTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    FGameplayTagContainer ImpactTypeTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     ESpatialDeliveryMotion MotionType = ESpatialDeliveryMotion::StraightVelocity;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
@@ -1249,6 +1254,17 @@ struct FDynamicSpatialDeliveryDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     float HomingTurnRate = 240.0f;
+
+    // --- NEW: Ballistic Physics Parameters ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float GravityScale = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    float Bounciness = 0.3f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
+    bool bDetonateOnBounce = true;
+    // -----------------------------------------
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     float TickInterval = 0.5f;
@@ -1283,7 +1299,6 @@ struct FDynamicSpatialDeliveryDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     FGameplayTagContainer PropagatedTriggerTags;
 
-    // --- Target Liveness & Faction Validation Filters ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery|Validation")
     FGameplayTagContainer RequiredTargetTags;
 
@@ -1307,6 +1322,10 @@ struct FDynamicInteractionProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     FGameplayTag InteractionActionTag;
+
+    // Defines the impact types associated with the ACTION itself (e.g. Impact.Type.Action.Thrust, Impact.Type.Action.OverheadSwing)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
+    FGameplayTagContainer ImpactTypeTags;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     FGameplayTag KinematicTargetTag;
@@ -1356,7 +1375,6 @@ struct FDynamicInteractionProfile
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Voxels")
     float VoxelModificationRadius = 150.0f;
 
-    // NEW: Text and Language definitions for readable items (books, ancient runes, signs)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Lore")
     FString ReadableTextPayload = TEXT("");
 
@@ -1375,6 +1393,9 @@ struct FDynamicChainProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Chain")
     FGameplayTag DamageParamTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Chain")
+    FGameplayTagContainer ImpactTypeTags;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Chain")
     int32 MaxBounces = 0;
@@ -3355,6 +3376,46 @@ struct FDynamicImpactConsequence
     TArray<FGameplayTag> StatusEffectsToApply;
 };
 
+// ----------------------------------------------------------------------------
+// Overpower & Impact Physics (DynamicGASTypes.h Additions)
+// ----------------------------------------------------------------------------
+
+USTRUCT(BlueprintType)
+struct FDynamicOverpowerRule
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    float BasePenetrationThreshold = 5000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    FDynamicTagFloatMapWrapper ResistanceAttributeScalars;
+
+    // CLEAVE: Ignores collision completely for follow-through
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    bool bIgnoreCollisionOnOverpower = false;
+
+    // PIERCE: Spawns a physical constraint locking penetration to the impact normal up to the Max Depth
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    bool bIsPiercing = false;
+
+    // How deep the weapon is allowed to slide into the target before the guard/shaft stops it (in cm)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    float MaxPiercingDepth = 45.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    float IgnoreCollisionDuration = 0.45f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    bool bHyperextendLimbOnOverpower = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    bool bForceRagdollOnOverpower = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
+    TArray<FGameplayTag> StatusEffectsToApply;
+};
+
 USTRUCT(BlueprintType)
 struct FDynamicImpactReactionRule
 {
@@ -3363,22 +3424,30 @@ struct FDynamicImpactReactionRule
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     float BaseImpactVelocityThreshold = 750.0f;
 
-    // Threshold at which the character breaks stance, loses grip, or falls over
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     float BaseStabilityLossThreshold = 30.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     float MassImpactMultiplier = 0.015f;
 
-    // Attributes reducing effective impact velocity (e.g., Attribute.Skill.Acrobatics, Attribute.Stat.Agility)
+    // --- NEW: Stagger & Recoil Newton Exchange ---
+    
+    // Attributes that resist physical displacement (e.g., Strength, Constitution, Armor)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    FDynamicTagFloatMapWrapper StaggerResistanceScalars;
+    
+    // Multiplier for how much of the deflected force returns to the attacker's limb
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    float BaseRecoilMultiplier = 1.0f;
+
+    // ---------------------------------------------
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     FDynamicTagFloatMapWrapper VelocityMitigationScalars;
 
-    // Attributes reducing final damage (e.g., Attribute.Stat.Toughness, Attribute.Limb.Armor)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     FDynamicTagFloatMapWrapper DamageMitigationScalars;
 
-    // Attributes increasing grip/stability retention (e.g., Attribute.Stat.Strength, Attribute.Stat.Balance)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     FDynamicTagFloatMapWrapper StabilityRetentionScalars;
 
@@ -3387,6 +3456,48 @@ struct FDynamicImpactReactionRule
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     bool bTriggersRagdollOnInstability = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
+    TArray<FDynamicOverpowerRule> OverpowerRules;
+};
+
+// ----------------------------------------------------------------------------
+// Ragdoll Joint Soft Limits & Hyperextension
+// ----------------------------------------------------------------------------
+
+USTRUCT(BlueprintType)
+struct FDynamicJointLimitProfile
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    FName BoneName = NAME_None;
+
+    // Base limits in degrees (Pitch, Yaw, Roll equivalents)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    float BaseSwing1Limit = 45.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    float BaseSwing2Limit = 45.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    float BaseTwistLimit = 30.0f;
+
+    // Attributes increasing flexibility (e.g., Attribute.Stat.Agility -> +0.5 multiplier)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    FDynamicTagFloatMapWrapper RangeOfMotionAttributeScalars;
+
+    // Attributes increasing joint stiffness against ragdoll impacts (e.g., Attribute.Stat.Strength -> +10.0 stiffness)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    FDynamicTagFloatMapWrapper ResistanceAttributeScalars;
+
+    // Angle (in degrees) beyond the soft limit at which the joint breaks/hyperextends
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    float HyperextensionThresholdAngle = 20.0f;
+
+    // Status effect tags to apply upon breaking (e.g., State.Debuff.Dislocated)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Joints")
+    TArray<FGameplayTag> HyperextensionEffects;
 };
 
 // ============================================================================
@@ -3624,6 +3735,10 @@ struct FDynamicPhysicsActorDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FGameplayTag ArchetypeTag;
+
+    // Intrinsic impact types of the tool/weapon (e.g. Impact.Type.Weapon.Piercing, Impact.Type.Weapon.Slashing)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
+    FGameplayTagContainer ImpactTypeTags;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     TSoftObjectPtr<UObject> MeshAsset;
@@ -4063,6 +4178,10 @@ struct FDynamicSkeletonDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
     TArray<FPhysicsLimbConfig> Limbs;
+
+    // NEW: Contains all constraints and dynamic failure rules for physical ragdolling
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Creator|Skeleton")
+    TArray<FDynamicJointLimitProfile> JointLimits;
 };
 
 // ============================================================================

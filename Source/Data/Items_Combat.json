@@ -14,6 +14,7 @@
       "CollisionProfileName": "PhysicsActor",
       "bSimulatePhysicsOnSpawn": true,
       "bUsePhysicsControl": true,
+      "ImpactTypeTag": "Impact.Type.Slashing",
       "MassOverride": 3.2,
       "DefaultGlobalAttributes": {
         "ReplicatedEntries": [

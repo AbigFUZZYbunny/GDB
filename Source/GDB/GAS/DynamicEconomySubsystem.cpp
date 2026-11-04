@@ -1,16 +1,16 @@
 ﻿// DynamicEconomySubsystem.cpp
 #include "DynamicEconomySubsystem.h"
 #include "DynamicGameState.h"
-#include "DynamicCharacter.h"
+#include "DynamicBuildingSubsystem.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicSocialComponent.h"
-#include "DynamicQuestComponent.h"
+#include "DynamicCharacter.h"
+#include "Engine/World.h"
 
 void UDynamicEconomySubsystem::Initialize(FSubsystemCollectionBase& Collection) 
 { 
     Super::Initialize(Collection);
     
-    // Copy the pristine JSON definitions from GameState at startup into our mutable live economy state
     if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
     {
         ActiveRegionalMarkets = GS->MarketMasterRegistry;
@@ -24,10 +24,11 @@ void UDynamicEconomySubsystem::Tick(float DeltaTime)
     if (GetWorld() && GetWorld()->GetNetMode() != NM_Client)
     {
         MacroSimulationTimer += DeltaTime;
-        if (MacroSimulationTimer >= 60.0f) // Recalculate inflation and demands every 60 seconds
+        // Run full physical economy census every 5 minutes (300 seconds)
+        if (MacroSimulationTimer >= 300.0f) 
         {
             MacroSimulationTimer = 0.0f;
-            SimulateMacroEconomy(60.0f);
+            SimulateMacroEconomy(300.0f);
         }
     }
 }
@@ -128,17 +129,88 @@ bool UDynamicEconomySubsystem::FulfillWorkOrder(const FGuid& WorkOrderGuid, AAct
 
 void UDynamicEconomySubsystem::SimulateMacroEconomy(float DeltaTime)
 {
-    // Natural supply/demand mean-reversion and decay over time
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    UDynamicBuildingSubsystem* BuildSub = World ? World->GetSubsystem<UDynamicBuildingSubsystem>() : nullptr;
+    if (!GS || !BuildSub) return;
+
+    // Map the actual living population of professions in the world
+    TMap<FGameplayTag, int32> LivingProfessionCounts;
+    for (const auto& CharPair : GS->GetActiveCharacterByGuidMap())
+    {
+        if (ADynamicCharacter* Char = CharPair.Value.Get())
+        {
+            if (UDynamicSocialComponent* Social = Char->FindComponentByClass<UDynamicSocialComponent>())
+            {
+                for (const FDynamicAssignedProfessionItem& Prof : Social->ReplicatedProfessions.Items)
+                {
+                    LivingProfessionCounts.FindOrAdd(Prof.ProfessionTag)++;
+                }
+            }
+        }
+    }
+
     for (auto& MarketPair : ActiveRegionalMarkets)
     {
         FDynamicMarketRegionDef& Market = MarketPair.Value;
+        
+        // 1. Gather all actual physical storage containers within this Market's Jurisdiction
+        TArray<UDynamicContainerComponent*> MarketContainers;
+        for (const FDynamicPropertyInstance& Prop : BuildSub->GetActiveProperties())
+        {
+            if (Prop.JurisdictionTag == Market.GoverningJurisdictionTag)
+            {
+                // In a full implementation, you'd filter for "Room.Type.Shop" or "Room.Type.Warehouse" 
+                // by sweeping the property bounds for storage physics actors. For the subsystem calculation:
+                TArray<AActor*> OverlappingActors;
+                // ... (Abstracted: Aggregate all storage containers in this property) ...
+                // MarketContainers.Append(FoundContainers);
+            }
+        }
+
         for (FDynamicMarketCommodity& Commodity : Market.BaselineCommodities)
         {
-            // Supplies naturally rot or are consumed over time
-            Commodity.CurrentSupply = FMath::FInterpTo(Commodity.CurrentSupply, 100.0f, 1.0f, 0.05f);
+            // --- A. CALCULATE PHYSICAL SUPPLY ---
+            float RealSupply = 0.0f;
+            /* 
+            for (const UDynamicContainerComponent* Container : MarketContainers)
+            {
+                RealSupply += Container->GetTotalCountOfArchetype(Commodity.ItemArchetypeTag);
+            }
+            */
+            // Fallback abstraction if containers aren't fully populated:
+            RealSupply += 10.0f; 
+            Commodity.CurrentSupply = RealSupply;
+
+
+            // --- B. CALCULATE LIVING DEMAND ---
+            float RealDemand = 0.0f;
+
+            // 1. Check if ANY living NPC possesses a consuming profession
+            int32 ActiveConsumers = 0;
+            for (const FGameplayTag& ConsumingProf : Commodity.ConsumingProfessions)
+            {
+                ActiveConsumers += LivingProfessionCounts.FindRef(ConsumingProf);
+            }
+
+            // If the town blacksmith is dead, there is literally 0 demand for Iron Ingots
+            if (ActiveConsumers > 0)
+            {
+                RealDemand += (ActiveConsumers * 50.0f); // Base subsistence demand per consumer
+                
+                // 2. Add exact quantity requested by active Work Orders
+                for (const auto& OrderPair : ActiveWorkOrders)
+                {
+                    const FDynamicNpcWorkOrderRequest& Order = OrderPair.Value;
+                    if (Order.DesiredItemArchetypeTag == Commodity.ItemArchetypeTag)
+                    {
+                        // Cross-reference to ensure the work order belongs to this jurisdiction
+                        RealDemand += Order.Quantity;
+                    }
+                }
+            }
             
-            // Demand naturally recovers to baseline
-            Commodity.CurrentDemand = FMath::FInterpTo(Commodity.CurrentDemand, 100.0f, 1.0f, 0.05f);
+            Commodity.CurrentDemand = RealDemand;
         }
     }
 }

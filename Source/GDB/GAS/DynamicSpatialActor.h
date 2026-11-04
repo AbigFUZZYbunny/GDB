@@ -27,6 +27,7 @@ public:
         const TArray<FSourcePassBackRule>& InPassBackRules,
         float InSpeed,
         float InPowerMultiplier,
+        FVector InDirection,
         AActor* InHomingTarget = nullptr
     );
 
@@ -49,6 +50,8 @@ protected:
     float PowerMultiplier = 1.0f;
     float ElapsedLifetime = 0.0f;
     bool bIsActive = false;
+
+    FVector CurrentVelocity = FVector::ZeroVector;
 
     UPROPERTY()
     TWeakObjectPtr<AActor> HomingTargetActor;

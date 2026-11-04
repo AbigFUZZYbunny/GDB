@@ -26,6 +26,86 @@
       ]
     },
     "ImpactReactionRules": {
+      "Impact.Type.Crushing": {
+        "BaseImpactVelocityThreshold": 700.0,
+        "BaseStabilityLossThreshold": 25.0,
+        "MassImpactMultiplier": 0.035,
+        "VelocityMitigationScalars": { "ReplicatedEntries": [] },
+        "DamageMitigationScalars": { "ReplicatedEntries": [] },
+        "StabilityRetentionScalars": { "ReplicatedEntries": [] },
+        "Consequences": [],
+        "OverpowerRules": [
+          {
+            "BasePenetrationThreshold": 7500.0,
+            "ResistanceAttributeScalars": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Attribute.Stat.Armor", "Value": 10.0 },
+                { "KeyTag": "Attribute.Stat.Constitution", "Value": 8.0 },
+                { "KeyTag": "GDBCombat.Attribute.Resource.Posture", "Value": 5.0 }
+              ]
+            },
+            "bIgnoreCollisionOnOverpower": false,
+            "bHyperextendLimbOnOverpower": true,
+            "bForceRagdollOnOverpower": true,
+            "StatusEffectsToApply": [ "State.Debuff.Fractured", "State.Debuff.Crippled" ]
+          }
+        ]
+      },
+      "Impact.Type.Piercing": {
+        "BaseImpactVelocityThreshold": 600.0,
+        "BaseStabilityLossThreshold": 15.0,
+        "MassImpactMultiplier": 0.01,
+        "BaseRecoilMultiplier": 1.5,
+        "OverpowerRules": [
+          {
+            "BasePenetrationThreshold": 3500.0,
+            "ResistanceAttributeScalars": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Attribute.Stat.Armor", "Value": 20.0 }
+              ]
+            },
+            "bIgnoreCollisionOnOverpower": true,
+            "bIsPiercing": true,
+            "MaxPiercingDepth": 35.0,
+            "IgnoreCollisionDuration": 1.25,
+            "bHyperextendLimbOnOverpower": false,
+            "bForceRagdollOnOverpower": false,
+            "StatusEffectsToApply": [ "State.Debuff.PuncturedLung", "State.Debuff.SevereBleed" ]
+          }
+        ]
+      },
+      "Impact.Type.Slashing": {
+        "BaseImpactVelocityThreshold": 500.0,
+        "BaseStabilityLossThreshold": 35.0,
+        "MassImpactMultiplier": 0.015,
+        "BaseRecoilMultiplier": 1.25,
+        "StaggerResistanceScalars": {
+          "ReplicatedEntries": [
+            { "KeyTag": "Attribute.Stat.Strength", "Value": 15.0 },
+            { "KeyTag": "Attribute.Stat.Constitution", "Value": 10.0 },
+            { "KeyTag": "Attribute.Stat.Armor", "Value": 5.0 }
+          ]
+        },
+        "VelocityMitigationScalars": { "ReplicatedEntries": [] },
+        "DamageMitigationScalars": { "ReplicatedEntries": [] },
+        "StabilityRetentionScalars": { "ReplicatedEntries": [] },
+        "Consequences": [],
+        "OverpowerRules": [
+          {
+            "BasePenetrationThreshold": 4500.0,
+            "ResistanceAttributeScalars": {
+              "ReplicatedEntries": [
+                { "KeyTag": "Attribute.Stat.Armor", "Value": 30.0 }
+              ]
+            },
+            "bIgnoreCollisionOnOverpower": true,
+            "IgnoreCollisionDuration": 0.45,
+            "bHyperextendLimbOnOverpower": false,
+            "bForceRagdollOnOverpower": false,
+            "StatusEffectsToApply": [ "State.Debuff.Lacerated" ]
+          }
+        ]
+      },
       "Impact.Type.FallLanding": {
         "BaseImpactVelocityThreshold": 750.0,
         "BaseStabilityLossThreshold": 30.0,

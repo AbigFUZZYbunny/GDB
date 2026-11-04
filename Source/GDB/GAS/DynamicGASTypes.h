@@ -5157,6 +5157,106 @@ struct FPlayerPersistenceSnapshot
     TArray<FDraggedPhysicsActorSnapshot> DraggedPhysicsActors;
 };
 
+// ============================================================================
+// GROUND ITEM VIRTUALIZATION
+// ============================================================================
+USTRUCT(BlueprintType)
+struct GDB_API FGroundItemRecordItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Virtualization")
+    FGuid InstanceID; 
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Virtualization")
+    FDraggedPhysicsActorSnapshot Payload;
+
+    void PreReplicatedRemove(const struct FFastGroundItemArray& InArrayOwner);
+    void PostReplicatedAdd(const struct FFastGroundItemArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastGroundItemArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FFastGroundItemArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FGroundItemRecordItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class ADynamicItemChunkActor* OwningChunk = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FGroundItemRecordItem, FFastGroundItemArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastGroundItemArray> : public TStructOpsTypeTraitsBase2<FFastGroundItemArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
+struct FItemChunkSnapshot
+{
+    GENERATED_BODY()
+    UPROPERTY() FIntPoint ChunkCoord;
+    UPROPERTY() TArray<FGroundItemRecordItem> SavedItems;
+};
+
+// ============================================================================
+// MACRO-ECONOMY & MARKETS
+// ============================================================================
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicMarketCommodity
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    FGameplayTag ItemArchetypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    float BasePrice = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    float PriceElasticity = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    float CurrentSupply = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    float CurrentDemand = 0.0f;
+
+    // NEW: The professions that must exist in the jurisdiction to generate baseline demand
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    TArray<FGameplayTag> ConsumingProfessions;
+
+    // NEW: The professions that organically generate this supply
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    TArray<FGameplayTag> ProducingProfessions;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicMarketRegionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    FGameplayTag MarketTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    FGameplayTag GoverningJurisdictionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    float BaseInflationRate = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Economy")
+    TArray<FDynamicMarketCommodity> BaselineCommodities;
+};
+
 USTRUCT(BlueprintType)
 struct FNameDefinition
 {
@@ -5806,6 +5906,7 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
     TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
     TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
+    TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

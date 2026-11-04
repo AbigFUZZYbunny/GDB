@@ -65,6 +65,9 @@ public:
 
     const FPhysicsLimbConfig* ResolveActorLimbConfig(uint8 LimbId) const;
     uint8 ResolveLimbIdForBone(const FName& BoneName) const;
+    
+    UFUNCTION()
+    void OnPhysicsSleep(UPrimitiveComponent* SleepingComponent, FName BoneName);
 
 protected:
     virtual void BeginPlay() override;

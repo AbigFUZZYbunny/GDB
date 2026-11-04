@@ -10,6 +10,7 @@
 #include "DynamicGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/StreamableManager.h"
+#include "DynamicGroundItemSubsystem.h"
 
 ADynamicPhysicsActor::ADynamicPhysicsActor(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -91,6 +92,12 @@ void ADynamicPhysicsActor::BeginPlay()
         if (SkeletalMeshComponent) SkeletalMeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicPhysicsActor::OnServerPrimitiveHit);
         if (StaticMeshComponent) StaticMeshComponent->OnComponentHit.AddUniqueDynamic(this, &ADynamicPhysicsActor::OnServerPrimitiveHit);
 
+        if (UPrimitiveComponent* Prim = GetActivePhysicsPrimitive())
+        {
+            Prim->BodyInstance.bGenerateWakeEvents = true; 
+            Prim->OnComponentSleep.AddUniqueDynamic(this, &ADynamicPhysicsActor::OnPhysicsSleep);
+        }
+        
         if (ActorArchetypeTag.IsValid() && !bAttributesInitializedOnServer)
         {
             InitializeFromArchetype(ActorArchetypeTag);
@@ -122,6 +129,22 @@ void ADynamicPhysicsActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     }
 
     Super::EndPlay(EndPlayReason);
+}
+
+void ADynamicPhysicsActor::OnPhysicsSleep(UPrimitiveComponent* SleepingComponent, FName BoneName)
+{
+    if (!HasAuthority() || !bIsActiveInWorld) return;
+    
+    // Prevent virtualizing items that are currently attached to a character (equipped/carried)
+    if (GetAttachParentActor()) return;
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UDynamicGroundItemSubsystem* GroundSub = World->GetSubsystem<UDynamicGroundItemSubsystem>())
+        {
+            GroundSub->VirtualizePhysicsActor(this);
+        }
+    }
 }
 
 UDynamicContainerComponent* ADynamicPhysicsActor::GetContainerComponent(FGameplayTag ContainerIdentifierTag) const

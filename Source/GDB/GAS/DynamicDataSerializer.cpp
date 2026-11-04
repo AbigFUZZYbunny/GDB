@@ -1414,6 +1414,44 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.DialectMasterRegistry.Add(KeyTag, DiaDef);
         }
     }
+    // ------------------------------------------------------------------------
+    // Macro-Economy & Market Pricing Registry
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("MarketMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("MarketMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> MarketObj = Pair.Value->AsObject();
+            if (!MarketObj.IsValid()) continue;
+
+            FDynamicMarketRegionDef MarketDef;
+            MarketDef.MarketTag = KeyTag;
+            MarketDef.GoverningJurisdictionTag = FGameplayTag::RequestGameplayTag(FName(*MarketObj->GetStringField(TEXT("GoverningJurisdictionTag"))), false);
+            MarketDef.BaseInflationRate = MarketObj->HasField(TEXT("BaseInflationRate")) ? static_cast<float>(MarketObj->GetNumberField(TEXT("BaseInflationRate"))) : 1.0f;
+
+            if (MarketObj->HasField(TEXT("BaselineCommodities")))
+            {
+                for (const auto& Val : MarketObj->GetArrayField(TEXT("BaselineCommodities")))
+                {
+                    TSharedPtr<FJsonObject> ComObj = Val->AsObject();
+                    if (ComObj.IsValid())
+                    {
+                        FDynamicMarketCommodity Commodity;
+                        Commodity.ItemArchetypeTag = FGameplayTag::RequestGameplayTag(FName(*ComObj->GetStringField(TEXT("ItemArchetypeTag"))), false);
+                        Commodity.BasePrice = ComObj->HasField(TEXT("BasePrice")) ? static_cast<float>(ComObj->GetNumberField(TEXT("BasePrice"))) : 10.0f;
+                        Commodity.PriceElasticity = ComObj->HasField(TEXT("PriceElasticity")) ? static_cast<float>(ComObj->GetNumberField(TEXT("PriceElasticity"))) : 1.0f;
+                        Commodity.CurrentSupply = ComObj->HasField(TEXT("CurrentSupply")) ? static_cast<float>(ComObj->GetNumberField(TEXT("CurrentSupply"))) : 100.0f;
+                        Commodity.CurrentDemand = ComObj->HasField(TEXT("CurrentDemand")) ? static_cast<float>(ComObj->GetNumberField(TEXT("CurrentDemand"))) : 100.0f;
+                        MarketDef.BaselineCommodities.Add(Commodity);
+                    }
+                }
+            }
+
+            OutStaging.MarketMasterRegistry.Add(KeyTag, MarketDef);
+        }
+    }
 
     return true;
 }

@@ -65,6 +65,10 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
 
+    // Immersion Voice & Viseme Registries
+    UPROPERTY() TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
+
     UPROPERTY() FDynamicCalendarDef CalendarConfig;
     UPROPERTY() FPhysicsCalculationSettings CalculationSettings;
     UPROPERTY() TArray<FPhysicsLimbConfig> GlobalLimbs;
@@ -72,7 +76,6 @@ public:
     UPROPERTY() FDynamicEnvironmentSystemConfig EnvironmentConfig;
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Cloud AI") FCloudAISystemConfig CloudAIConfig;
 
-    // FastArray of procedurally coined words replicated to all connected clients
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedCoinedWords)
     FFastCoinedWordArray ReplicatedCoinedWords;
 
@@ -81,12 +84,10 @@ public:
 
     void HandleSingleCoinedWordReplicated(const FDynamicCoinedWordItem& Item);
 
-    // Generic Pre-warmed Gameplay Effects (Zero runtime GC allocations)
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericInstantEffect;
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericDurationEffect;
     UPROPERTY() TObjectPtr<UGameplayEffect> GenericInfiniteEffect;
 
-    // O(1) Active Character Lookup by Persistent GUID
     void RegisterCharacterByGuid(const FGuid& CharacterGuid, ADynamicCharacter* Character);
     void UnregisterCharacterByGuid(const FGuid& CharacterGuid, ADynamicCharacter* Character = nullptr);
 
@@ -95,12 +96,10 @@ public:
 
     const TMap<FGuid, TWeakObjectPtr<ADynamicCharacter>>& GetActiveCharacterByGuidMap() const { return ActiveCharacterByGuidMap; }
 
-    // Dynamic AI Behavior Evaluation & Cooldowns
     bool EvaluateBestDynamicBehavior(ADynamicCharacter* Character, FDynamicAIBehaviorDef& OutBestBehavior, float& OutBestScore) const;
     void RecordBehaviorExecutionCooldown(ADynamicCharacter* Character, FGameplayTag BehaviorTag, float CooldownSeconds);
     bool IsBehaviorOnCooldown(ADynamicCharacter* Character, FGameplayTag BehaviorTag) const;
 
-    // Dynamic Linguistic Coining & Translation Caches
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Language")
     FString GetOrCreateDynamicVocabularyWord(FGameplayTag LanguageTag, const FString& EnglishWord);
 
@@ -111,18 +110,15 @@ public:
     void SaveCoinedVocabularyToDisk();
     void LoadCoinedVocabularyFromDisk();
 
-    // Network Component Graph Management
     void RegisterNetworkNode(UDynamicNetworkComponent* Node);
     void UnregisterNetworkNode(UDynamicNetworkComponent* Node);
     void MarkNetworkGraphDirty(UDynamicNetworkComponent* Node);
     void QueueNetworkBurstTransfer(UDynamicNetworkComponent* Node, FGameplayTag ResourceTag);
 
-    // Spatial Roles
     void RegisterSpatialRoleActor(AActor* TargetActor, const FGameplayTagContainer& RoleTags);
     void UnregisterSpatialRoleActor(AActor* TargetActor);
     void GetActorsWithRoleTag(FGameplayTag RoleTag, TArray<AActor*>& OutActors) const;
 
-    // Environmental Simulation
     float GetEnvironmentMetricAtLocation(const FVector& WorldLocation, FGameplayTag MetricOrElementTag) const;
     float ServerModifyEnvironmentalMana(const FVector& WorldLocation, FGameplayTag ElementTag, float DeltaAmount);
     void ServerTickEnvironmentSimulation(float ElapsedGameHours);
@@ -130,7 +126,6 @@ public:
     void UnregisterEnvironmentChunk(ADynamicEnvironmentChunkActor* Chunk);
     void RecalculateCellPhysicalMetrics(FEnvironmentGridCellItem& Cell);
 
-    // Object Pooling
     ADynamicSpatialActor* AcquireSpatialActor(const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleaseSpatialActorToPool(ADynamicSpatialActor* ActorToReturn);
     ADynamicPhysicsActor* AcquirePhysicsActor(FGameplayTag ArchetypeTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
@@ -138,7 +133,6 @@ public:
     ADynamicCharacter* AcquireCharacter(FGameplayTag TemplateTag, const FTransform& SpawnTransform, AActor* OwnerActor, APawn* InstigatorPawn);
     void ReleaseCharacterToPool(ADynamicCharacter* ActorToReturn);
 
-    // Gameplay Effect Cache & Staging
     UGameplayEffect* GetOrCreateCachedEffectObject(FGameplayTag EffectTag);
     void WarmGameplayEffectCache();
     void WarmGameplayEffectCacheAsync(TFunction<void()> OnComplete, float MaxBudgetPerFrameSeconds = 0.002f);
@@ -214,7 +208,6 @@ private:
     TMap<FName, FPhysicsJointNodeConfig> BoneToJointMap;
     TMap<FGameplayTag, FComputedAbilityScoreInfo> ComputedAbilityScoresCache;
 
-    // Bidirectional O(1) Language Translation Caches
     TMap<FGameplayTag, TMap<FString, FString>> EnglishToNativeLookupCache;
 
     struct FNativeWordLookupEntry

@@ -407,12 +407,16 @@ void UBTTask_RequestCloudDirective::HandleDirectCloudResponse(TWeakObjectPtr<UBe
                                 APawn* ListenerPawn = Cast<APawn>(Listener);
                                 if (ListenerPawn && ListenerPawn->IsPlayerControlled())
                                 {
+                                    const FGameplayTag VoiceProfileTag = LangComp ? LangComp->ResolveActiveVoiceProfile() : FGameplayTag();
+
                                     ListenerLang->ClientReceiveHeardDialogue(
                                         ControlledPawn,
                                         SpokenUtteranceText,
                                         SpokenLanguageTag,
                                         BaseRadius,
-                                        VolumeTag
+                                        VolumeTag,
+                                        PrimaryCmd.EmotionTag,
+                                        VoiceProfileTag
                                     );
                                 }
 

@@ -114,3 +114,49 @@ FString UDynamicLanguageSubsystem::FormatWrittenTextForReader(
 
 	return RawWrittenText;
 }
+
+bool UDynamicLanguageSubsystem::GetVoiceProfile(FGameplayTag VoiceProfileTag, FVoiceProfileDef& OutProfile) const
+{
+    if (!VoiceProfileTag.IsValid()) return false;
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return false;
+
+    if (const FVoiceProfileDef* Def = GS->VoiceProfileMasterRegistry.Find(VoiceProfileTag))
+    {
+        OutProfile = *Def;
+        return true;
+    }
+    return false;
+}
+
+float UDynamicLanguageSubsystem::CalculateAcousticLowPassFilterFrequency(
+    const FVector& SpeakerLoc, 
+    const FVector& ListenerLoc, 
+    AActor* ListenerActor) const
+{
+    // Default crisp audio frequency cutoff (20 kHz)
+    float CutoffFrequency = 20000.0f;
+
+    UWorld* World = GetWorld();
+    if (!World) return CutoffFrequency;
+
+    // Line of sight / Wall thickness low-pass occlusion
+    FHitResult Hit;
+    FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(VoiceLowPassCheck), false, ListenerActor);
+    if (World->LineTraceSingleByChannel(Hit, SpeakerLoc, ListenerLoc, ECC_Visibility, TraceParams))
+    {
+        // Muffle heavily through obstacles (drops to 1.2 kHz)
+        CutoffFrequency = 1200.0f;
+    }
+
+    // Distance attenuation damping
+    const float Dist = FVector::Dist(SpeakerLoc, ListenerLoc);
+    if (Dist > 2000.0f)
+    {
+        const float FalloffAlpha = FMath::Clamp((Dist - 2000.0f) / 3000.0f, 0.0f, 1.0f);
+        CutoffFrequency = FMath::Lerp(CutoffFrequency, 3000.0f, FalloffAlpha);
+    }
+
+    return CutoffFrequency;
+}

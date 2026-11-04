@@ -14,8 +14,7 @@ class FJsonObject;
 DECLARE_DELEGATE_OneParam(FOnCloudAIResponseDirectCallback, const TArray<FCloudAICommandOutput>&);
 DECLARE_DELEGATE_OneParam(FOnCloudAITokenStream, const FString&);
 DECLARE_DELEGATE_OneParam(FOnCloudAITaskAssigned, float /*EstimatedLatency*/);
-
-
+DECLARE_DELEGATE_TwoParams(FOnSpeechClauseReadyForTTS, const FString& /*ClauseText*/, bool /*bIsFinalClause*/);
 
 USTRUCT(BlueprintType)
 struct FCloudAIDirectiveResponse
@@ -51,12 +50,13 @@ struct GDB_API FCloudAIQueuedTask
     UPROPERTY() int32 UtteranceStartIndex = 0;
     UPROPERTY() int32 LastBroadcastedLength = 0;
 
-    // Real-time translation buffer for LLM Token Streaming
     UPROPERTY() FString StreamingWordBuffer;
+    UPROPERTY() FString StreamingClauseBuffer;
 
     FOnCloudAIResponseDirectCallback FinalCompletionDelegate;
     FOnCloudAITokenStream TokenStreamDelegate;
     FOnCloudAITaskAssigned TaskAssignedDelegate;
+    FOnSpeechClauseReadyForTTS ClauseStreamDelegate;
 };
 
 UCLASS()
@@ -96,7 +96,8 @@ public:
         float TimeoutSeconds,
         FOnCloudAITokenStream TokenStreamCallback,
         FOnCloudAIResponseDirectCallback DirectCallback,
-        FOnCloudAITaskAssigned AssignedCallback
+        FOnCloudAITaskAssigned AssignedCallback,
+        FOnSpeechClauseReadyForTTS ClauseCallback = FOnSpeechClauseReadyForTTS()
     );
 
     UFUNCTION(BlueprintCallable, Category = "Cloud AI")

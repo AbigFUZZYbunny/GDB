@@ -66,9 +66,10 @@ FGuid UDynamicCloudAISubsystem::DispatchDistributedAIRequest(
     float TimeoutSeconds,
     FOnCloudAITokenStream TokenStreamCallback,
     FOnCloudAIResponseDirectCallback DirectCallback,
-    FOnCloudAITaskAssigned AssignedCallback)
+    FOnCloudAITaskAssigned AssignedCallback,
+    FOnSpeechClauseReadyForTTS ClauseCallback)
 {
-    UWorld* World = AgentPawn ? AgentPawn->GetWorld() : this->GetWorld();
+    UWorld* World = AgentPawn ? AgentPawn->GetWorld() : GetWorld();
     const double CurrentTime = World ? World->GetTimeSeconds() : 0.0;
 
     FCloudAIQueuedTask NewTask;
@@ -86,6 +87,7 @@ FGuid UDynamicCloudAISubsystem::DispatchDistributedAIRequest(
     NewTask.TokenStreamDelegate = TokenStreamCallback;
     NewTask.FinalCompletionDelegate = DirectCallback;
     NewTask.TaskAssignedDelegate = AssignedCallback;
+    NewTask.ClauseStreamDelegate = ClauseCallback;
 
     TaskQueue.Add(NewTask);
     return NewTask.TaskId;
@@ -268,9 +270,10 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
             const FString NewUtteranceChunk = Task->PrimaryAccumulatedJson.Mid(Task->LastBroadcastedLength, ReadToIdx - Task->LastBroadcastedLength);
             Task->LastBroadcastedLength = ReadToIdx;
             
-            // Buffer incoming words to formulate non-native speech across word boundaries
             Task->StreamingWordBuffer += NewUtteranceChunk;
+            Task->StreamingClauseBuffer += NewUtteranceChunk;
             
+            // 1. Process Word Boundary Token Stream
             int32 LastBoundaryIdx = -1;
             for (int32 i = Task->StreamingWordBuffer.Len() - 1; i >= 0; --i)
             {
@@ -296,6 +299,29 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
                 }
                 
                 Task->TokenStreamDelegate.ExecuteIfBound(StreamedChunk);
+            }
+
+            // 2. Low-Latency Clause / Sentence Boundary Detection for Streaming TTS
+            int32 ClauseBoundaryIdx = -1;
+            for (int32 i = 0; i < Task->StreamingClauseBuffer.Len(); ++i)
+            {
+                const TCHAR C = Task->StreamingClauseBuffer[i];
+                if (C == '.' || C == '!' || C == '?' || C == ';' || C == '\n')
+                {
+                    ClauseBoundaryIdx = i;
+                    break;
+                }
+            }
+
+            if (ClauseBoundaryIdx != -1)
+            {
+                const FString FinishedClause = Task->StreamingClauseBuffer.Left(ClauseBoundaryIdx + 1).TrimStartAndEnd();
+                Task->StreamingClauseBuffer = Task->StreamingClauseBuffer.Mid(ClauseBoundaryIdx + 1);
+
+                if (!FinishedClause.IsEmpty() && Task->ClauseStreamDelegate.IsBound())
+                {
+                    Task->ClauseStreamDelegate.Execute(FinishedClause, false);
+                }
             }
         }
     }

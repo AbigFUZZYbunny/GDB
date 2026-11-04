@@ -40,7 +40,7 @@ public:
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Social")
     FGuid CurrentPropertyID;
 
-    // --- Conversational Lock & Arbitration ---
+    // Conversational Lock & Arbitration
     UPROPERTY(ReplicatedUsing = OnRep_ActiveTurnState, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
     EConversationalTurnState ActiveTurnState = EConversationalTurnState::Idle;
 
@@ -59,7 +59,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
     void ServerReleaseConversationalLock();
 
-    // --- Memory & Dialogue Buffers ---
+    // Memory & Dialogue Buffers
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|Conversation")
     float ConversationalMemoryTimeoutSeconds = 300.0f;
 
@@ -81,7 +81,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
     void TriggerMemoryConsolidation(const FGuid& TargetEntityGuid, const TArray<FDynamicDialogueTurn>& TurnsToCompress);
 
-    // Overheard Gossip / Topic Knowledge
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedTopics)
     FFastTopicMemoryArray ReplicatedTopics;
 
@@ -96,8 +95,16 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|AI")
     void HandleHeardDialogueFromSpeaker(AActor* Speaker, const FString& UtteranceText, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag);
 
+    // Added EmotionTag default argument
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Language")
-    void ServerBroadcastStreamingDialogueChunk(const FString& FormulatedChunk, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag, float BaseAudibleRadius, bool bIsFinalChunk);
+    void ServerBroadcastStreamingDialogueChunk(
+        const FString& FormulatedChunk, 
+        FGameplayTag SpokenLanguageTag, 
+        FGameplayTag VolumeTag, 
+        float BaseAudibleRadius, 
+        bool bIsFinalChunk, 
+        FGameplayTag EmotionTag = FGameplayTag()
+    );
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Reactivity")
     void ApplySocialReactionConsequences(const FDynamicDialogueReactionRule& Rule, AActor* TargetOffender);

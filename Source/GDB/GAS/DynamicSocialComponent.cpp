@@ -56,12 +56,22 @@ static void BroadcastLanguageExposureAcoustic(
     FGameplayTag LanguageTag, 
     const FString& Utterance, 
     float BaseAudibleRadius, 
-    FGameplayTag VolumeTag)
+    FGameplayTag VolumeTag,
+    FGameplayTag EmotionTag = FGameplayTag(),
+    FGameplayTag VoiceProfileTag = FGameplayTag())
 {
     if (!Speaker || !Speaker->HasAuthority() || !LanguageTag.IsValid() || Utterance.IsEmpty()) return;
 
     UWorld* World = Speaker->GetWorld();
     if (!World) return;
+
+    if (!VoiceProfileTag.IsValid())
+    {
+        if (const UDynamicLanguageComponent* SpeakerLang = Speaker->FindComponentByClass<UDynamicLanguageComponent>())
+        {
+            VoiceProfileTag = SpeakerLang->ResolveActiveVoiceProfile();
+        }
+    }
 
     const float MaxQueryRadius = FMath::Clamp(BaseAudibleRadius * 4.5f, 300.0f, 15000.0f);
     TArray<FOverlapResult> Overlaps;
@@ -87,11 +97,19 @@ static void BroadcastLanguageExposureAcoustic(
                         // A. Linguistic Exposure
                         ListenerLang->ServerRegisterLanguageExposure(LanguageTag, Utterance);
 
-                        // B. Client Subtitle RPC for Player Listeners
+                        // B. Client Subtitle RPC for Player Listeners (7 arguments passed)
                         APawn* ListenerPawn = Cast<APawn>(Listener);
                         if (ListenerPawn && ListenerPawn->IsPlayerControlled())
                         {
-                            ListenerLang->ClientReceiveHeardDialogue(Speaker, Utterance, LanguageTag, BaseAudibleRadius, VolumeTag);
+                            ListenerLang->ClientReceiveHeardDialogue(
+                                Speaker, 
+                                Utterance, 
+                                LanguageTag, 
+                                BaseAudibleRadius, 
+                                VolumeTag, 
+                                EmotionTag, 
+                                VoiceProfileTag
+                            );
                         }
 
                         // C. AI Agent Ingestion & Conversational Reaction
@@ -628,7 +646,7 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
     RootObj->SetStringField(TEXT("AgentGuid"), CharacterPersistentGuid.ToString());
     RootObj->SetStringField(TEXT("RequestType"), UEnum::GetValueAsString(RequestType));
 
-    // 1. Identity, Race, and Native Language Directive
+    // 1. Identity, Race, and Native Language Directive    
     if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
     {
         RootObj->SetStringField(TEXT("AgentDisplayName"), ResolveActorDisplayName(CharOwner));
@@ -642,16 +660,17 @@ FString UDynamicSocialComponent::SerializeAgentContextForLLM(ECloudAIRequestType
         {
             RootObj->SetStringField(TEXT("NativeLanguage"), LangComp->ActiveSpokenLanguageTag.ToString());
             RootObj->SetNumberField(TEXT("CommonFluency"), LangComp->GetLanguageFluency(FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false)));
+            RootObj->SetStringField(TEXT("AssignedVoiceProfile"), LangComp->ResolveActiveVoiceProfile().ToString());
         }
     }
 
-    // 2. Strict Machine Output Instructions for LLM Miners (Updated with Emotion tracking)
+    // 2. Guide the LLM to output expressive punctuation suited for Speech Synthesis
     RootObj->SetStringField(TEXT("SystemInstruction"), 
         TEXT("You are an NPC AI brain. You MUST reply ONLY with a raw JSON object matching: ")
         TEXT("{\"Commands\":[{\"CommandActionTag\":\"Action.Interact.Chat\",\"TargetEntityOrPlaceRoleTag\":\"Role.Place.TownSquare\",\"UtteranceText\":\"<English sentence>\",\"PriorityWeight\":100.0, \"EmotionTag\":\"Emotion.Happy\"}]}. ")
-        TEXT("If a player asks you to teach them a word, you MAY use 'Action.Interact.TeachWord'. ")
-        TEXT("Use EmotionTag to reflect your internal state (e.g. Emotion.Happy, Emotion.Angry, Emotion.Sad, Emotion.Fear, Emotion.Neutral). ")
-        TEXT("Write UtteranceText in natural English. Do NOT wrap in markdown backticks.")
+        TEXT("Write UtteranceText with clear punctuation (commas, periods, exclamation points) to guide natural Text-to-Speech pauses and prosody. ")
+        TEXT("Set EmotionTag to reflect your internal state (Emotion.Happy, Emotion.Angry, Emotion.Sad, Emotion.Fear, Emotion.Pensive, Emotion.Neutral). ")
+        TEXT("Do NOT wrap in markdown backticks.")
     );
 
     // 3. Multi-Turn Conversational Dialogue History (Short-term conversation buffer)
@@ -1182,6 +1201,7 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
 
     FGameplayTag SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
     float SelectedAudibleRadius = 1500.0f;
+    FGameplayTag SelectedEmotionTag = FGameplayTag::EmptyTag;
 
     if (ChosenEntry->UtteranceVariations.Num() > 0)
     {
@@ -1194,6 +1214,7 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
             if (ChosenVariation.VoiceCueTag.IsValid()) OutVoiceCueTag = ChosenVariation.VoiceCueTag;
             if (ChosenVariation.VolumeTag.IsValid()) SelectedVolumeTag = ChosenVariation.VolumeTag;
             if (ChosenVariation.BaseAudibleRadius > 0.0f) SelectedAudibleRadius = ChosenVariation.BaseAudibleRadius;
+            if (ChosenVariation.EmotionTag.IsValid()) SelectedEmotionTag = ChosenVariation.EmotionTag;
         }
     }
 
@@ -1222,7 +1243,7 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
         }
     }
 
-    // 3. Format Tokens and Formulate Speech (Handles Native or Non-Native Attempt automatically)
+    // 3. Format Tokens and Formulate Speech
     const FString FormattedEnglish = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
     if (SpeakerLang)
     {
@@ -1236,7 +1257,8 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
 
     // 4. Acoustic Broadcast & Linguistic Exposure
-    BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag);
+    const FGameplayTag ResolvedVoice = SpeakerLang ? SpeakerLang->ResolveActiveVoiceProfile() : FGameplayTag();
+    BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag, SelectedEmotionTag, ResolvedVoice);
     return true;
 }
 
@@ -1274,6 +1296,7 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
 
     FGameplayTag SelectedVolumeTag = FGameplayTag::RequestGameplayTag(TEXT("Dialogue.Volume.Normal"), false);
     float SelectedAudibleRadius = 1500.0f;
+    FGameplayTag SelectedEmotionTag = FGameplayTag::EmptyTag;
     FString TemplateText;
     bool bResolved = false;
 
@@ -1287,6 +1310,7 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
             OutVoiceCueTag = ChosenUtterance.VoiceCueTag;
             if (ChosenUtterance.VolumeTag.IsValid()) SelectedVolumeTag = ChosenUtterance.VolumeTag;
             if (ChosenUtterance.BaseAudibleRadius > 0.0f) SelectedAudibleRadius = ChosenUtterance.BaseAudibleRadius;
+            if (ChosenUtterance.EmotionTag.IsValid()) SelectedEmotionTag = ChosenUtterance.EmotionTag;
             TemplateText = ChosenUtterance.UtteranceText;
             bResolved = true;
         }
@@ -1334,7 +1358,7 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
         }
     }
 
-    // 3. Format Tokens and Formulate Speech (Handles Native or Non-Native Attempt automatically)
+    // 3. Format Tokens and Formulate Speech
     const FString FormattedEnglish = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
     if (SpeakerLang)
     {
@@ -1348,7 +1372,8 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
 
     // 4. Acoustic Broadcast & Linguistic Exposure
-    BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag);
+    const FGameplayTag ResolvedVoice = SpeakerLang ? SpeakerLang->ResolveActiveVoiceProfile() : FGameplayTag();
+    BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag, SelectedEmotionTag, ResolvedVoice);
     return true;
 }
 
@@ -1855,7 +1880,13 @@ void UDynamicSocialComponent::HandleHeardDialogueFromSpeaker(AActor* Speaker, co
     }
 }
 
-void UDynamicSocialComponent::ServerBroadcastStreamingDialogueChunk(const FString& FormulatedChunk, FGameplayTag SpokenLanguageTag, FGameplayTag VolumeTag, float BaseAudibleRadius, bool bIsFinalChunk)
+void UDynamicSocialComponent::ServerBroadcastStreamingDialogueChunk(
+    const FString& FormulatedChunk, 
+    FGameplayTag SpokenLanguageTag, 
+    FGameplayTag VolumeTag, 
+    float BaseAudibleRadius, 
+    bool bIsFinalChunk, 
+    FGameplayTag EmotionTag)
 {
     AActor* Speaker = GetOwner();
     UWorld* World = GetWorld();
@@ -1887,8 +1918,16 @@ void UDynamicSocialComponent::ServerBroadcastStreamingDialogueChunk(const FStrin
                     // Evaluates listener hearing attributes, buffs, and wall occlusion dynamically
                     if (ListenerLang->CanHearUtteranceAtDistance(Distance, BaseAudibleRadius, VolumeTag, SpeakerLoc))
                     {
-                        // Send the RPC to the client for real-time UI typing
-                        ListenerLang->ClientReceiveHeardDialogueChunk(Speaker, FormulatedChunk, SpokenLanguageTag, BaseAudibleRadius, VolumeTag, bIsFinalChunk);
+                        // Send the 7-argument RPC to the client for real-time UI typing & visemes
+                        ListenerLang->ClientReceiveHeardDialogueChunk(
+                            Speaker, 
+                            FormulatedChunk, 
+                            SpokenLanguageTag, 
+                            BaseAudibleRadius, 
+                            VolumeTag, 
+                            bIsFinalChunk, 
+                            EmotionTag
+                        );
                     }
                 }
             }

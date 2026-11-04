@@ -1381,6 +1381,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     RoomTypeRegistry.Append(MoveTemp(StagingData.RoomTypeRegistry));
     CrimeMasterRegistry.Append(MoveTemp(StagingData.CrimeMasterRegistry));
     JurisdictionMasterRegistry.Append(MoveTemp(StagingData.JurisdictionMasterRegistry));
+    VoiceProfileMasterRegistry.Append(MoveTemp(StagingData.VoiceProfileMasterRegistry));
+    PhonemeVisemeRegistry.Append(MoveTemp(StagingData.PhonemeVisemeRegistry));
     
     RebuildLanguageLookupCaches();
 

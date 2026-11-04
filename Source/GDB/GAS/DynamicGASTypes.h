@@ -852,6 +852,88 @@ struct TStructOpsTypeTraits<FFastTopicMemoryArray> : public TStructOpsTypeTraits
 };
 
 // ============================================================================
+// VOICE PROFILES, TTS, STT & VISEME LIP-SYNC TYPES
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct GDB_API FVoiceProfileDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    FGameplayTag VoiceProfileTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    FString ModelIdentifier = TEXT("tts_models/en/vctk/vits");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    FString SpeakerId = TEXT("p226");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    float BasePitchMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    float BaseTempoRate = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    FGameplayTag VoiceGender;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    TArray<FGameplayTag> AllowedTemplateTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    FDynamicTagFloatMapWrapper EmotionPitchOffsets;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Profile")
+    FDynamicTagFloatMapWrapper EmotionSpeedOffsets;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FVisemeMorphMapping
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|LipSync")
+    FString PhonemePattern = TEXT("a");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|LipSync")
+    FName MorphTargetName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|LipSync")
+    float WeightMultiplier = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FPhonemeVisemeRegistryDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|LipSync")
+    FGameplayTag RegistryTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|LipSync")
+    TArray<FVisemeMorphMapping> VisemeMappings;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FVoiceInputTranscript
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|ASR")
+    FString TranscribedText = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|ASR")
+    FGameplayTag DetectedLanguageTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|ASR")
+    float Confidence = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|ASR")
+    double Timestamp = 0.0;
+};
+
+// ============================================================================
 // ITEM & CONTAINER GRID SYSTEM
 // ============================================================================
 
@@ -2904,6 +2986,39 @@ struct FDynamicThresholdContainer
     TArray<FDynamicThresholdRule> Rules;
 };
 
+USTRUCT(BlueprintType)
+struct GDB_API FTTSAudioChunk
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Audio")
+    USoundBase* AudioAsset = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Audio")
+    FString SpokenText = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Voice|Audio")
+    float Duration = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FActiveViseme
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FName MorphTargetName = NAME_None;
+
+    UPROPERTY()
+    float TargetWeight = 0.0f;
+
+    UPROPERTY()
+    float CurrentWeight = 0.0f;
+
+    UPROPERTY()
+    float TimeRemaining = 0.0f;
+};
+
 // ============================================================================
 // ENVIRONMENT, BIOMES, & WEATHER
 // ============================================================================
@@ -3221,7 +3336,14 @@ struct FCloudAISystemConfig
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Config")
     FString DefaultModelName = TEXT("llama3.2:latest");
 
-    // Attribute granted to Primary and Validator miners upon reaching consensus
+    // NEW: Client-side Text-To-Speech API Endpoint (e.g., Piper, XTTS, OpenAI)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Voice")
+    FString TtsEndpointUrl = TEXT("http://127.0.0.1:5002/api/tts");
+
+    // NEW: Client-side Speech-To-Text API Endpoint (e.g., Whisper.cpp)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Voice")
+    FString SttEndpointUrl = TEXT("http://127.0.0.1:5002/api/stt");
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloud AI|Rewards")
     FGameplayTag MiningRewardAttributeTag;
 
@@ -5614,6 +5736,8 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
     TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
     TMap<FGameplayTag, TArray<FWitnessReactionRule>> WitnessReactionRegistry;
+    TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
+    TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

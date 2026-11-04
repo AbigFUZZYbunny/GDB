@@ -1,0 +1,81 @@
+﻿{
+  "_comment": "Master Voice Profile Registry for TTS and Speech Recognition parameters.",
+  "VoiceProfileMasterRegistry": {
+    "Voice.Profile.Human.Male.Standard": {
+      "VoiceProfileTag": "Voice.Profile.Human.Male.Standard",
+      "ModelIdentifier": "tts_models/en/vctk/vits",
+      "SpeakerId": "p226",
+      "BasePitchMultiplier": 1.0,
+      "BaseTempoRate": 1.0,
+      "VoiceGender": "Male",
+      "AllowedTemplateTags": [ "Character.Humanoid.Human" ],
+      "EmotionPitchOffsets": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Emotion.Angry", "Value": 0.15 },
+          { "KeyTag": "Emotion.Pain", "Value": 0.25 },
+          { "KeyTag": "Emotion.Despair", "Value": -0.15 }
+        ]
+      },
+      "EmotionSpeedOffsets": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Emotion.Angry", "Value": 0.20 },
+          { "KeyTag": "Emotion.Pensive", "Value": -0.15 }
+        ]
+      }
+    },
+    "Voice.Profile.Human.Female.Standard": {
+      "VoiceProfileTag": "Voice.Profile.Human.Female.Standard",
+      "ModelIdentifier": "tts_models/en/vctk/vits",
+      "SpeakerId": "p228",
+      "BasePitchMultiplier": 1.15,
+      "BaseTempoRate": 1.0,
+      "VoiceGender": "Female",
+      "AllowedTemplateTags": [ "Character.Humanoid.Human" ],
+      "EmotionPitchOffsets": { "ReplicatedEntries": [] },
+      "EmotionSpeedOffsets": { "ReplicatedEntries": [] }
+    },
+    "Voice.Profile.Orc.Blood": {
+      "VoiceProfileTag": "Voice.Profile.Orc.Blood",
+      "ModelIdentifier": "tts_models/en/vctk/vits",
+      "SpeakerId": "p230",
+      "BasePitchMultiplier": 0.75,
+      "BaseTempoRate": 0.88,
+      "VoiceGender": "Neutral",
+      "AllowedTemplateTags": [ "Character.Humanoid.Orc.Blood", "Character.Humanoid.Orc.Snow" ],
+      "EmotionPitchOffsets": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Emotion.Angry", "Value": 0.2 }
+        ]
+      },
+      "EmotionSpeedOffsets": { "ReplicatedEntries": [] }
+    },
+    "Voice.Profile.Elf.High": {
+      "VoiceProfileTag": "Voice.Profile.Elf.High",
+      "ModelIdentifier": "tts_models/en/vctk/vits",
+      "SpeakerId": "p232",
+      "BasePitchMultiplier": 1.10,
+      "BaseTempoRate": 1.05,
+      "VoiceGender": "Neutral",
+      "AllowedTemplateTags": [ "Character.Humanoid.Elf.High", "Character.Humanoid.Elf.Forest" ],
+      "EmotionPitchOffsets": { "ReplicatedEntries": [] },
+      "EmotionSpeedOffsets": { "ReplicatedEntries": [] }
+    }
+  },
+  "PhonemeVisemeRegistry": {
+    "Phoneme.Viseme.Default": {
+      "RegistryTag": "Phoneme.Viseme.Default",
+      "VisemeMappings": [
+        { "PhonemePattern": "a", "MorphTargetName": "Mouth_Open", "WeightMultiplier": 0.85 },
+        { "PhonemePattern": "o", "MorphTargetName": "Mouth_Funnel", "WeightMultiplier": 0.90 },
+        { "PhonemePattern": "u", "MorphTargetName": "Mouth_Pucker", "WeightMultiplier": 0.80 },
+        { "PhonemePattern": "e", "MorphTargetName": "Mouth_Smile_Left", "WeightMultiplier": 0.65 },
+        { "PhonemePattern": "m", "MorphTargetName": "Mouth_Closed", "WeightMultiplier": 1.0 },
+        { "PhonemePattern": "p", "MorphTargetName": "Mouth_Closed", "WeightMultiplier": 1.0 },
+        { "PhonemePattern": "b", "MorphTargetName": "Mouth_Closed", "WeightMultiplier": 1.0 },
+        { "PhonemePattern": "f", "MorphTargetName": "Mouth_Bite_LowerLip", "WeightMultiplier": 0.75 },
+        { "PhonemePattern": "v", "MorphTargetName": "Mouth_Bite_LowerLip", "WeightMultiplier": 0.75 },
+        { "PhonemePattern": "th", "MorphTargetName": "Mouth_Tongue_Out", "WeightMultiplier": 0.60 }
+      ]
+    }
+  }
+}

@@ -16,8 +16,6 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// Formats subtitles for a specific listener: evaluates auditory reach, structural occlusion, comprehension level,
-	// and checks if a nearby friendly companion/party member acts as an interpreter to translate foreign speech.
 	UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Language")
 	FString FormatSubtitleForListener(
 		AActor* Speaker, 
@@ -36,4 +34,11 @@ public:
 		FGameplayTag WrittenLanguageTag, 
 		FGameplayTag TargetLocalizationTag
 	) const;
+
+	// Immersion Speech Recognition & TTS Audio Helpers
+	UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Voice")
+	bool GetVoiceProfile(FGameplayTag VoiceProfileTag, FVoiceProfileDef& OutProfile) const;
+
+	UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Voice")
+	float CalculateAcousticLowPassFilterFrequency(const FVector& SpeakerLoc, const FVector& ListenerLoc, AActor* ListenerActor) const;
 };

@@ -26,7 +26,8 @@ public class GDB : ModuleRules
 			"AIModule", 
 			"HTTP",
 			"SignificanceManager",
-			"ProceduralMeshComponent"
+			"ProceduralMeshComponent",
+			"Voice"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

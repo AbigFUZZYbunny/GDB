@@ -1291,6 +1291,83 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.JurisdictionMasterRegistry.Add(KeyTag, Def);
         }
     }
+    
+    // ------------------------------------------------------------------------
+    // Voice Profiles Master Registry
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("VoiceProfileMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("VoiceProfileMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> VoiceObj = Pair.Value->AsObject();
+            if (!VoiceObj.IsValid()) continue;
+
+            FVoiceProfileDef VoiceDef;
+            VoiceDef.VoiceProfileTag = KeyTag;
+            VoiceDef.ModelIdentifier = VoiceObj->HasField(TEXT("ModelIdentifier")) ? VoiceObj->GetStringField(TEXT("ModelIdentifier")) : TEXT("tts_models/en/vctk/vits");
+            VoiceDef.SpeakerId = VoiceObj->HasField(TEXT("SpeakerId")) ? VoiceObj->GetStringField(TEXT("SpeakerId")) : TEXT("p226");
+            VoiceDef.BasePitchMultiplier = VoiceObj->HasField(TEXT("BasePitchMultiplier")) ? static_cast<float>(VoiceObj->GetNumberField(TEXT("BasePitchMultiplier"))) : 1.0f;
+            VoiceDef.BaseTempoRate = VoiceObj->HasField(TEXT("BaseTempoRate")) ? static_cast<float>(VoiceObj->GetNumberField(TEXT("BaseTempoRate"))) : 1.0f;
+            
+            if (VoiceObj->HasField(TEXT("VoiceGender")))
+            {
+                VoiceDef.VoiceGender = FGameplayTag::RequestGameplayTag(FName(*VoiceObj->GetStringField(TEXT("VoiceGender"))), false);
+            }
+
+            if (VoiceObj->HasField(TEXT("AllowedTemplateTags")))
+            {
+                for (const auto& TagVal : VoiceObj->GetArrayField(TEXT("AllowedTemplateTags")))
+                {
+                    FGameplayTag TemplateTag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                    if (TemplateTag.IsValid())
+                    {
+                        VoiceDef.AllowedTemplateTags.Add(TemplateTag);
+                    }
+                }
+            }
+
+            DeserializeMapWrapper(VoiceObj, TEXT("EmotionPitchOffsets"), VoiceDef.EmotionPitchOffsets);
+            DeserializeMapWrapper(VoiceObj, TEXT("EmotionSpeedOffsets"), VoiceDef.EmotionSpeedOffsets);
+
+            OutStaging.VoiceProfileMasterRegistry.Add(KeyTag, VoiceDef);
+        }
+    }
+    
+    // ------------------------------------------------------------------------
+    // Phoneme to Viseme Lip-Sync Registry
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("PhonemeVisemeRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("PhonemeVisemeRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+            TSharedPtr<FJsonObject> RegObj = Pair.Value->AsObject();
+            if (!RegObj.IsValid()) continue;
+
+            FPhonemeVisemeRegistryDef RegDef;
+            RegDef.RegistryTag = KeyTag;
+
+            if (RegObj->HasField(TEXT("VisemeMappings")))
+            {
+                for (const auto& MapVal : RegObj->GetArrayField(TEXT("VisemeMappings")))
+                {
+                    TSharedPtr<FJsonObject> MapObj = MapVal->AsObject();
+                    if (!MapObj.IsValid()) continue;
+
+                    FVisemeMorphMapping Mapping;
+                    Mapping.PhonemePattern = MapObj->GetStringField(TEXT("PhonemePattern"));
+                    Mapping.MorphTargetName = FName(*MapObj->GetStringField(TEXT("MorphTargetName")));
+                    Mapping.WeightMultiplier = MapObj->HasField(TEXT("WeightMultiplier")) ? static_cast<float>(MapObj->GetNumberField(TEXT("WeightMultiplier"))) : 1.0f;
+                    RegDef.VisemeMappings.Add(Mapping);
+                }
+            }
+
+            OutStaging.PhonemeVisemeRegistry.Add(KeyTag, RegDef);
+        }
+    }
 
     return true;
 }

@@ -137,6 +137,14 @@
 		{
 			"Name": "MetaHumanLiveLink",
 			"Enabled": true
+		},
+		{
+			"Name": "ActorModifier",
+			"Enabled": true
+		},
+		{
+			"Name": "ActorModifierCore",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

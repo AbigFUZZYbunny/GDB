@@ -12,7 +12,6 @@
 #include "Components/SphereComponent.h"
 #include "DynamicGASTypes.h"
 
-// Complete component definitions required for direct subobject template instantiations
 #include "DynamicLifeComponent.h"
 #include "DynamicLanguageComponent.h"
 #include "DynamicQuestComponent.h"
@@ -28,6 +27,7 @@ class UDynamicAttributeSet;
 class UDynamicGASManagerComponent;
 class UDynamicForceComponent;
 class UDynamicInteractableComponent;
+class UPhysicsConstraintComponent;
 
 UCLASS()
 class GDB_API ADynamicCharacter : public APawn, public IAbilitySystemInterface, public IDynamicPoolScrubbableInterface
@@ -156,9 +156,15 @@ public:
     UFUNCTION()
     void OnPhysicsConstraintBroken(int32 ConstraintIndex);
 
-    // O(1) single-pass iteration evaluates total mass and the aggregate center of mass offset
     void EvaluatePhysicalEncumbrance(float& OutTotalMass, FVector& OutCoMOffset) const;
     void ApplyEnvironmentalForces(float DeltaSeconds);
+
+    // Dynamic Navigation Traversal
+    UFUNCTION(BlueprintPure, Category = "DynamicGAS|Navigation")
+    bool CanInitiateEmergencyClimbOrVault() const;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Navigation")
+    bool TryExecuteLedgeTraversal(const FVector& TargetLedgeLocation);
 
 protected:
     virtual void BeginPlay() override;
@@ -255,7 +261,7 @@ private:
     FVector PreviousVelocity = FVector::ZeroVector;
     FGameplayTagContainer GrantedMovementTags;
     FVector LastHoldSweepLocation = FVector::ZeroVector;
-    float AccumulatedHoldSweepTime = 0.0;
+    float AccumulatedHoldSweepTime = 0.0f;
     
     float HistorySaveAccumulator = 0.0f;
     static constexpr float HistorySaveInterval = 1.0f / 20.0f;
@@ -263,8 +269,6 @@ private:
     mutable float CachedTotalMass = 80.0f;
     mutable double LastMassCalculateTime = -100.0;
     
-    // Tracks joints that have already been broken to prevent log/effect spam during a single ragdoll
     TSet<FName> HyperextendedJoints;
-    
     float IdleDormancyTimer = 0.0f;
 };

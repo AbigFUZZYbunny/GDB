@@ -27,7 +27,8 @@ public class GDB : ModuleRules
 			"HTTP",
 			"SignificanceManager",
 			"ProceduralMeshComponent",
-			"Voice"
+			"Voice",
+			"NavigationSystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

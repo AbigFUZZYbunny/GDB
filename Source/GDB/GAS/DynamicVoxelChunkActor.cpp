@@ -2,6 +2,7 @@
 #include "DynamicVoxelSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "Async/Async.h"
+#include "NavigationSystem.h"
 #include "Runtime/Engine/Public/Net/UnrealNetwork.h"
 
 struct FProcMeshTangent;
@@ -19,6 +20,9 @@ ADynamicVoxelChunkActor::ADynamicVoxelChunkActor()
     ProceduralMesh->bCastDynamicShadow = true;
     ProceduralMesh->SetCollisionProfileName(TEXT("BlockAll"));
     RootComponent = ProceduralMesh;
+    
+    NavModifierComponent = CreateDefaultSubobject<UNavModifierComponent>(TEXT("NavModifierComponent"));
+    NavModifierComponent->SetIsReplicated(false);
 
     ReplicatedDeltas.OwningChunk = this;
     CachedVoxelData.Init(0, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
@@ -273,6 +277,12 @@ void ADynamicVoxelChunkActor::ApplyMeshToComponent(const TArray<FVector>& Vertic
     if (ProceduralMesh && Vertices.Num() > 0)
     {
         ProceduralMesh->CreateMeshSection(0, Vertices, Triangles, Normals, UVs, Colors, TArray<FProcMeshTangent>(), true);
+        
+        // Notify the NavSystem that the physical ground has shifted
+        if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+        {
+            NavSys->UpdateComponentInNavOctree(*ProceduralMesh);
+        }
     }
     
     if (bMeshUpdateQueued)

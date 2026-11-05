@@ -15,6 +15,7 @@
 #include "DynamicAttributeSet.h"
 #include "DynamicBuildingSubsystem.h"
 #include "Engine/AssetManager.h"
+#include "NavigationSystem.h"
 #include "Engine/StreamableManager.h"
 
 ADynamicBuildingChunkActor::ADynamicBuildingChunkActor()
@@ -24,6 +25,9 @@ ADynamicBuildingChunkActor::ADynamicBuildingChunkActor()
     bAlwaysRelevant = false;
     NetPriority = 1.0f;
     SetNetUpdateFrequency(2.0f);
+    
+    NavModifierComponent = CreateDefaultSubobject<UNavModifierComponent>(TEXT("NavModifierComponent"));
+    NavModifierComponent->SetIsReplicated(false);
     
     RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
     ReplicatedStructures.OwningChunk = this;
@@ -155,6 +159,12 @@ void ADynamicBuildingChunkActor::UpdateInstancedMeshes()
         // Single final bounds update for rendering & navmesh
         HISM->BuildTreeIfOutdated(true, false);
         HISM->MarkRenderStateDirty();
+    }
+    
+    // Trigger runtime NavMesh rebuild for this specific chunk bounds
+    if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+    {
+        NavSys->UpdateComponentInNavOctree(*RootComponent);
     }
 }
 

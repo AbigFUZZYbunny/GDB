@@ -19,6 +19,7 @@
 #include "DefaultMovementSet/Modes/SwimmingMode.h"
 #include "EngineUtils.h"
 #include "DynamicCustomizationComponent.h"
+#include "DynamicLogicEvaluator.h"
 #include "Engine/OverlapResult.h"
 #include "DynamicPhysicsActor.h"
 #include "Net/UnrealNetwork.h"
@@ -2104,4 +2105,84 @@ void ADynamicCharacter::EvaluatePhysicalEncumbrance(float& OutTotalMass, FVector
     OutCoMOffset.X = FMath::Clamp(WeightedCoMOffsetForward / SafeTotalMass, -45.0f, 45.0f);
     OutCoMOffset.Y = FMath::Clamp(WeightedCoMOffsetRight / SafeTotalMass, -30.0f, 30.0f);
     OutCoMOffset.Z = FMath::Clamp(WeightedCoMOffsetUp / SafeTotalMass, -50.0f, 50.0f);
+}
+
+bool ADynamicCharacter::CanInitiateEmergencyClimbOrVault() const
+{
+    // Players have agency to climb at will; NPCs evaluate condition trees
+    if (IsPlayerControlled()) return true;
+
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+    if (!ASC) return false;
+
+    // 1. Condition Tree evaluation (e.g. Condition.AI.CanEmergencyClimbOrVault)
+    const FDynamicConditionTreeContainer* Tree = UDynamicGASManagerComponent::GetConditionTreeByName(
+        this, 
+        FName(TEXT("Condition.AI.CanEmergencyClimbOrVault"))
+    );
+
+    if (Tree)
+    {
+        FGameplayTagContainer OwnedTags;
+        ASC->GetOwnedGameplayTags(OwnedTags);
+        if (UDynamicLogicEvaluator::EvaluateConditionTree(*Tree, ASC, ASC, OwnedTags, OwnedTags))
+        {
+            return true;
+        }
+    }
+
+    // 2. Direct Tag Fallback: Being attacked or pursued authorizes emergency traversal
+    static const FGameplayTag AttackedTag = FGameplayTag::RequestGameplayTag(TEXT("State.Combat.AttackingMe"), false);
+    static const FGameplayTag TrappedTag = FGameplayTag::RequestGameplayTag(TEXT("State.Navigation.TrappedNoExit"), false);
+    static const FGameplayTag FleeingTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Flee"), false);
+
+    if (AttackedTag.IsValid() && ASC->HasMatchingGameplayTag(AttackedTag)) return true;
+    if (TrappedTag.IsValid() && ASC->HasMatchingGameplayTag(TrappedTag)) return true;
+    if (FleeingTag.IsValid() && ActiveMovementStateTag.MatchesTag(FleeingTag)) return true;
+
+    return false;
+}
+
+bool ADynamicCharacter::TryExecuteLedgeTraversal(const FVector& TargetLedgeLocation)
+{
+    if (!HasAuthority() || !CanInitiateEmergencyClimbOrVault()) return false;
+
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+    if (!ASC) return false;
+
+    // Must have climbing capability granted via GAS
+    static const FGameplayTag CapabilityClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Movement.Climb"), false);
+    if (!ASC->HasMatchingGameplayTag(CapabilityClimbTag))
+    {
+        return false;
+    }
+
+    const FVector CurrentLoc = GetActorLocation();
+    const float HeightDelta = TargetLedgeLocation.Z - CurrentLoc.Z;
+
+    // Ensure within physical reach (e.g. up to 2.5m obstacle)
+    if (HeightDelta <= 0.0f || HeightDelta > 260.0f)
+    {
+        return false;
+    }
+
+    // 1. Transition into the exact same physical Climbing mode used by players
+    static const FGameplayTag ClimbStateTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
+    if (!ServerSetMovementState(ClimbStateTag))
+    {
+        return false;
+    }
+
+    // 2. Register hands to the ledge anchor coordinates
+    ActiveLimbHolds.Add(FName("hand_r"), FTransform(TargetLedgeLocation + FVector(0.0f, 25.0f, 0.0f)));
+    ActiveLimbHolds.Add(FName("hand_l"), FTransform(TargetLedgeLocation - FVector(0.0f, 25.0f, 0.0f)));
+
+    ConfigureClimbingPhysics(true, false);
+
+    // 3. Trigger the data-driven GAS ability for mantle / climb completion
+    FGameplayTagContainer VaultAbilityTags;
+    VaultAbilityTags.AddTag(CapabilityClimbTag);
+    ASC->TryActivateAbilitiesByTag(VaultAbilityTags);
+
+    return true;
 }

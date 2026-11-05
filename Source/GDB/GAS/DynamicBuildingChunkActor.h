@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "DynamicGASTypes.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "NavModifierComponent.h"
 #include "DynamicBuildingChunkActor.generated.h"
 
 UCLASS()
@@ -48,6 +49,10 @@ public:
     static constexpr float CHUNK_SIZE_UNITS = 5000.0f;
     TMap<FGuid, TArray<FGuid>> AdjacencyGraph;
     TMap<UHierarchicalInstancedStaticMeshComponent*, TMap<int32, FGuid>> InstanceHitMap;
+    
+protected:
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Navigation")
+    UNavModifierComponent* NavModifierComponent;
 
 private:
     float ChunkWorldSize = 5000.0f;

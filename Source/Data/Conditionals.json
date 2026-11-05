@@ -19,6 +19,37 @@
       "UserDefinedKey": "State.Combat.AttackingMe",
       "bCheckSource": false
     },
+    "Condition.AI.CanEmergencyClimbOrVault": {
+      "FlatNodes": [
+        {
+          "ConditionType": "LogicalGateOnly",
+          "LogicOperator": "Or",
+          "ChildIndices": [ 1, 2 ],
+          "UserDefinedKey": "None",
+          "bCheckSource": true,
+          "ComparisonOperator": "Equal",
+          "ComparisonValue": 0.0
+        },
+        {
+          "ConditionType": "TagExists",
+          "LogicOperator": "Or",
+          "ChildIndices": [],
+          "UserDefinedKey": "State.Combat.AttackingMe",
+          "bCheckSource": true,
+          "ComparisonOperator": "Equal",
+          "ComparisonValue": 1.0
+        },
+        {
+          "ConditionType": "TagExists",
+          "LogicOperator": "Or",
+          "ChildIndices": [],
+          "UserDefinedKey": "State.Navigation.TrappedNoExit",
+          "bCheckSource": true,
+          "ComparisonOperator": "Equal",
+          "ComparisonValue": 1.0
+        }
+      ]
+    },
     "Condition.Ability.CanDodgeRoll": {
       "FlatNodes": [
         {

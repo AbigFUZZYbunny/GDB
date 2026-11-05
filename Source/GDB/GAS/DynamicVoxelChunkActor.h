@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "DynamicGASTypes.h"
 #include "ProceduralMeshComponent.h"
+#include "NavModifierComponent.h"
 #include "DynamicVoxelChunkActor.generated.h"
 
 class UDynamicVoxelSubsystem;
@@ -47,6 +48,10 @@ public:
 
     static constexpr int32 CHUNK_SIZE = 32;
     TArray<uint8> CachedVoxelData;
+    
+protected:
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Navigation")
+    UNavModifierComponent* NavModifierComponent;
 
 private:
     float VoxelSizeWorldUnits = 100.0f;

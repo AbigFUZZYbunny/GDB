@@ -1,18 +1,13 @@
 ﻿{
-  "StructureMaterialRegistry": {
+  "_comment": "Master Unified Materials Schema: Consolidates Voxels, Foliage, and Construction Materials.",
+  "MaterialMasterRegistry": {
     "Material.Wood.Pine": {
       "MaterialTag": "Material.Wood.Pine",
       "StructuralDensity": 1.2,
-      "SupportStrength": 450.0,
-      "InsulationValue": 4.0,
-      "DurabilityMultiplier": 1.5,
       "Hardness": 2.5,
       "Brittleness": 0.15,
       "Elasticity": 0.45,
-      "CompressiveStrength": 300.0,
-      "ShearStrength": 80.0,
-      "TensileStrength": 250.0,
-      "BaseMaxHP": 200,
+      "DefaultYieldArchetype": "Item.Resource.WoodLog",
       "bIsGravityAffected": false,
       "RequiredAdhesionNeighbors": 1,
       "bIsFlammable": true,
@@ -20,137 +15,83 @@
       "BurnRatePerSecond": 10.0,
       "bCanRot": true,
       "RotWetnessThreshold": 70.0,
-      "DefaultYieldArchetype": "Item.Resource.WoodLog",
-      "CleavedYieldArchetype": "Item.Resource.WoodLog",
-      "CrushedYieldArchetype": "Item.Resource.WoodSplinters",
-      "BurnedYieldArchetype": "Item.Resource.Charcoal",
-      "RottedYieldArchetype": "Item.Resource.RottedWood",
-      "ShatteredYieldArchetype": "Item.Resource.WoodSplinters"
+      "StressResponses": {
+        "Damage.Type.Physical.Crushing": {
+          "BaseResistance": 300.0,
+          "HardnessScalar": 0.5,
+          "BrittlenessScalar": 1.0,
+          "ElasticityDamping": 1.0,
+          "YieldArchetype": "Item.Resource.WoodSplinters"
+        },
+        "Damage.Type.Physical.Slashing": {
+          "BaseResistance": 80.0,
+          "HardnessScalar": 1.0,
+          "BrittlenessScalar": -0.4,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.WoodLog"
+        },
+        "Damage.Type.Physical.Piercing": {
+          "BaseResistance": 250.0,
+          "HardnessScalar": 0.75,
+          "BrittlenessScalar": 0.5,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.WoodSplinters"
+        },
+        "Damage.Type.Fire": {
+          "BaseResistance": 0.0,
+          "HardnessScalar": 0.0,
+          "BrittlenessScalar": 0.0,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.Charcoal"
+        },
+        "Damage.Type.Rot": {
+          "BaseResistance": 0.0,
+          "HardnessScalar": 0.0,
+          "BrittlenessScalar": 0.0,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.RottedWood"
+        }
+      }
     },
     "Material.Stone.Granite": {
       "MaterialTag": "Material.Stone.Granite",
       "StructuralDensity": 2.8,
-      "SupportStrength": 1600.0,
-      "InsulationValue": 8.0,
-      "DurabilityMultiplier": 4.0,
       "Hardness": 6.5,
       "Brittleness": 0.85,
       "Elasticity": 0.1,
-      "CompressiveStrength": 750.0,
-      "ShearStrength": 600.0,
-      "TensileStrength": 350.0,
-      "BaseMaxHP": 600,
+      "DefaultYieldArchetype": "Item.Resource.RoughStone",
       "bIsGravityAffected": true,
       "RequiredAdhesionNeighbors": 2,
-      "bIsFlammable": false,
-      "DefaultYieldArchetype": "Item.Resource.CutStoneBlock",
-      "CrushedYieldArchetype": "Item.Resource.RoughStone",
-      "PiercedYieldArchetype": "Item.Resource.CutStoneBlock",
-      "ShatteredYieldArchetype": "Item.Resource.RoughStone"
-    },
-    "Material.Stone.Loose": {
-      "MaterialTag": "Material.Stone.Loose",
-      "StructuralDensity": 2.4,
-      "SupportStrength": 120.0,
-      "InsulationValue": 2.0,
-      "DurabilityMultiplier": 1.0,
-      "Hardness": 4.0,
-      "Brittleness": 0.95,
-      "Elasticity": 0.05,
-      "CompressiveStrength": 180.0,
-      "ShearStrength": 120.0,
-      "TensileStrength": 80.0,
-      "BaseMaxHP": 90,
-      "bIsGravityAffected": true,
-      "RequiredAdhesionNeighbors": 3,
-      "bIsFlammable": false,
-      "DefaultYieldArchetype": "Item.Resource.RoughStone",
-      "CrushedYieldArchetype": "Item.Resource.RoughStone",
-      "PiercedYieldArchetype": "Item.Resource.RoughStone"
-    },
-    "Material.Water.Pure": {
-      "MaterialTag": "Material.Water.Pure",
-      "StructuralDensity": 1.0,
-      "SupportStrength": 0.0,
-      "InsulationValue": 0.0,
-      "DurabilityMultiplier": 0.1,
-      "Hardness": 0.0,
-      "Brittleness": 0.0,
-      "Elasticity": 0.9,
-      "CompressiveStrength": 10.0,
-      "ShearStrength": 0.0,
-      "TensileStrength": 0.0,
-      "BaseMaxHP": 10,
-      "bIsGravityAffected": true,
-      "bIsFluid": true,
-      "RequiredAdhesionNeighbors": 5,
-      "PhaseChangeTemperature": -1.0,
-      "TransmutedMaterialTag": "Material.Water.Ice"
-    },
-    "Material.Water.Ice": {
-      "MaterialTag": "Material.Water.Ice",
-      "StructuralDensity": 0.92,
-      "SupportStrength": 250.0,
-      "InsulationValue": 1.5,
-      "DurabilityMultiplier": 0.8,
-      "Hardness": 1.5,
-      "Brittleness": 0.9,
-      "Elasticity": 0.15,
-      "CompressiveStrength": 120.0,
-      "ShearStrength": 90.0,
-      "TensileStrength": 60.0,
-      "BaseMaxHP": 80,
-      "bIsGravityAffected": true,
-      "RequiredAdhesionNeighbors": 2,
-      "PhaseChangeTemperature": 2.0,
-      "TransmutedMaterialTag": "Material.Water.Pure",
-      "DefaultYieldArchetype": "Item.Resource.RoughStone",
-      "CrushedYieldArchetype": "Item.Resource.RoughStone"
-    }
-  },
-  "StructurePieceRegistry": {
-    "Build.Piece.Wall.WoodPlank": {
-      "PieceTag": "Build.Piece.Wall.WoodPlank",
-      "MeshAsset": "StaticMesh'/Game/Meshes/Building/SM_WoodWall.SM_WoodWall'",
-      "bIsVolumetricBlock": false,
-      "BaseMass": 40.0,
-      "BaseMaxHP": 250.0,
-      "BaseLaborCost": 5.0,
-      "RequiredToolTag": "Item.Tool.Hammer",
-      "OverlapConnectionRadius": 150.0,
-      "RequiredMaterials": [
-        { "MaterialArchetypeTag": "Item.Resource.WoodLog", "RequiredQuantity": 2 },
-        { "MaterialArchetypeTag": "Item.Resource.WoodPlank", "RequiredQuantity": 4 },
-        { "MaterialArchetypeTag": "Item.Resource.IronNails", "RequiredQuantity": 8 }
-      ]
-    },
-    "Build.Piece.Block.Stone.Rough": {
-      "PieceTag": "Build.Piece.Block.Stone.Rough",
-      "MeshAsset": "StaticMesh'/Game/Meshes/Building/SM_StoneBlock.SM_StoneBlock'",
-      "bIsVolumetricBlock": true,
-      "VolumetricGridSnapSize": 50.0,
-      "BaseMass": 150.0,
-      "BaseMaxHP": 600.0,
-      "BaseLaborCost": 50.0,
-      "RequiredToolTag": "Item.Tool.MasonryTrowel",
-      "RequiredMaterials": [
-        { "MaterialArchetypeTag": "Item.Resource.RoughStone", "RequiredQuantity": 1 },
-        { "MaterialArchetypeTag": "Item.Resource.Mortar", "RequiredQuantity": 1 }
-      ]
-    },
-    "Build.Piece.Block.Stone.Cut": {
-      "PieceTag": "Build.Piece.Block.Stone.Cut",
-      "MeshAsset": "StaticMesh'/Game/Meshes/Building/SM_StoneBlockCut.SM_StoneBlockCut'",
-      "bIsVolumetricBlock": true,
-      "VolumetricGridSnapSize": 50.0,
-      "BaseMass": 150.0,
-      "BaseMaxHP": 1200.0,
-      "BaseLaborCost": 15.0,
-      "RequiredToolTag": "Item.Tool.MasonryTrowel",
-      "RequiredMaterials": [
-        { "MaterialArchetypeTag": "Item.Resource.CutStoneBlock", "RequiredQuantity": 1 },
-        { "MaterialArchetypeTag": "Item.Resource.Mortar", "RequiredQuantity": 1 }
-      ]
+      "StressResponses": {
+        "Damage.Type.Physical.Crushing": {
+          "BaseResistance": 750.0,
+          "HardnessScalar": 1.5,
+          "BrittlenessScalar": 1.0,
+          "ElasticityDamping": 1.0,
+          "YieldArchetype": "Item.Resource.RoughStone"
+        },
+        "Damage.Type.Physical.Slashing": {
+          "BaseResistance": 600.0,
+          "HardnessScalar": 1.0,
+          "BrittlenessScalar": -0.5,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.CutStoneBlock"
+        },
+        "Damage.Type.Physical.Piercing": {
+          "BaseResistance": 350.0,
+          "HardnessScalar": 0.5,
+          "BrittlenessScalar": 0.8,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.StoneFragments"
+        },
+        "Damage.Type.Shattered": {
+          "BaseResistance": 0.0,
+          "HardnessScalar": 0.0,
+          "BrittlenessScalar": 0.0,
+          "ElasticityDamping": 0.0,
+          "YieldArchetype": "Item.Resource.StoneFragments"
+        }
+      }
     }
   }
 }

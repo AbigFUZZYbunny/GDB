@@ -361,40 +361,8 @@ void ADynamicBuildingChunkActor::ServerDamageBuildingInstance(
         {
             if (const FDynamicMaterialDef* MatDef = GS->MaterialMasterRegistry.Find(Item.MaterialTag))
             {
-                // Determine the correct drop based on mechanical stress/thermal destruction cause
-                FGameplayTag YieldTag = MatDef->DefaultYieldArchetype;
-
-                static const FGameplayTag FireTag     = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Fire"), false);
-                static const FGameplayTag RotTag      = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Rot"), false);
-                static const FGameplayTag CrushingTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false);
-                static const FGameplayTag SlashingTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Slashing"), false);
-                static const FGameplayTag PiercingTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Piercing"), false);
-                static const FGameplayTag ShatterTag  = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Shattered"), false);
-
-                if (DamageCauseTag.MatchesTag(FireTag) && MatDef->BurnedYieldArchetype.IsValid())
-                {
-                    YieldTag = MatDef->BurnedYieldArchetype;
-                }
-                else if (DamageCauseTag.MatchesTag(RotTag) && MatDef->RottedYieldArchetype.IsValid())
-                {
-                    YieldTag = MatDef->RottedYieldArchetype;
-                }
-                else if (DamageCauseTag.MatchesTag(CrushingTag) && MatDef->CrushedYieldArchetype.IsValid())
-                {
-                    YieldTag = MatDef->CrushedYieldArchetype;
-                }
-                else if (DamageCauseTag.MatchesTag(SlashingTag) && MatDef->CleavedYieldArchetype.IsValid())
-                {
-                    YieldTag = MatDef->CleavedYieldArchetype;
-                }
-                else if (DamageCauseTag.MatchesTag(PiercingTag) && MatDef->PiercedYieldArchetype.IsValid())
-                {
-                    YieldTag = MatDef->PiercedYieldArchetype;
-                }
-                else if (DamageCauseTag.MatchesTag(ShatterTag) && MatDef->ShatteredYieldArchetype.IsValid())
-                {
-                    YieldTag = MatDef->ShatteredYieldArchetype;
-                }
+                // NO MORE SWITCH STATEMENTS: Resolves dynamically mapped yields based directly on the damage tag
+                const FGameplayTag YieldTag = MatDef->GetYieldForDamageType(DamageCauseTag);
 
                 if (YieldTag.IsValid())
                 {

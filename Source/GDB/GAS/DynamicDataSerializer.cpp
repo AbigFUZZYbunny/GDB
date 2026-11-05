@@ -331,8 +331,13 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             }
             if (AbilityObj->HasField(TEXT("InteractionConfig")))
             {
-                TSharedPtr<FJsonObject> InteractionObj = AbilityObj->GetObjectField(TEXT("InteractionConfig"));
+                TSharedPtr<FJsonObject> InteractionObj = AbilityObj->GetObjectField(TEXT("InteractionConfig"));                
                 DeserializeMapWrapper(InteractionObj, TEXT("InteractionMetrics"), AbilityDef.InteractionConfig.InteractionMetrics);
+                
+                if (InteractionObj->HasField(TEXT("DefaultImpactTypeTag")))
+                {
+                    AbilityDef.InteractionConfig.DefaultImpactTypeTag = FGameplayTag::RequestGameplayTag(FName(*InteractionObj->GetStringField(TEXT("DefaultImpactTypeTag"))), false);
+                }
                 
                 if (InteractionObj->HasField(TEXT("ImpactTypeTags")))
                 {
@@ -1223,14 +1228,32 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             MatDef.bCanRot = MatObj->HasField(TEXT("bCanRot")) ? MatObj->GetBoolField(TEXT("bCanRot")) : false;
             MatDef.RotWetnessThreshold = MatObj->HasField(TEXT("RotWetnessThreshold")) ? static_cast<float>(MatObj->GetNumberField(TEXT("RotWetnessThreshold"))) : 80.0f;
 
-            // Conditional Material Science Yield Archetypes
-            if (MatObj->HasField(TEXT("DefaultYieldArchetype"))) MatDef.DefaultYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("DefaultYieldArchetype"))), false);
-            if (MatObj->HasField(TEXT("CrushedYieldArchetype"))) MatDef.CrushedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("CrushedYieldArchetype"))), false);
-            if (MatObj->HasField(TEXT("CleavedYieldArchetype"))) MatDef.CleavedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("CleavedYieldArchetype"))), false);
-            if (MatObj->HasField(TEXT("PiercedYieldArchetype"))) MatDef.PiercedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("PiercedYieldArchetype"))), false);
-            if (MatObj->HasField(TEXT("BurnedYieldArchetype"))) MatDef.BurnedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("BurnedYieldArchetype"))), false);
-            if (MatObj->HasField(TEXT("RottedYieldArchetype"))) MatDef.RottedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("RottedYieldArchetype"))), false);
-            if (MatObj->HasField(TEXT("ShatteredYieldArchetype"))) MatDef.ShatteredYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("ShatteredYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("DefaultYieldArchetype"))) 
+            {
+                MatDef.DefaultYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("DefaultYieldArchetype"))), false);
+            }
+
+            // Parse Stress Response Rules
+            if (MatObj->HasField(TEXT("StressResponses")))
+            {
+                TSharedPtr<FJsonObject> StressObj = MatObj->GetObjectField(TEXT("StressResponses"));
+                for (const auto& StressPair : StressObj->Values)
+                {
+                    FGameplayTag StressKey = FGameplayTag::RequestGameplayTag(FName(*StressPair.Key), false);
+                    if (StressKey.IsValid() && StressPair.Value->Type == EJson::Object)
+                    {
+                        FMaterialStressResponse Response;
+                        TSharedPtr<FJsonObject> RObj = StressPair.Value->AsObject();
+                        FJsonObjectConverter::JsonObjectToUStruct(RObj.ToSharedRef(), &Response, 0, 0);
+                        
+                        if (RObj->HasField(TEXT("YieldArchetype")))
+                        {
+                            Response.YieldArchetype = FGameplayTag::RequestGameplayTag(FName(*RObj->GetStringField(TEXT("YieldArchetype"))), false);
+                        }
+                        MatDef.StressResponses.Add(StressKey, Response);
+                    }
+                }
+            }
 
             OutStaging.MaterialMasterRegistry.Add(KeyTag, MatDef);
         }

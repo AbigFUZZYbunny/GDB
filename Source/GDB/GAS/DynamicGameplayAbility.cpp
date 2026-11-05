@@ -675,9 +675,10 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
                 }
             }
 
-            if (MechanicalImpactTags.IsEmpty())
+            // NO MORE HARDCODING: Rely on the external ability configuration for default stress typing
+            if (MechanicalImpactTags.IsEmpty() && AbilityConfig.InteractionConfig.DefaultImpactTypeTag.IsValid())
             {
-                MechanicalImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false));
+                MechanicalImpactTags.AddTag(AbilityConfig.InteractionConfig.DefaultImpactTypeTag);
             }
 
             if (const UDynamicAttributeSet* AttrSet = AvatarChar->GetDynamicAttributeSet())

@@ -1,148 +1,104 @@
 ﻿{
   "AIBehaviorMasterRegistry": {
+    "Behavior.Movement.PatrolTown": {
+      "BehaviorTag": "Behavior.Movement.PatrolTown",
+      "ActionTag": "Action.Movement.Patrol",
+      "ExecutionType": "Movement",
+      "MovementStateTagToSet": "Movement.Mode.Walk",
+      "BasePriority": 50.0,
+      "CooldownDuration": 0.0,
+      "bInterruptible": true,
+      "TargetEQSConfig": {
+        "QueryAsset": "/Game/AI/EQS/EQS_FindTownWaypoints.EQS_FindTownWaypoints",
+        "QueryParams": [
+          { "ParamName": "SearchRadius", "Value": 5000.0 },
+          { "ParamName": "GridDensity", "Value": 250.0 }
+        ]
+      }
+    },
+    "Behavior.Movement.InvestigateEQS": {
+      "BehaviorTag": "Behavior.Movement.InvestigateEQS",
+      "ActionTag": "Action.Movement.Investigate",
+      "ExecutionType": "Movement",
+      "MovementStateTagToSet": "Movement.Mode.Walk",
+      "BasePriority": 80.0,
+      "CooldownDuration": 5.0,
+      "bInterruptible": true,
+      "TargetEQSConfig": {
+        "QueryAsset": "/Game/AI/EQS/EQS_FindInvestigationPoints.EQS_FindInvestigationPoints",
+        "QueryParams": [
+          { "ParamName": "SearchRadius", "Value": 1000.0 }
+        ]
+      },
+      "DialogueCategoryTag": "Dialogue.Category.Suspicious",
+      "Utterances": [
+        {
+          "UtteranceText": "Who goes there? Show yourself!",
+          "SelectionWeight": 10.0,
+          "VolumeTag": "Dialogue.Volume.Shout",
+          "EmotionTag": "Emotion.Angry"
+        }
+      ]
+    },
+    "Behavior.Work.FellTimber": {
+      "BehaviorTag": "Behavior.Work.FellTimber",
+      "ActionTag": "Action.Interact.Mine",
+      "ExecutionType": "Interaction",
+      "MovementStateTagToSet": "None",
+      "BasePriority": 60.0,
+      "CooldownDuration": 2.0,
+      "bInterruptible": true,
+      "TargetEQSConfig": {
+        "QueryAsset": "/Game/AI/EQS/EQS_FindNearestMatureTree.EQS_FindNearestMatureTree",
+        "QueryParams": [
+          { "ParamName": "SearchRadius", "Value": 3000.0 }
+        ]
+      }
+    },
+    "Behavior.Combat.BerserkerCharge": {
+      "BehaviorTag": "Behavior.Combat.BerserkerCharge",
+      "ActionTag": "Action.Combat.Charge",
+      "ExecutionType": "Movement",
+      "MovementStateTagToSet": "Movement.Mode.Sprint",
+      "BasePriority": 100.0,
+      "CooldownDuration": 15.0,
+      "bInterruptible": false,
+      "TargetEQSConfig": {
+        "QueryAsset": "/Game/AI/EQS/EQS_FindCombatTargetFlank.EQS_FindCombatTargetFlank",
+        "QueryParams": [
+          { "ParamName": "FlankDistance", "Value": 150.0 }
+        ]
+      },
+      "DialogueCategoryTag": "None",
+      "Utterances": [
+        {
+          "UtteranceText": "Looks like meat's back on the menu, boys!",
+          "SelectionWeight": 10.0,
+          "VolumeTag": "Dialogue.Volume.Scream",
+          "EmotionTag": "Emotion.Angry"
+        }
+      ]
+    },
     "Behavior.Core.ShareGossip": {
+      "BehaviorTag": "Behavior.Core.ShareGossip",
       "ActionTag": "Action.Interact.Chat",
-      "TargetPlaceRoleTag": "Role.Place.TownSquare",
+      "TargetPlaceRoleTag": "Role.Place.Tavern",
       "ExecutionType": "Wait",
-      "BasePriority": 7.0,
-      "CooldownDuration": 20.0,
+      "BasePriority": 30.0,
+      "CooldownDuration": 120.0,
       "bInterruptible": true,
       "DialogueCategoryTag": "Dialogue.Category.Conversation",
-      "PriorityAttributeScalars": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Need.Social", "Value": 1.5 }
-        ]
-      },
       "ExecutionMetrics": {
         "ReplicatedEntries": [
-          { "KeyTag": "Metric.Duration", "Value": 4.0 }
+          { "KeyTag": "Metric.Duration", "Value": 15.0 }
         ]
       },
       "Utterances": [
         {
-          "UtteranceText": "Have you heard the rumors around %Location%? Times are growing perilous.",
+          "UtteranceText": "The Queen's guard is doubling patrols. Have you heard?",
           "SelectionWeight": 5.0,
+          "VolumeTag": "Dialogue.Volume.Whisper",
           "EmotionTag": "Emotion.Pensive"
-        }
-      ]
-    },
-    "Behavior.Core.BegOrGreet": {
-      "ActionTag": "Action.Interact.Chat",
-      "TargetPlaceRoleTag": "Role.Place.TownSquare",
-      "ExecutionType": "Wait",
-      "BasePriority": 8.0,
-      "CooldownDuration": 15.0,
-      "PriorityAttributeScalars": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Need.Hunger", "Value": 1.2 }
-        ]
-      },
-      "ExecutionMetrics": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Metric.Duration", "Value": 2.5 }
-        ]
-      },
-      "Utterances": [
-        {
-          "UtteranceText": "Please, kind traveler... a coin for a starving soul? I haven't eaten in days.",
-          "SelectionWeight": 5.0,
-          "AttributeRequirements": [
-            { "AttributeTag": "Need.Hunger", "MinValue": 60.0, "MaxValue": 100.0 },
-            { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 5.0 }
-          ],
-          "ProbabilityAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Need.Hunger", "Value": 0.25 }
-            ]
-          },
-          "EmotionTag": "Emotion.Despair"
-        },
-        {
-          "UtteranceText": "Ugh... my wounds... I don't know if I can make it much longer...",
-          "SelectionWeight": 10.0,
-          "AttributeRequirements": [
-            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 35.0 }
-          ],
-          "ProbabilityAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Resource.Health", "Value": -0.3 }
-            ]
-          },
-          "EmotionTag": "Emotion.Pain"
-        },
-        {
-          "UtteranceText": "Fine day in the market, isn't it? May fortune find your coin purse.",
-          "SelectionWeight": 2.0,
-          "AttributeRequirements": [
-            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 70.0, "MaxValue": 100.0 },
-            { "AttributeTag": "Need.Hunger", "MinValue": 0.0, "MaxValue": 40.0 }
-          ],
-          "ProbabilityAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Wealth.Gold", "Value": 0.05 }
-            ]
-          },
-          "EmotionTag": "Emotion.Friendly"
-        }
-      ]
-    },
-    "Behavior.Core.Passerby": {
-      "ActionTag": "Action.Interact.Chat",
-      "TargetPlaceRoleTag": "",
-      "ExecutionType": "Walk",
-      "BasePriority": 5.0,
-      "CooldownDuration": 1.0,
-      "PriorityAttributeScalars": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Need.Hunger", "Value": 1.2 }
-        ]
-      },
-      "ExecutionMetrics": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Metric.Duration", "Value": 2.5 }
-        ]
-      },
-      "Utterances": [
-        {
-          "UtteranceText": "Please, kind traveler... a coin for a starving soul? I haven't eaten in days.",
-          "SelectionWeight": 5.0,
-          "AttributeRequirements": [
-            { "AttributeTag": "Need.Hunger", "MinValue": 60.0, "MaxValue": 100.0 },
-            { "AttributeTag": "Attribute.Wealth.Gold", "MinValue": 0.0, "MaxValue": 5.0 }
-          ],
-          "ProbabilityAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Need.Hunger", "Value": 0.25 }
-            ]
-          },
-          "EmotionTag": "Emotion.Despair"
-        },
-        {
-          "UtteranceText": "Ugh... my wounds... I don't know if I can make it much longer...",
-          "SelectionWeight": 10.0,
-          "AttributeRequirements": [
-            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 0.0, "MaxValue": 35.0 }
-          ],
-          "ProbabilityAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Resource.Health", "Value": -0.3 }
-            ]
-          },
-          "EmotionTag": "Emotion.Pain"
-        },
-        {
-          "UtteranceText": "Fine day in the market, isn't it? May fortune find your coin purse.",
-          "SelectionWeight": 2.0,
-          "AttributeRequirements": [
-            { "AttributeTag": "Attribute.Resource.Health", "MinValue": 70.0, "MaxValue": 100.0 },
-            { "AttributeTag": "Need.Hunger", "MinValue": 0.0, "MaxValue": 40.0 }
-          ],
-          "ProbabilityAttributeScalars": {
-            "ReplicatedEntries": [
-              { "KeyTag": "Attribute.Wealth.Gold", "Value": 0.05 }
-            ]
-          },
-          "EmotionTag": "Emotion.Friendly"
         }
       ]
     }

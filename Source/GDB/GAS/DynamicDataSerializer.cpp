@@ -614,6 +614,19 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             TSharedPtr<FJsonObject> AgentObj = Pair.Value->AsObject();
             FDynamicAIAgentDef AgentDef;
             FJsonObjectConverter::JsonObjectToUStruct(AgentObj.ToSharedRef(), &AgentDef, 0, 0);
+            if (AgentObj->HasField(TEXT("PerceptionConfig")))
+            {
+                TSharedPtr<FJsonObject> PercObj = AgentObj->GetObjectField(TEXT("PerceptionConfig"));
+                AgentDef.PerceptionConfig.SightRadius = PercObj->HasField(TEXT("SightRadius")) ? static_cast<float>(PercObj->GetNumberField(TEXT("SightRadius"))) : 1500.0f;
+                AgentDef.PerceptionConfig.LoseSightRadius = PercObj->HasField(TEXT("LoseSightRadius")) ? static_cast<float>(PercObj->GetNumberField(TEXT("LoseSightRadius"))) : 2000.0f;
+                AgentDef.PerceptionConfig.PeripheralVisionAngleDegrees = PercObj->HasField(TEXT("PeripheralVisionAngleDegrees")) ? static_cast<float>(PercObj->GetNumberField(TEXT("PeripheralVisionAngleDegrees"))) : 90.0f;
+                AgentDef.PerceptionConfig.HearingRange = PercObj->HasField(TEXT("HearingRange")) ? static_cast<float>(PercObj->GetNumberField(TEXT("HearingRange"))) : 3000.0f;
+                AgentDef.PerceptionConfig.bEnableDamageSense = PercObj->HasField(TEXT("bEnableDamageSense")) ? PercObj->GetBoolField(TEXT("bEnableDamageSense")) : true;
+            }
+            if (AgentObj->HasField(TEXT("StateTreeAsset")))
+            {
+                AgentDef.StateTreeAsset = TSoftObjectPtr<UStateTree>(FSoftObjectPath(AgentObj->GetStringField(TEXT("StateTreeAsset"))));
+            }
             OutStaging.MasterAIAgentRegistry.Add(KeyTag, AgentDef);
         }
     }
@@ -1180,14 +1193,29 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             if (DefObj->HasField(TEXT("DialogueProfileTag")))
             {
                 BehaviorDef.DialogueProfileTag = FGameplayTag::RequestGameplayTag(FName(*DefObj->GetStringField(TEXT("DialogueProfileTag"))), false);
-            }
-            
+            }            
             ParseDialogueUtteranceArray(DefObj, TEXT("Utterances"), BehaviorDef.Utterances);
             if (DefObj->HasField(TEXT("UtteranceTemplates")))
             {
                 for (const auto& Val : DefObj->GetArrayField(TEXT("UtteranceTemplates")))
                 {
                     BehaviorDef.UtteranceTemplates.Add(Val->AsString());
+                }
+            }
+            if (DefObj->HasField(TEXT("TargetEQSConfig")))
+            {
+                TSharedPtr<FJsonObject> EqsObj = DefObj->GetObjectField(TEXT("TargetEQSConfig"));
+                BehaviorDef.TargetEQSConfig.QueryAsset = TSoftObjectPtr<UEnvQuery>(FSoftObjectPath(EqsObj->GetStringField(TEXT("QueryAsset"))));
+                if (EqsObj->HasField(TEXT("QueryParams")))
+                {
+                    for (const auto& ParamVal : EqsObj->GetArrayField(TEXT("QueryParams")))
+                    {
+                        TSharedPtr<FJsonObject> ParamObj = ParamVal->AsObject();
+                        FDynamicEQSParam EqParam;
+                        EqParam.ParamName = FName(*ParamObj->GetStringField(TEXT("ParamName")));
+                        EqParam.Value = static_cast<float>(ParamObj->GetNumberField(TEXT("Value")));
+                        BehaviorDef.TargetEQSConfig.QueryParams.Add(EqParam);
+                    }
                 }
             }
             OutStaging.AIBehaviorMasterRegistry.Add(KeyTag, BehaviorDef);

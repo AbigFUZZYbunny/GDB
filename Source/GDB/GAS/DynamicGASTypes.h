@@ -23,6 +23,8 @@ class UDynamicEquipmentComponent;
 class ADynamicEnvironmentChunkActor;
 class UCustomizableObject;
 class UDynamicQuestComponent;
+class UEnvQuery;
+class UStateTree;
 
 // ============================================================================
 // QUANTIZATION UTILITIES (RANGE-AWARE QUANTIZATION)
@@ -2144,6 +2146,51 @@ struct FDynamicTaskPriorityRule
 // MASTER AI AGENT TEMPLATE
 // ============================================================================
 USTRUCT(BlueprintType)
+struct FDynamicAIPerceptionConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Perception")
+    float SightRadius = 1500.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Perception")
+    float LoseSightRadius = 2000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Perception")
+    float PeripheralVisionAngleDegrees = 90.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Perception")
+    float HearingRange = 3000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|Perception")
+    bool bEnableDamageSense = true;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEQSParam
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
+    FName ParamName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
+    float Value = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEQSConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
+    TSoftObjectPtr<UEnvQuery> QueryAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
+    TArray<FDynamicEQSParam> QueryParams;
+};
+
+USTRUCT(BlueprintType)
 struct FDynamicAIAgentDef
 {
     GENERATED_BODY()
@@ -2175,6 +2222,12 @@ struct FDynamicAIAgentDef
     // Baseline physiological reactions (e.g., standard humanoids flee loud noises)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI|Senses")
     TArray<FSensoryResponseRule> SensoryResponses;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI|Perception")
+    FDynamicAIPerceptionConfig PerceptionConfig;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|AI|StateTree")
+    TSoftObjectPtr<UStateTree> StateTreeAsset;
 };
 
 // ============================================================================
@@ -6158,6 +6211,9 @@ struct GDB_API FDynamicAIBehaviorDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI")
     bool bInterruptible = true;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
+    FDynamicEQSConfig TargetEQSConfig;
 };
 
 // ============================================================================

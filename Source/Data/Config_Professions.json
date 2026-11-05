@@ -1,74 +1,30 @@
 ﻿{
   "_comment": "AI Sociological Roles & Professions mapping to FDynamicProfessionDef",
   "ProfessionMasterRegistry": {
-    "Profession.Labor.Woodcutter": {
-      "ProfessionTag": "Profession.Labor.Woodcutter",
+    "Profession.Guard.Kingsguard": {
+      "ProfessionTag": "Profession.Guard.Kingsguard",
       "Localization": {
         "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Woodcutter" },
-          { "KeyTag": "Localization.Description", "Value": "Fells timber and splits firewood." }
-        ]
-      },
-      "PrioritizedItemWeights": {
-        "ReplicatedEntries": [ { "KeyTag": "Actor.Tool.Axe.Felling", "Value": 100.0 } ]
-      },
-      "GrantedBehaviors": [
-        "Behavior.Work.FellTimber"
-      ],
-      "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
-      ]
-    },
-    "Profession.Crafting.Carpenter": {
-      "ProfessionTag": "Profession.Crafting.Carpenter",
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Localization.Name", "Value": "Carpenter" },
-          { "KeyTag": "Localization.Description", "Value": "Crafts wooden tables, chairs, and structures." }
-        ]
-      },
-      "PrioritizedItemWeights": {
-        "ReplicatedEntries": [ { "KeyTag": "Actor.Material.WoodPlank", "Value": 100.0 } ]
-      },
-      "GrantedBehaviors": [
-        "Behavior.Work.Carpentry"
-      ],
-      "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
-      ]
-    },
-    "Profession.CityGuard": {
-      "ProfessionTag": "Profession.CityGuard",
-      "Localization": {
-        "ReplicatedEntries": [
-          { "KeyTag": "Lang.English", "Value": "City Guard" },
-          { "KeyTag": "Localization.Description", "Value": "Patrols jurisdictions and maintains law and order." }
+          { "KeyTag": "Localization.Name", "Value": "Kingsguard" },
+          { "KeyTag": "Localization.Description", "Value": "Elite sworn protectors of the crown." }
         ]
       },
       "PrioritizedItemWeights": {
         "ReplicatedEntries": [
-          { "KeyTag": "Item.Weapon.Halberd", "Value": 10.0 },
-          { "KeyTag": "Item.Armor.CityWatch", "Value": 10.0 }
+          { "KeyTag": "Actor.Combat.Weapon.Sword.Longsword", "Value": 100.0 },
+          { "KeyTag": "Actor.Combat.Armor.Chestplate.Gold", "Value": 100.0 }
         ]
       },
       "GrantedBehaviors": [
-        "Behavior.Patrol",
-        "Behavior.Investigate",
-        "Behavior.Combat.Arrest"
+        "Behavior.Movement.PatrolTown",
+        "Behavior.Combat.Arrest",
+        "Behavior.Combat.LethalTakedown"
       ],
       "SensoryResponses": [
         {
           "TriggeringStimulusTag": "Stimulus.Sound.Footstep",
           "PrerequisiteConditionTree": "Condition.AI.IsSuspicious",
-          "ResultingBehaviorTag": "Behavior.Investigate"
+          "ResultingBehaviorTag": "Behavior.Movement.InvestigateEQS"
         },
         {
           "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
@@ -76,6 +32,64 @@
           "ResultingBehaviorTag": "Behavior.Combat.Alert"
         }
       ]
+    },
+    "Profession.Guard.CityWatch": {
+      "ProfessionTag": "Profession.Guard.CityWatch",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "City Watch" }
+        ]
+      },
+      "PrioritizedItemWeights": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Actor.Combat.Weapon.Polearm.Spear", "Value": 80.0 }
+        ]
+      },
+      "GrantedBehaviors": [
+        "Behavior.Movement.PatrolTown",
+        "Behavior.Combat.Arrest"
+      ],
+      "SensoryResponses": [
+        {
+          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
+          "PrerequisiteConditionTree": "Condition.AI.OnDuty",
+          "ResultingBehaviorTag": "Behavior.Movement.InvestigateEQS"
+        }
+      ]
+    },
+    "Profession.Labor.Woodcutter": {
+      "ProfessionTag": "Profession.Labor.Woodcutter",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Woodcutter" }
+        ]
+      },
+      "PrioritizedItemWeights": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Actor.Tool.Axe.Felling", "Value": 100.0 }
+        ]
+      },
+      "GrantedBehaviors": [
+        "Behavior.Work.FellTimber"
+      ],
+      "SensoryResponses": []
+    },
+    "Profession.Combat.UrukBerserker": {
+      "ProfessionTag": "Profession.Combat.UrukBerserker",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Berserker" }
+        ]
+      },
+      "PrioritizedItemWeights": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Actor.Combat.Weapon.Sword.TwoHanded.Cleaver", "Value": 100.0 }
+        ]
+      },
+      "GrantedBehaviors": [
+        "Behavior.Combat.BerserkerCharge"
+      ],
+      "SensoryResponses": []
     }
   }
 }

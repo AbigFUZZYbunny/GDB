@@ -29,7 +29,9 @@ public class GDB : ModuleRules
 			"ProceduralMeshComponent",
 			"Voice",
 			"NavigationSystem",
-			"CustomizableObject"
+			"CustomizableObject",
+			"StateTreeModule", 
+			"GameplayStateTreeModule"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

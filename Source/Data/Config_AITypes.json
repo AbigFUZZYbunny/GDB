@@ -1,43 +1,115 @@
 ﻿{
-  "_comment": "Overarching AI physiological and behavioral templates mapping to FDynamicAIAgentDef",
+  "_comment": "Master AI Agent Registry: Pure biological and foundational templates. Updated with StateTreeAsset and PerceptionConfig for all agents.",
   "MasterAIAgentRegistry": {
     "AI.Type.Humanoid.Standard": {
       "AIAgentTag": "AI.Type.Humanoid.Standard",
-      "AIControllerClass": "/Game/AI/BP_HumanoidAIController.BP_HumanoidAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Humanoid_Civilian.ST_Humanoid_Civilian",
+      "PerceptionConfig": {
+        "SightRadius": 1500.0,
+        "LoseSightRadius": 2000.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 2500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Civilization", "bFormsPacks": true, "MaxGroupSize": 25, "CohesionRadius": 4000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Cooked", "Item.Food.Bread", "Item.Drink.Water" ],
       "bHuntsForFood": false,
       "FleeHealthThreshold": 0.40,
       "AbilityUsageRules": [],
       "IdleTasks": [
-        {
-          "TaskTag": "Behavior.Idle.Wander",
-          "BasePriorityWeight": 50.0,
-          "LinkedAbilityOrRecipeTag": "None",
-          "RequiredItemTags": [],
-          "ProducedOutputTags": [],
-          "TaskConditionTreeName": "None"
-        },
-        {
-          "TaskTag": "Behavior.Idle.Converse",
-          "BasePriorityWeight": 60.0,
-          "LinkedAbilityOrRecipeTag": "None",
-          "RequiredItemTags": [],
-          "ProducedOutputTags": [],
-          "TaskConditionTreeName": "None"
-        }
+        { "TaskTag": "Behavior.Idle.Wander", "BasePriorityWeight": 50.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "None" },
+        { "TaskTag": "Behavior.Idle.Converse", "BasePriorityWeight": 60.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "None" }
       ],
       "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
-          "PrerequisiteConditionTree": "Condition.AI.IsCivilian",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
+        { "TriggeringStimulusTag": "Stimulus.Sound.Explosion", "PrerequisiteConditionTree": "Condition.AI.IsCivilian", "ResultingBehaviorTag": "Behavior.Flee" }
+      ]
+    },
+    "AI.Type.Humanoid.Kingslander": {
+      "AIAgentTag": "AI.Type.Humanoid.Kingslander",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Humanoid_Civilian.ST_Humanoid_Civilian",
+      "PerceptionConfig": {
+        "SightRadius": 2000.0,
+        "LoseSightRadius": 2500.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Kingdom.Westeros", "bFormsPacks": true, "MaxGroupSize": 50, "CohesionRadius": 10000.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Bread", "Item.Food.Meat", "Item.Drink.Ale", "Item.Drink.Wine" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.40,
+      "AbilityUsageRules": [],
+      "IdleTasks": [
+        { "TaskTag": "Behavior.Core.ShareGossip", "BasePriorityWeight": 50.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Condition.AI.OffDuty" }
+      ],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Explosion", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Movement.FleeInPanic" }
+      ]
+    },
+    "AI.Type.Humanoid.UrukHai": {
+      "AIAgentTag": "AI.Type.Humanoid.UrukHai",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Humanoid_Aggressive.ST_Humanoid_Aggressive",
+      "PerceptionConfig": {
+        "SightRadius": 3000.0,
+        "LoseSightRadius": 4000.0,
+        "PeripheralVisionAngleDegrees": 100.0,
+        "HearingRange": 2500.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.WhiteHand", "bFormsPacks": true, "MaxGroupSize": 200, "CohesionRadius": 8000.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.ManFlesh" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [],
+      "IdleTasks": [
+        { "TaskTag": "Behavior.Idle.Wander", "BasePriorityWeight": 40.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "None" }
+      ],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Explosion", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Combat.ChargeSource" }
+      ]
+    },
+    "AI.Type.Humanoid.Elf.LothlorienSentinel": {
+      "AIAgentTag": "AI.Type.Humanoid.Elf.LothlorienSentinel",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_ElvenSentinel.ST_ElvenSentinel",
+      "PerceptionConfig": {
+        "SightRadius": 6000.0,
+        "LoseSightRadius": 7000.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 5000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Kingdom.ElvenWoods", "bFormsPacks": true, "MaxGroupSize": 5, "CohesionRadius": 2000.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Bread", "Item.Food.Fruit", "Item.Drink.Water" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.20,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.Weapon.Ranged.Longbow", "RequiredConditionTreeName": "Trigger.Condition.TargetInLongRange", "PriorityWeight": 95.0, "MinRange": 500.0, "MaxRange": 5000.0 },
+        { "AbilityTag": "Ability.Movement.AcrobaticDodge", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 300.0 }
+      ],
+      "IdleTasks": [
+        { "TaskTag": "Behavior.Core.StandGuard", "BasePriorityWeight": 80.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Condition.AI.OnDuty" },
+        { "TaskTag": "Behavior.Movement.PatrolCanopy", "BasePriorityWeight": 60.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Condition.AI.OnDuty" }
+      ],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "Condition.AI.TargetIsHostile", "ResultingBehaviorTag": "Behavior.Combat.Alert" },
+        { "TriggeringStimulusTag": "Stimulus.Sound.Explosion", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Combat.TakeCover" }
       ]
     },
     "AI.Type.Beast.Wolf": {
       "AIAgentTag": "AI.Type.Beast.Wolf",
-      "AIControllerClass": "/Game/AI/BP_BeastAIController.BP_BeastAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_PackHunter.ST_Beast_PackHunter",
+      "PerceptionConfig": {
+        "SightRadius": 2000.0,
+        "LoseSightRadius": 2500.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 3500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Pack", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 3000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -48,45 +120,17 @@
       "IdleTasks": [],
       "SensoryResponses": []
     },
-    "AI.Type.Beast.Grazer": {
-      "AIAgentTag": "AI.Type.Beast.Grazer",
-      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 15, "CohesionRadius": 2500.0, "bDefendsPackMembers": false },
-      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass" ],
-      "bHuntsForFood": false,
-      "FleeHealthThreshold": 0.99,
-      "AbilityUsageRules": [],
-      "IdleTasks": [],
-      "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Footstep",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
-      ]
-    },
-    "AI.Type.Monster.Dragon": {
-      "AIAgentTag": "AI.Type.Monster.Dragon",
-      "AIControllerClass": "/Game/AI/BP_DragonAIController.BP_DragonAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Solitary", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
-      "DietaryTags": [ "Item.Food.Meat" ],
-      "bHuntsForFood": true,
-      "FleeHealthThreshold": 0.05,
-      "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Magic.DragonFireBreath", "RequiredConditionTreeName": "Trigger.Condition.TargetInCone", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 2000.0 }
-      ],
-      "IdleTasks": [],
-      "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Explosion",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Investigate"
-        }
-      ]
-    },
     "AI.Type.Beast.Canine.GreyWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.GreyWolf",
-      "AIControllerClass": "/Game/AI/BP_PackHunterAIController.BP_PackHunterAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_PackHunter.ST_Beast_PackHunter",
+      "PerceptionConfig": {
+        "SightRadius": 2500.0,
+        "LoseSightRadius": 3000.0,
+        "PeripheralVisionAngleDegrees": 115.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.GreyWolfPack", "bFormsPacks": true, "MaxGroupSize": 8, "CohesionRadius": 4000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Cervidae" ],
       "bHuntsForFood": true,
@@ -100,7 +144,15 @@
     },
     "AI.Type.Beast.Canine.WhiteWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.WhiteWolf",
-      "AIControllerClass": "/Game/AI/BP_PackHunterAIController.BP_PackHunterAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_PackHunter.ST_Beast_PackHunter",
+      "PerceptionConfig": {
+        "SightRadius": 2500.0,
+        "LoseSightRadius": 3000.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 3800.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.TundraPack", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 3500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -114,7 +166,15 @@
     },
     "AI.Type.Beast.Canine.RedWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.RedWolf",
-      "AIControllerClass": "/Game/AI/BP_StealthHunterAIController.BP_StealthHunterAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_StealthHunter.ST_Beast_StealthHunter",
+      "PerceptionConfig": {
+        "SightRadius": 1800.0,
+        "LoseSightRadius": 2200.0,
+        "PeripheralVisionAngleDegrees": 120.0,
+        "HearingRange": 4500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.ForestFamily", "bFormsPacks": true, "MaxGroupSize": 4, "CohesionRadius": 2500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -127,7 +187,15 @@
     },
     "AI.Type.Beast.Canine.DireWolf": {
       "AIAgentTag": "AI.Type.Beast.Canine.DireWolf",
-      "AIControllerClass": "/Game/AI/BP_ApexPredatorAIController.BP_ApexPredatorAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_ApexHunter.ST_Beast_ApexHunter",
+      "PerceptionConfig": {
+        "SightRadius": 3500.0,
+        "LoseSightRadius": 4500.0,
+        "PeripheralVisionAngleDegrees": 115.0,
+        "HearingRange": 5500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.DirePack", "bFormsPacks": true, "MaxGroupSize": 5, "CohesionRadius": 5000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -139,49 +207,65 @@
       "IdleTasks": [],
       "SensoryResponses": []
     },
-    "AI.Type.Monster.TrueDragon": {
-      "AIAgentTag": "AI.Type.Monster.TrueDragon",
-      "AIControllerClass": "/Game/AI/BP_DragonAIController.BP_DragonAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryApex", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+    "AI.Type.Beast.Canine.DireWolf.Stark": {
+      "AIAgentTag": "AI.Type.Beast.Canine.DireWolf.Stark",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Direwolf.ST_Direwolf",
+      "PerceptionConfig": {
+        "SightRadius": 4000.0,
+        "LoseSightRadius": 5000.0,
+        "PeripheralVisionAngleDegrees": 120.0,
+        "HearingRange": 6000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Kingdom.Winterfell", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 3000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
-      "bHuntsForFood": true,
-      "FleeHealthThreshold": 0.02,
-      "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Magic.ElementalBreath", "RequiredConditionTreeName": "Trigger.Condition.TargetInCone", "PriorityWeight": 100.0, "MinRange": 300.0, "MaxRange": 2500.0 },
-        { "AbilityTag": "Ability.Combat.TailSwipe", "RequiredConditionTreeName": "Trigger.Condition.TargetBehind", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 300.0 }
-      ],
-      "IdleTasks": [],
-      "SensoryResponses": []
-    },
-    "AI.Type.Monster.Hydra": {
-      "AIAgentTag": "AI.Type.Monster.Hydra",
-      "AIControllerClass": "/Game/AI/BP_HydraAIController.BP_HydraAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Solitary", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
-      "DietaryTags": [ "Item.Food.Meat" ],
-      "bHuntsForFood": true,
-      "FleeHealthThreshold": 0.0,
-      "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Combat.MultiBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 250.0 }
-      ],
-      "IdleTasks": [],
-      "SensoryResponses": []
-    },
-    "AI.Type.Monster.WyvernOrDrake": {
-      "AIAgentTag": "AI.Type.Monster.WyvernOrDrake",
-      "AIControllerClass": "/Game/AI/BP_AggressiveBeastAIController.BP_AggressiveBeastAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Pack", "bFormsPacks": true, "MaxGroupSize": 3, "CohesionRadius": 2000.0, "bDefendsPackMembers": true },
-      "DietaryTags": [ "Item.Food.Meat" ],
       "bHuntsForFood": true,
       "FleeHealthThreshold": 0.10,
       "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Combat.VenomStingOrClaw", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 200.0 }
+        { "AbilityTag": "Ability.Combat.CrushingBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 220.0 },
+        { "AbilityTag": "Ability.Combat.PackHowl", "RequiredConditionTreeName": "Trigger.Condition.PackIsolatedOrTargetSpotted", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 8000.0 }
       ],
+      "IdleTasks": [
+        { "TaskTag": "Behavior.Movement.FollowMaster", "BasePriorityWeight": 100.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Condition.AI.HasMaster" }
+      ],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "Condition.AI.TargetIsHostile", "ResultingBehaviorTag": "Behavior.Combat.Alert" },
+        { "TriggeringStimulusTag": "Sense.Damage", "PrerequisiteConditionTree": "Condition.AI.MasterUnderAttack", "ResultingBehaviorTag": "Behavior.Combat.DefendMaster" }
+      ]
+    },
+    "AI.Type.Beast.Grazer": {
+      "AIAgentTag": "AI.Type.Beast.Grazer",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_Grazer.ST_Beast_Grazer",
+      "PerceptionConfig": {
+        "SightRadius": 2000.0,
+        "LoseSightRadius": 2500.0,
+        "PeripheralVisionAngleDegrees": 150.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 15, "CohesionRadius": 2500.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.99,
+      "AbilityUsageRules": [],
       "IdleTasks": [],
-      "SensoryResponses": []
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Flee" }
+      ]
     },
     "AI.Type.Beast.Cervidae.Standard": {
       "AIAgentTag": "AI.Type.Beast.Cervidae.Standard",
-      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_Grazer.ST_Beast_Grazer",
+      "PerceptionConfig": {
+        "SightRadius": 2500.0,
+        "LoseSightRadius": 3000.0,
+        "PeripheralVisionAngleDegrees": 160.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 12, "CohesionRadius": 3000.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass", "Item.Food.Leaves" ],
       "bHuntsForFood": false,
@@ -191,30 +275,20 @@
       ],
       "IdleTasks": [],
       "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Footstep",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Flee" }
       ]
-    },
-    "AI.Type.Monster.Cervidae.Guardian": {
-      "AIAgentTag": "AI.Type.Monster.Cervidae.Guardian",
-      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.FaeProtector", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": true },
-      "DietaryTags": [ "Item.Food.Plant" ],
-      "bHuntsForFood": false,
-      "FleeHealthThreshold": 0.05,
-      "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Magic.NatureWrath", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1200.0 },
-        { "AbilityTag": "Ability.Combat.AntlerCharge", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 300.0 }
-      ],
-      "IdleTasks": [],
-      "SensoryResponses": []
     },
     "AI.Type.Beast.Equidae.Standard": {
       "AIAgentTag": "AI.Type.Beast.Equidae.Standard",
-      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_Grazer.ST_Beast_Grazer",
+      "PerceptionConfig": {
+        "SightRadius": 3000.0,
+        "LoseSightRadius": 4000.0,
+        "PeripheralVisionAngleDegrees": 160.0,
+        "HearingRange": 3500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Herd", "bFormsPacks": true, "MaxGroupSize": 10, "CohesionRadius": 3500.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Plant", "Item.Food.Grass", "Item.Food.Hay" ],
       "bHuntsForFood": false,
@@ -224,30 +298,20 @@
       ],
       "IdleTasks": [],
       "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Footstep",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Flee" }
       ]
-    },
-    "AI.Type.Monster.Equidae.Mythical": {
-      "AIAgentTag": "AI.Type.Monster.Equidae.Mythical",
-      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
-      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.FaeProtector", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": true },
-      "DietaryTags": [ "Item.Food.Plant" ],
-      "bHuntsForFood": false,
-      "FleeHealthThreshold": 0.10,
-      "AbilityUsageRules": [
-        { "AbilityTag": "Ability.Magic.HolyBeamOrHellflame", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1500.0 },
-        { "AbilityTag": "Ability.Combat.HoofStomp", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 200.0 }
-      ],
-      "IdleTasks": [],
-      "SensoryResponses": []
     },
     "AI.Type.Beast.Sus.Domestic": {
       "AIAgentTag": "AI.Type.Beast.Sus.Domestic",
-      "AIControllerClass": "/Game/AI/BP_GrazerAIController.BP_GrazerAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_Grazer.ST_Beast_Grazer",
+      "PerceptionConfig": {
+        "SightRadius": 1500.0,
+        "LoseSightRadius": 2000.0,
+        "PeripheralVisionAngleDegrees": 120.0,
+        "HearingRange": 2000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Farmherd", "bFormsPacks": true, "MaxGroupSize": 8, "CohesionRadius": 2000.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Plant", "Item.Food.Vegetable", "Item.Food.Scraps" ],
       "bHuntsForFood": false,
@@ -258,7 +322,15 @@
     },
     "AI.Type.Beast.Sus.WildBoar": {
       "AIAgentTag": "AI.Type.Beast.Sus.WildBoar",
-      "AIControllerClass": "/Game/AI/BP_AggressiveBeastAIController.BP_AggressiveBeastAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Beast_Aggressive.ST_Beast_Aggressive",
+      "PerceptionConfig": {
+        "SightRadius": 2000.0,
+        "LoseSightRadius": 2500.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Sounder", "bFormsPacks": true, "MaxGroupSize": 6, "CohesionRadius": 2500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Plant", "Item.Food.Root", "Item.Food.Meat" ],
       "bHuntsForFood": true,
@@ -272,7 +344,15 @@
     },
     "AI.Type.Monster.Sus.Fantasy": {
       "AIAgentTag": "AI.Type.Monster.Sus.Fantasy",
-      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_AggressiveMonster.ST_AggressiveMonster",
+      "PerceptionConfig": {
+        "SightRadius": 3000.0,
+        "LoseSightRadius": 3500.0,
+        "PeripheralVisionAngleDegrees": 100.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryBeast", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "Item.Food.Plant" ],
       "bHuntsForFood": true,
@@ -283,9 +363,148 @@
       "IdleTasks": [],
       "SensoryResponses": []
     },
+    "AI.Type.Monster.Cervidae.Guardian": {
+      "AIAgentTag": "AI.Type.Monster.Cervidae.Guardian",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_MagicalGuardian.ST_MagicalGuardian",
+      "PerceptionConfig": {
+        "SightRadius": 5000.0,
+        "LoseSightRadius": 6000.0,
+        "PeripheralVisionAngleDegrees": 160.0,
+        "HearingRange": 6000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.FaeProtector", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Plant" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.05,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.NatureWrath", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1200.0 },
+        { "AbilityTag": "Ability.Combat.AntlerCharge", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 300.0 }
+      ],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.Equidae.Mythical": {
+      "AIAgentTag": "AI.Type.Monster.Equidae.Mythical",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_MagicalGuardian.ST_MagicalGuardian",
+      "PerceptionConfig": {
+        "SightRadius": 6000.0,
+        "LoseSightRadius": 8000.0,
+        "PeripheralVisionAngleDegrees": 180.0,
+        "HearingRange": 7000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.FaeProtector", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Plant" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.HolyBeamOrHellflame", "RequiredConditionTreeName": "Trigger.Condition.TargetInMediumRange", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1500.0 },
+        { "AbilityTag": "Ability.Combat.HoofStomp", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 200.0 }
+      ],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.Dragon": {
+      "AIAgentTag": "AI.Type.Monster.Dragon",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_ApexDragon.ST_ApexDragon",
+      "PerceptionConfig": {
+        "SightRadius": 8000.0,
+        "LoseSightRadius": 10000.0,
+        "PeripheralVisionAngleDegrees": 120.0,
+        "HearingRange": 6000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Solitary", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.05,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.DragonFireBreath", "RequiredConditionTreeName": "Trigger.Condition.TargetInCone", "PriorityWeight": 100.0, "MinRange": 200.0, "MaxRange": 2000.0 }
+      ],
+      "IdleTasks": [],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Explosion", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Investigate" }
+      ]
+    },
+    "AI.Type.Monster.TrueDragon": {
+      "AIAgentTag": "AI.Type.Monster.TrueDragon",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_ApexDragon.ST_ApexDragon",
+      "PerceptionConfig": {
+        "SightRadius": 10000.0,
+        "LoseSightRadius": 12000.0,
+        "PeripheralVisionAngleDegrees": 130.0,
+        "HearingRange": 8000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryApex", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.02,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.ElementalBreath", "RequiredConditionTreeName": "Trigger.Condition.TargetInCone", "PriorityWeight": 100.0, "MinRange": 300.0, "MaxRange": 2500.0 },
+        { "AbilityTag": "Ability.Combat.TailSwipe", "RequiredConditionTreeName": "Trigger.Condition.TargetBehind", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 300.0 }
+      ],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.Hydra": {
+      "AIAgentTag": "AI.Type.Monster.Hydra",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_AggressiveMonster.ST_AggressiveMonster",
+      "PerceptionConfig": {
+        "SightRadius": 5000.0,
+        "LoseSightRadius": 6000.0,
+        "PeripheralVisionAngleDegrees": 360.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Solitary", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.MultiBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 250.0 }
+      ],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.WyvernOrDrake": {
+      "AIAgentTag": "AI.Type.Monster.WyvernOrDrake",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_AggressiveMonster.ST_AggressiveMonster",
+      "PerceptionConfig": {
+        "SightRadius": 4500.0,
+        "LoseSightRadius": 5500.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 3500.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Pack", "bFormsPacks": true, "MaxGroupSize": 3, "CohesionRadius": 2000.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Meat" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Combat.VenomStingOrClaw", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 90.0, "MinRange": 0.0, "MaxRange": 200.0 }
+      ],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
     "AI.Type.Beast.Avian.Songbird": {
       "AIAgentTag": "AI.Type.Beast.Avian.Songbird",
-      "AIControllerClass": "/Game/AI/BP_FlockAIController.BP_FlockAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Avian_Flock.ST_Avian_Flock",
+      "PerceptionConfig": {
+        "SightRadius": 1000.0,
+        "LoseSightRadius": 1500.0,
+        "PeripheralVisionAngleDegrees": 270.0,
+        "HearingRange": 2000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Flock", "bFormsPacks": true, "MaxGroupSize": 30, "CohesionRadius": 1500.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Seed", "Item.Food.Insect" ],
       "bHuntsForFood": false,
@@ -295,16 +514,20 @@
       ],
       "IdleTasks": [],
       "SensoryResponses": [
-        {
-          "TriggeringStimulusTag": "Stimulus.Sound.Footstep",
-          "PrerequisiteConditionTree": "None",
-          "ResultingBehaviorTag": "Behavior.Flee"
-        }
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Flee" }
       ]
     },
     "AI.Type.Beast.Avian.Raptor": {
       "AIAgentTag": "AI.Type.Beast.Avian.Raptor",
-      "AIControllerClass": "/Game/AI/BP_AerialPredatorAIController.BP_AerialPredatorAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Avian_Predator.ST_Avian_Predator",
+      "PerceptionConfig": {
+        "SightRadius": 8000.0,
+        "LoseSightRadius": 10000.0,
+        "PeripheralVisionAngleDegrees": 240.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.SolitaryHunter", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "Item.Food.Rodent" ],
       "bHuntsForFood": true,
@@ -318,7 +541,15 @@
     },
     "AI.Type.Monster.Avian.Fantasy": {
       "AIAgentTag": "AI.Type.Monster.Avian.Fantasy",
-      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_MagicalGuardian.ST_MagicalGuardian",
+      "PerceptionConfig": {
+        "SightRadius": 9000.0,
+        "LoseSightRadius": 12000.0,
+        "PeripheralVisionAngleDegrees": 260.0,
+        "HearingRange": 4500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Mythical", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat" ],
       "bHuntsForFood": true,
@@ -331,7 +562,15 @@
     },
     "AI.Type.Beast.Reptile.Ambush": {
       "AIAgentTag": "AI.Type.Beast.Reptile.Ambush",
-      "AIControllerClass": "/Game/AI/BP_AmbushPredatorAIController.BP_AmbushPredatorAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Reptile_Ambush.ST_Reptile_Ambush",
+      "PerceptionConfig": {
+        "SightRadius": 2000.0,
+        "LoseSightRadius": 2500.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 1500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.SolitaryReptile", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -345,7 +584,15 @@
     },
     "AI.Type.Monster.Reptile.Magical": {
       "AIAgentTag": "AI.Type.Monster.Reptile.Magical",
-      "AIControllerClass": "/Game/AI/BP_MagicalGuardianAIController.BP_MagicalGuardianAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_MagicalGuardian.ST_MagicalGuardian",
+      "PerceptionConfig": {
+        "SightRadius": 4000.0,
+        "LoseSightRadius": 5000.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 2500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.SolitaryBeast", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat" ],
       "bHuntsForFood": true,
@@ -358,7 +605,15 @@
     },
     "AI.Type.Beast.Fish.Schooling": {
       "AIAgentTag": "AI.Type.Beast.Fish.Schooling",
-      "AIControllerClass": "/Game/AI/BP_SchoolingFishAIController.BP_SchoolingFishAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Fish_School.ST_Fish_School",
+      "PerceptionConfig": {
+        "SightRadius": 1000.0,
+        "LoseSightRadius": 1500.0,
+        "PeripheralVisionAngleDegrees": 300.0,
+        "HearingRange": 2000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.School", "bFormsPacks": true, "MaxGroupSize": 50, "CohesionRadius": 1000.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Plankton", "Item.Food.Insect" ],
       "bHuntsForFood": false,
@@ -371,7 +626,15 @@
     },
     "AI.Type.Beast.Fish.Predator": {
       "AIAgentTag": "AI.Type.Beast.Fish.Predator",
-      "AIControllerClass": "/Game/AI/BP_AquaticPredatorAIController.BP_AquaticPredatorAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Fish_Predator.ST_Fish_Predator",
+      "PerceptionConfig": {
+        "SightRadius": 3000.0,
+        "LoseSightRadius": 4000.0,
+        "PeripheralVisionAngleDegrees": 180.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.AquaticHunter", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Fish" ],
       "bHuntsForFood": true,
@@ -384,7 +647,15 @@
     },
     "AI.Type.Monster.Fish.Abyssal": {
       "AIAgentTag": "AI.Type.Monster.Fish.Abyssal",
-      "AIControllerClass": "/Game/AI/BP_AbyssalAmbushAIController.BP_AbyssalAmbushAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_AbyssalMonster.ST_AbyssalMonster",
+      "PerceptionConfig": {
+        "SightRadius": 1000.0,
+        "LoseSightRadius": 1500.0,
+        "PeripheralVisionAngleDegrees": 180.0,
+        "HearingRange": 6000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Abyss", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat" ],
       "bHuntsForFood": true,
@@ -397,7 +668,15 @@
     },
     "AI.Type.Monster.Arthropod.Spider": {
       "AIAgentTag": "AI.Type.Monster.Arthropod.Spider",
-      "AIControllerClass": "/Game/AI/BP_AmbushPredatorAIController.BP_AmbushPredatorAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Spider_Ambush.ST_Spider_Ambush",
+      "PerceptionConfig": {
+        "SightRadius": 1500.0,
+        "LoseSightRadius": 2000.0,
+        "PeripheralVisionAngleDegrees": 160.0,
+        "HearingRange": 2500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -411,7 +690,15 @@
     },
     "AI.Type.Monster.Arthropod.Spider.Hunter": {
       "AIAgentTag": "AI.Type.Monster.Arthropod.Spider.Hunter",
-      "AIControllerClass": "/Game/AI/BP_AggressiveHunterAIController.BP_AggressiveHunterAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Spider_Hunter.ST_Spider_Hunter",
+      "PerceptionConfig": {
+        "SightRadius": 2500.0,
+        "LoseSightRadius": 3000.0,
+        "PeripheralVisionAngleDegrees": 180.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "Item.Food.Insect" ],
       "bHuntsForFood": true,
@@ -428,7 +715,15 @@
     },
     "AI.Type.Monster.Arthropod.Spider.Trapper": {
       "AIAgentTag": "AI.Type.Monster.Arthropod.Spider.Trapper",
-      "AIControllerClass": "/Game/AI/BP_AmbushTrapperAIController.BP_AmbushTrapperAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Spider_Trapper.ST_Spider_Trapper",
+      "PerceptionConfig": {
+        "SightRadius": 1000.0,
+        "LoseSightRadius": 1500.0,
+        "PeripheralVisionAngleDegrees": 360.0,
+        "HearingRange": 2000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "State.Status.Webbed" ],
       "bHuntsForFood": false,
@@ -443,9 +738,45 @@
       ],
       "SensoryResponses": []
     },
+    "AI.Type.Monster.Arthropod.ShelobBrood": {
+      "AIAgentTag": "AI.Type.Monster.Arthropod.ShelobBrood",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_ApexSpider.ST_ApexSpider",
+      "PerceptionConfig": {
+        "SightRadius": 1000.0,
+        "LoseSightRadius": 1200.0,
+        "PeripheralVisionAngleDegrees": 160.0,
+        "HearingRange": 5000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Arachnid", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse", "State.Status.Webbed" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.15,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Monster.SpinWeb", "RequiredConditionTreeName": "Trigger.Condition.NeedsWebTrap", "PriorityWeight": 90.0, "MinRange": 200.0, "MaxRange": 1500.0 },
+        { "AbilityTag": "Ability.Combat.VenomBite", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 200.0 }
+      ],
+      "IdleTasks": [
+        { "TaskTag": "Task.Monster.WaitInWebAmbush", "BasePriorityWeight": 95.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Trigger.Condition.IsInsideWebArea" },
+        { "TaskTag": "Task.Monster.ConstructWebNode", "BasePriorityWeight": 70.0, "LinkedAbilityOrRecipeTag": "Ability.Monster.SpinWeb", "RequiredItemTags": [], "ProducedOutputTags": [ "Actor.Hazard.SpiderWeb" ], "TaskConditionTreeName": "Trigger.Condition.NoWebsNearby" }
+      ],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Footstep", "PrerequisiteConditionTree": "Condition.AI.TargetIsWebbed", "ResultingBehaviorTag": "Behavior.Combat.Alert" },
+        { "TriggeringStimulusTag": "Sense.Damage", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.FleeToShadows" }
+      ]
+    },
     "AI.Type.Beast.Arthropod.InsectSwarm": {
       "AIAgentTag": "AI.Type.Beast.Arthropod.InsectSwarm",
-      "AIControllerClass": "/Game/AI/BP_SwarmAIController.BP_SwarmAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Swarm.ST_Swarm",
+      "PerceptionConfig": {
+        "SightRadius": 1000.0,
+        "LoseSightRadius": 1500.0,
+        "PeripheralVisionAngleDegrees": 360.0,
+        "HearingRange": 2000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Colony", "bFormsPacks": true, "MaxGroupSize": 40, "CohesionRadius": 1500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "Item.Food.Plant", "Item.Food.Organic" ],
       "bHuntsForFood": false,
@@ -458,7 +789,15 @@
     },
     "AI.Type.Beast.Arthropod.Crustacean": {
       "AIAgentTag": "AI.Type.Beast.Arthropod.Crustacean",
-      "AIControllerClass": "/Game/AI/BP_DefensiveAquaticAIController.BP_DefensiveAquaticAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_DefensiveAquatic.ST_DefensiveAquatic",
+      "PerceptionConfig": {
+        "SightRadius": 1200.0,
+        "LoseSightRadius": 1800.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 1500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Beast.Scuttler", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "Item.Food.Scraps", "Item.Food.Plant" ],
       "bHuntsForFood": true,
@@ -471,7 +810,15 @@
     },
     "AI.Type.Monster.Undead.Spectral": {
       "AIAgentTag": "AI.Type.Monster.Undead.Spectral",
-      "AIControllerClass": "/Game/AI/BP_HauntAIController.BP_HauntAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Undead_Spectral.ST_Undead_Spectral",
+      "PerceptionConfig": {
+        "SightRadius": 2500.0,
+        "LoseSightRadius": 3500.0,
+        "PeripheralVisionAngleDegrees": 360.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.UndeadHorde", "bFormsPacks": true, "MaxGroupSize": 10, "CohesionRadius": 4000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "State.Status.LifeForce" ],
       "bHuntsForFood": true,
@@ -485,7 +832,15 @@
     },
     "AI.Type.Monster.Undead.Skeleton.Aimless": {
       "AIAgentTag": "AI.Type.Monster.Undead.Skeleton.Aimless",
-      "AIControllerClass": "/Game/AI/BP_AimlessWandererAIController.BP_AimlessWandererAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Undead_Wanderer.ST_Undead_Wanderer",
+      "PerceptionConfig": {
+        "SightRadius": 1500.0,
+        "LoseSightRadius": 2000.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 1500.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.UndeadHorde", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
       "DietaryTags": [],
       "bHuntsForFood": false,
@@ -500,7 +855,15 @@
     },
     "AI.Type.Monster.Undead.Zombie.Hungry": {
       "AIAgentTag": "AI.Type.Monster.Undead.Zombie.Hungry",
-      "AIControllerClass": "/Game/AI/BP_HungryHordeAIController.BP_HungryHordeAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Undead_Horde.ST_Undead_Horde",
+      "PerceptionConfig": {
+        "SightRadius": 2000.0,
+        "LoseSightRadius": 2500.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.UndeadHorde", "bFormsPacks": true, "MaxGroupSize": 15, "CohesionRadius": 2500.0, "bDefendsPackMembers": false },
       "DietaryTags": [ "State.Status.LifeForce", "Item.Food.Meat", "State.Dead.Corpse" ],
       "bHuntsForFood": true,
@@ -515,7 +878,15 @@
     },
     "AI.Type.Monster.Undead.Enslaved": {
       "AIAgentTag": "AI.Type.Monster.Undead.Enslaved",
-      "AIControllerClass": "/Game/AI/BP_MasterBoundAIController.BP_MasterBoundAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Undead_Minion.ST_Undead_Minion",
+      "PerceptionConfig": {
+        "SightRadius": 3000.0,
+        "LoseSightRadius": 4000.0,
+        "PeripheralVisionAngleDegrees": 120.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.BoundMinion", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 1000.0, "bDefendsPackMembers": true },
       "DietaryTags": [],
       "bHuntsForFood": false,
@@ -531,7 +902,15 @@
     },
     "AI.Type.Monster.Undead.Intelligent.Lich": {
       "AIAgentTag": "AI.Type.Monster.Undead.Intelligent.Lich",
-      "AIControllerClass": "/Game/AI/BP_NecromancerAIController.BP_NecromancerAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Undead_Necromancer.ST_Undead_Necromancer",
+      "PerceptionConfig": {
+        "SightRadius": 5000.0,
+        "LoseSightRadius": 6000.0,
+        "PeripheralVisionAngleDegrees": 180.0,
+        "HearingRange": 5000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.DarkCoven", "bFormsPacks": true, "MaxGroupSize": 10, "CohesionRadius": 500.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "State.Status.LifeForce" ],
       "bHuntsForFood": true,
@@ -547,7 +926,15 @@
     },
     "AI.Type.Monster.Undead.Intelligent.Wight": {
       "AIAgentTag": "AI.Type.Monster.Undead.Intelligent.Wight",
-      "AIControllerClass": "/Game/AI/BP_UndeadCommanderAIController.BP_UndeadCommanderAIController_C",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_Undead_Commander.ST_Undead_Commander",
+      "PerceptionConfig": {
+        "SightRadius": 4000.0,
+        "LoseSightRadius": 5000.0,
+        "PeripheralVisionAngleDegrees": 120.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
       "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.UndeadHorde", "bFormsPacks": true, "MaxGroupSize": 8, "CohesionRadius": 3000.0, "bDefendsPackMembers": true },
       "DietaryTags": [ "State.Status.LifeForce" ],
       "bHuntsForFood": true,
@@ -558,6 +945,90 @@
       "IdleTasks": [
         { "TaskTag": "Task.AI.PatrolCrypt", "BasePriorityWeight": 80.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "Trigger.Condition.NoTargetVisible" }
       ],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.Undead.NightWalker": {
+      "AIAgentTag": "AI.Type.Monster.Undead.NightWalker",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_NightWalker.ST_NightWalker",
+      "PerceptionConfig": {
+        "SightRadius": 6000.0,
+        "LoseSightRadius": 8000.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 4000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.UndeadHorde.Leaders", "bFormsPacks": true, "MaxGroupSize": 13, "CohesionRadius": 10000.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "State.Status.LifeForce" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.0,
+      "AbilityUsageRules": [
+        { "AbilityTag": "Ability.Magic.FrostNova", "RequiredConditionTreeName": "Trigger.Condition.MultipleEnemiesNearby", "PriorityWeight": 95.0, "MinRange": 0.0, "MaxRange": 800.0 },
+        { "AbilityTag": "Ability.Combat.Weapon.Sword.IceCleave", "RequiredConditionTreeName": "Trigger.Condition.TargetInRange", "PriorityWeight": 85.0, "MinRange": 0.0, "MaxRange": 250.0 },
+        { "AbilityTag": "Ability.Magic.RaiseMinion", "RequiredConditionTreeName": "Trigger.Condition.CorpsesNearby", "PriorityWeight": 100.0, "MinRange": 0.0, "MaxRange": 3000.0 }
+      ],
+      "IdleTasks": [
+        { "TaskTag": "Behavior.Movement.MarchSouth", "BasePriorityWeight": 80.0, "LinkedAbilityOrRecipeTag": "None", "RequiredItemTags": [], "ProducedOutputTags": [], "TaskConditionTreeName": "None" }
+      ],
+      "SensoryResponses": [
+        { "TriggeringStimulusTag": "Stimulus.Sound.Explosion", "PrerequisiteConditionTree": "None", "ResultingBehaviorTag": "Behavior.Investigate" }
+      ]
+    },
+    "AI.Type.Monster.Goblinoid": {
+      "AIAgentTag": "AI.Type.Monster.Goblinoid",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_AggressiveMonster.ST_AggressiveMonster",
+      "PerceptionConfig": {
+        "SightRadius": 1500.0,
+        "LoseSightRadius": 2000.0,
+        "PeripheralVisionAngleDegrees": 110.0,
+        "HearingRange": 2500.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Goblin", "bFormsPacks": true, "MaxGroupSize": 15, "CohesionRadius": 1500.0, "bDefendsPackMembers": true },
+      "DietaryTags": [ "Item.Food.Meat", "Item.Food.Scraps" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.30,
+      "AbilityUsageRules": [],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.Troll": {
+      "AIAgentTag": "AI.Type.Monster.Troll",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_AggressiveMonster.ST_AggressiveMonster",
+      "PerceptionConfig": {
+        "SightRadius": 2500.0,
+        "LoseSightRadius": 3000.0,
+        "PeripheralVisionAngleDegrees": 90.0,
+        "HearingRange": 3000.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Troll", "bFormsPacks": false, "MaxGroupSize": 1, "CohesionRadius": 0.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Meat", "State.Dead.Corpse" ],
+      "bHuntsForFood": true,
+      "FleeHealthThreshold": 0.10,
+      "AbilityUsageRules": [],
+      "IdleTasks": [],
+      "SensoryResponses": []
+    },
+    "AI.Type.Monster.Fae": {
+      "AIAgentTag": "AI.Type.Monster.Fae",
+      "AIControllerClass": "/Game/AI/BP_DynamicAIController.BP_DynamicAIController_C",
+      "StateTreeAsset": "/Game/AI/StateTrees/ST_FaeTrickster.ST_FaeTrickster",
+      "PerceptionConfig": {
+        "SightRadius": 3000.0,
+        "LoseSightRadius": 4000.0,
+        "PeripheralVisionAngleDegrees": 180.0,
+        "HearingRange": 4500.0,
+        "bEnableDamageSense": true
+      },
+      "GroupDynamics": { "GroupArchetypeTag": "Faction.Monster.Fae", "bFormsPacks": true, "MaxGroupSize": 5, "CohesionRadius": 2000.0, "bDefendsPackMembers": false },
+      "DietaryTags": [ "Item.Food.Fruit", "Item.Drink.Water" ],
+      "bHuntsForFood": false,
+      "FleeHealthThreshold": 0.50,
+      "AbilityUsageRules": [],
+      "IdleTasks": [],
       "SensoryResponses": []
     }
   }

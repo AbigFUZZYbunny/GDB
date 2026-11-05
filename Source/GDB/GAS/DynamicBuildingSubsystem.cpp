@@ -34,6 +34,14 @@ void UDynamicBuildingSubsystem::Tick(float DeltaTime)
             TransitionTimer = 0.0f;
             ProcessCharacterRoomTransitions();
         }
+
+        // --- NEW: Thermodynamic Evaluation ---
+        ThermoDecayTimer += DeltaTime;
+        if (ThermoDecayTimer >= 5.0f) // Evaluate every 5 seconds to conserve CPU
+        {
+            ProcessThermodynamicDecay(ThermoDecayTimer);
+            ThermoDecayTimer = 0.0f;
+        }
     }
 }
 
@@ -138,7 +146,7 @@ bool UDynamicBuildingSubsystem::ServerPlaceStructureGhost(const FTransform& Inte
     if (!GS) return false;
 
     const FDynamicStructurePieceDef* PieceDef = GS->StructurePieceRegistry.Find(PieceTag);
-    const FDynamicStructureMaterialDef* MatDef = GS->StructureMaterialRegistry.Find(MaterialTag);
+    const FDynamicMaterialDef* MatDef = GS->MaterialMasterRegistry.Find(MaterialTag);
 
     if (!PieceDef || !MatDef) return false;
 
@@ -333,7 +341,7 @@ float UDynamicBuildingSubsystem::EvaluateShelterInsulationAtLocation(const FVect
                             const FStructureInstanceItem* Item = Chunk->ReplicatedStructures.Items.FindByPredicate([&](const FStructureInstanceItem& I) { return I.InstanceID == *TargetGuid; });
                             if (Item && !Item->bIsGhost)
                             {
-                                if (const FDynamicStructureMaterialDef* MatDef = GS->StructureMaterialRegistry.Find(Item->MaterialTag))
+                                if (const FDynamicMaterialDef* MatDef = GS->MaterialMasterRegistry.Find(Item->MaterialTag))
                                 {
                                     TotalInsulation += MatDef->InsulationValue;
                                     ValidHits++;
@@ -829,4 +837,56 @@ UReverbEffect* UDynamicBuildingSubsystem::GetAcousticReverbAtLocation(const FVec
         }
     }
     return nullptr;
+}
+
+void UDynamicBuildingSubsystem::ProcessThermodynamicDecay(float DeltaTime)
+{
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    static const FGameplayTag TempTag = FGameplayTag::RequestGameplayTag(TEXT("Env.Metric.Temperature"), false);
+    static const FGameplayTag WetnessTag = FGameplayTag::RequestGameplayTag(TEXT("Env.Metric.Wetness"), false);
+
+    // Provide Contextual Damage Tags
+    static const FGameplayTag FireDmgTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Fire"), false);
+    static const FGameplayTag RotDmgTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Rot"), false);
+
+    for (const auto& ChunkPair : ActiveBuildingChunks)
+    {
+        if (ADynamicBuildingChunkActor* Chunk = ChunkPair.Value)
+        {
+            // We cannot remove elements while iterating if we use the function call, so queue the damage
+            TArray<TPair<FGuid, TPair<float, FGameplayTag>>> PendingDamage;
+
+            for (FStructureInstanceItem& Item : Chunk->ReplicatedStructures.Items)
+            {
+                if (Item.bIsGhost || Item.CurrentHP <= 0.0f) continue;
+
+                if (const FDynamicMaterialDef* MatDef = GS->MaterialMasterRegistry.Find(Item.MaterialTag))
+                {
+                    if (!MatDef->bIsFlammable && !MatDef->bCanRot) continue;
+
+                    const float CellTemp = GS->GetEnvironmentMetricAtLocation(Item.WorldTransform.GetLocation(), TempTag);
+                    const float CellWetness = GS->GetEnvironmentMetricAtLocation(Item.WorldTransform.GetLocation(), WetnessTag);
+
+                    if (MatDef->bIsFlammable && CellTemp >= MatDef->IgnitionTemperature)
+                    {
+                        const float BurnDamage = MatDef->BurnRatePerSecond * DeltaTime;
+                        PendingDamage.Add(TPair<FGuid, TPair<float, FGameplayTag>>(Item.InstanceID, TPair<float, FGameplayTag>(BurnDamage, FireDmgTag)));
+                    }
+                    else if (MatDef->bCanRot && CellWetness >= MatDef->RotWetnessThreshold)
+                    {
+                        const float RotDamage = (0.5f) * DeltaTime; 
+                        PendingDamage.Add(TPair<FGuid, TPair<float, FGameplayTag>>(Item.InstanceID, TPair<float, FGameplayTag>(RotDamage, RotDmgTag)));
+                    }
+                }
+            }
+
+            for (const auto& DmgReq : PendingDamage)
+            {
+                Chunk->ServerDamageBuildingInstance(DmgReq.Key, DmgReq.Value.Key, FVector::ZeroVector, FVector::ZeroVector, nullptr, DmgReq.Value.Value);
+            }
+        }
+    }
 }

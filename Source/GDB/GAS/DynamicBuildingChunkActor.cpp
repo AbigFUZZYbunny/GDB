@@ -128,7 +128,7 @@ void ADynamicBuildingChunkActor::UpdateInstancedMeshes()
             Payload.InstanceIDs.Add(Item.InstanceID);
 
             float MaxSupport = 100.0f;
-            if (const FDynamicStructureMaterialDef* MatDef = GS->StructureMaterialRegistry.Find(Item.MaterialTag))
+            if (const FDynamicMaterialDef* MatDef = GS->MaterialMasterRegistry.Find(Item.MaterialTag))
             {
                 MaxSupport = MatDef->SupportStrength;
             }
@@ -337,7 +337,13 @@ void ADynamicBuildingChunkActor::ServerApplyConstructionLabor(const FGuid& Insta
     UpdateInstancedMeshes();
 }
 
-void ADynamicBuildingChunkActor::ServerDamageBuildingInstance(const FGuid& InstanceID, float DamageAmount, const FVector& HitLocation, const FVector& HitNormal, AActor* DamageInstigator)
+void ADynamicBuildingChunkActor::ServerDamageBuildingInstance(
+    const FGuid& InstanceID, 
+    float DamageAmount, 
+    const FVector& HitLocation, 
+    const FVector& HitNormal, 
+    AActor* DamageInstigator, 
+    FGameplayTag DamageCauseTag)
 {
     if (!HasAuthority() || DamageAmount <= 0.0f) return;
 
@@ -351,14 +357,49 @@ void ADynamicBuildingChunkActor::ServerDamageBuildingInstance(const FGuid& Insta
     {
         ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>();
         
-        if (GS && !Item.bIsGhost) // Don't drop loot for destroying blueprints
+        if (GS && !Item.bIsGhost)
         {
-            if (const FDynamicStructureMaterialDef* MatDef = GS->StructureMaterialRegistry.Find(Item.MaterialTag))
+            if (const FDynamicMaterialDef* MatDef = GS->MaterialMasterRegistry.Find(Item.MaterialTag))
             {
-                if (MatDef->DestroyedYieldArchetype.IsValid())
+                // Determine the correct drop based on mechanical stress/thermal destruction cause
+                FGameplayTag YieldTag = MatDef->DefaultYieldArchetype;
+
+                static const FGameplayTag FireTag     = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Fire"), false);
+                static const FGameplayTag RotTag      = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Rot"), false);
+                static const FGameplayTag CrushingTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false);
+                static const FGameplayTag SlashingTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Slashing"), false);
+                static const FGameplayTag PiercingTag = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Piercing"), false);
+                static const FGameplayTag ShatterTag  = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Shattered"), false);
+
+                if (DamageCauseTag.MatchesTag(FireTag) && MatDef->BurnedYieldArchetype.IsValid())
+                {
+                    YieldTag = MatDef->BurnedYieldArchetype;
+                }
+                else if (DamageCauseTag.MatchesTag(RotTag) && MatDef->RottedYieldArchetype.IsValid())
+                {
+                    YieldTag = MatDef->RottedYieldArchetype;
+                }
+                else if (DamageCauseTag.MatchesTag(CrushingTag) && MatDef->CrushedYieldArchetype.IsValid())
+                {
+                    YieldTag = MatDef->CrushedYieldArchetype;
+                }
+                else if (DamageCauseTag.MatchesTag(SlashingTag) && MatDef->CleavedYieldArchetype.IsValid())
+                {
+                    YieldTag = MatDef->CleavedYieldArchetype;
+                }
+                else if (DamageCauseTag.MatchesTag(PiercingTag) && MatDef->PiercedYieldArchetype.IsValid())
+                {
+                    YieldTag = MatDef->PiercedYieldArchetype;
+                }
+                else if (DamageCauseTag.MatchesTag(ShatterTag) && MatDef->ShatteredYieldArchetype.IsValid())
+                {
+                    YieldTag = MatDef->ShatteredYieldArchetype;
+                }
+
+                if (YieldTag.IsValid())
                 {
                     FTransform DropTransform(FRotator::ZeroRotator, Item.WorldTransform.GetLocation());
-                    if (ADynamicPhysicsActor* DroppedLoot = GS->AcquirePhysicsActor(MatDef->DestroyedYieldArchetype, DropTransform, this, Cast<APawn>(DamageInstigator)))
+                    if (ADynamicPhysicsActor* DroppedLoot = GS->AcquirePhysicsActor(YieldTag, DropTransform, this, Cast<APawn>(DamageInstigator)))
                     {
                         if (UPrimitiveComponent* Prim = DroppedLoot->GetActivePhysicsPrimitive())
                         {
@@ -405,7 +446,7 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
     }
 
     TMap<FGameplayTag, FDynamicStructurePieceDef> Pieces = GS->StructurePieceRegistry;
-    TMap<FGameplayTag, FDynamicStructureMaterialDef> Materials = GS->StructureMaterialRegistry;
+    TMap<FGameplayTag, FDynamicMaterialDef> Materials = GS->MaterialMasterRegistry;
 
     TArray<bool> GroundedStates;
     GroundedStates.SetNum(StateCapture.Num());
@@ -438,7 +479,7 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
 
             if (Node.bIsGrounded)
             {
-                const FDynamicStructureMaterialDef* Mat = Materials.Find(Node.MaterialTag);
+                const FDynamicMaterialDef* Mat = Materials.Find(Node.MaterialTag);
                 Node.SupportValue = Mat ? Mat->SupportStrength : 100.0f;
                 ResolvedSupport.Add(Node.InstanceID, Node.SupportValue);
                 EvaluationQueue.Enqueue(Node.InstanceID);
@@ -503,7 +544,7 @@ void ADynamicBuildingChunkActor::RecalculateStructuralIntegrityAsync()
                     if (!NeighborItem) continue;
 
                     const FDynamicStructurePieceDef* NDef = Pieces.Find(NeighborItem->PieceTag);
-                    const FDynamicStructureMaterialDef* NMat = Materials.Find(NeighborItem->MaterialTag);
+                    const FDynamicMaterialDef* NMat = Materials.Find(NeighborItem->MaterialTag);
                     
                     const float Mass = NDef ? NDef->BaseMass : 10.0f;
                     const float Density = NMat ? NMat->StructuralDensity : 1.0f;

@@ -132,7 +132,7 @@ void UDynamicVoxelSubsystem::Tick(float DeltaTime)
     if (World && World->GetNetMode() != NM_Client && !bHasInitializedMapData)
     {
         ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
-        if (GS && (GS->VoxelMasterRegistry.Num() > 0 || GS->VoxelGenerationConfig.SurfaceHeightMap.IsValid()))
+        if (GS && (GS->MaterialMasterRegistry.Num() > 0 || GS->VoxelGenerationConfig.SurfaceHeightMap.IsValid()))
         {
             InitializeVoxelGenerationData();
             bHasInitializedMapData = true;
@@ -339,20 +339,163 @@ void UDynamicVoxelSubsystem::ProcessTemporalGenerativeUpdates(double CurrentWorl
 
 void UDynamicVoxelSubsystem::ExecuteGenerativePassAsync(FIntPoint ChunkCoord, EVoxelLODState LodState)
 {
-    // Dispatches a zero-lock background thread task to run cellular automata or ecology loops on the chunk.
-    // e.g. "If water is here, turn adjacent dirt to mud. If grass, spread."
-    // Once calculation is done, the thread pushes the resulting FVoxelDeltaItems back into VirtualChunkRegistry.
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    const FVoxelChunkPersistentData* DataPtr = VirtualChunkRegistry.Find(ChunkCoord);
+    if (!DataPtr) return;
+
+    TArray<uint8> ReconstructedGrid;
+    ReconstructedGrid.Init(0, ADynamicVoxelChunkActor::CHUNK_SIZE * ADynamicVoxelChunkActor::CHUNK_SIZE * ADynamicVoxelChunkActor::CHUNK_SIZE);
     
-    Async(EAsyncExecution::ThreadPool, [this, ChunkCoord]() {
-        // ... Abstracted Ecology Algorithms run here ...
+    for (const FVoxelDeltaItem& Delta : DataPtr->SavedDeltas)
+    {
+        if (ReconstructedGrid.IsValidIndex(Delta.VoxelIndex))
+        {
+            ReconstructedGrid[Delta.VoxelIndex] = Delta.VoxelTypeID;
+        }
+    }
+
+    TMap<uint8, FDynamicMaterialDef> FastVoxelDefs;
+    uint8 Counter = 1;
+    for (const auto& Pair : GS->MaterialMasterRegistry)
+    {
+        FastVoxelDefs.Add(Counter, Pair.Value);
+        Counter++;
+    }
+
+    const float ChunkWorldWidth = ADynamicVoxelChunkActor::CHUNK_SIZE * VoxelWorldSize;
+    const FVector ChunkCenter(ChunkCoord.X * ChunkWorldWidth + (ChunkWorldWidth * 0.5f), ChunkCoord.Y * ChunkWorldWidth + (ChunkWorldWidth * 0.5f), 0.0f);
+    static const FGameplayTag TempTag = FGameplayTag::RequestGameplayTag(TEXT("Env.Metric.Temperature"), false);
+    const float AmbientTemp = GS->GetEnvironmentMetricAtLocation(ChunkCenter, TempTag);
+
+    TWeakObjectPtr<UDynamicVoxelSubsystem> WeakThis(this);
+
+    Async(EAsyncExecution::ThreadPool, [ChunkCoord, ReconstructedGrid, FastVoxelDefs, AmbientTemp, WeakThis]() mutable {
         
-        Async(EAsyncExecution::TaskGraphMainThread, [this, ChunkCoord]() {
-            // Apply generative deltas to VirtualChunkRegistry[ChunkCoord].SavedDeltas safely
-        });
+        TArray<uint8> NextGrid = ReconstructedGrid;
+        bool bModified = false;
+        const int32 ChunkSize = ADynamicVoxelChunkActor::CHUNK_SIZE;
+
+        auto GetIdx = [ChunkSize](int32 x, int32 y, int32 z) -> int32 {
+            return x + (y * ChunkSize) + (z * ChunkSize * ChunkSize);
+        };
+
+        auto CountSolidNeighbors = [&](int32 X, int32 Y, int32 Z) -> int32 {
+            int32 Solids = 0;
+            if (X > 0 && ReconstructedGrid[GetIdx(X - 1, Y, Z)] != 0) Solids++;
+            if (X < ChunkSize - 1 && ReconstructedGrid[GetIdx(X + 1, Y, Z)] != 0) Solids++;
+            if (Y > 0 && ReconstructedGrid[GetIdx(X, Y - 1, Z)] != 0) Solids++;
+            if (Y < ChunkSize - 1 && ReconstructedGrid[GetIdx(X, Y + 1, Z)] != 0) Solids++;
+            if (Z > 0 && ReconstructedGrid[GetIdx(X, Y, Z - 1)] != 0) Solids++;
+            if (Z < ChunkSize - 1 && ReconstructedGrid[GetIdx(X, Y, Z + 1)] != 0) Solids++;
+            return Solids;
+        };
+
+        for (int32 Z = 1; Z < ChunkSize; ++Z) 
+        { 
+            for (int32 Y = 0; Y < ChunkSize; ++Y) 
+            {
+                for (int32 X = 0; X < ChunkSize; ++X) 
+                {
+                    const int32 Idx = GetIdx(X, Y, Z);
+                    const uint8 Type = ReconstructedGrid[Idx];
+                    if (Type == 0) continue; 
+
+                    const FDynamicMaterialDef* Def = FastVoxelDefs.Find(Type);
+                    if (!Def) continue;
+
+                    // 1. Phase Transmutation (e.g. Ice Melting)
+                    if (Def->TransmutedMaterialTag.IsValid() && AmbientTemp >= Def->PhaseChangeTemperature)
+                    {
+                        uint8 TransmutedID = 0;
+                        for (const auto& DefPair : FastVoxelDefs)
+                        {
+                            if (DefPair.Value.MaterialTag == Def->TransmutedMaterialTag)
+                            {
+                                TransmutedID = DefPair.Key;
+                                break;
+                            }
+                        }
+                        NextGrid[Idx] = TransmutedID;
+                        bModified = true;
+                        continue; 
+                    }
+
+                    // 2. Encapsulation / Adhesion Check
+                    if (Def->bIsGravityAffected)
+                    {
+                        const int32 ActiveNeighbors = CountSolidNeighbors(X, Y, Z);
+                        
+                        // If it lacks the necessary adhesion/encapsulation to remain stuck to a wall, it breaks free
+                        if (ActiveNeighbors < Def->RequiredAdhesionNeighbors)
+                        {
+                            const int32 BelowIdx = GetIdx(X, Y, Z - 1);
+                            
+                            // Straight fall
+                            if (ReconstructedGrid[BelowIdx] == 0)
+                            {
+                                NextGrid[BelowIdx] = Type;
+                                NextGrid[Idx] = 0;
+                                bModified = true;
+                                continue;
+                            }
+                            
+                            // Loose Material Dispersal (Sand, Water, Loose Rock rolling down hills)
+                            int32 FallX = X, FallY = Y;
+                            bool bCanSlide = false;
+                            
+                            if (X > 0 && ReconstructedGrid[GetIdx(X - 1, Y, Z)] == 0 && ReconstructedGrid[GetIdx(X - 1, Y, Z - 1)] == 0) { FallX = X - 1; bCanSlide = true; }
+                            else if (X < ChunkSize - 1 && ReconstructedGrid[GetIdx(X + 1, Y, Z)] == 0 && ReconstructedGrid[GetIdx(X + 1, Y, Z - 1)] == 0) { FallX = X + 1; bCanSlide = true; }
+                            else if (Y > 0 && ReconstructedGrid[GetIdx(X, Y - 1, Z)] == 0 && ReconstructedGrid[GetIdx(X, Y - 1, Z - 1)] == 0) { FallY = Y - 1; bCanSlide = true; }
+                            else if (Y < ChunkSize - 1 && ReconstructedGrid[GetIdx(X, Y + 1, Z)] == 0 && ReconstructedGrid[GetIdx(X, Y + 1, Z - 1)] == 0) { FallY = Y + 1; bCanSlide = true; }
+
+                            if (bCanSlide)
+                            {
+                                NextGrid[GetIdx(FallX, FallY, Z - 1)] = Type;
+                                NextGrid[Idx] = 0;
+                                bModified = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (bModified)
+        {
+            Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, ChunkCoord, NextGrid, FastVoxelDefs]() mutable {
+                if (UDynamicVoxelSubsystem* StrongThis = WeakThis.Get())
+                {
+                    FVoxelChunkPersistentData& Data = StrongThis->VirtualChunkRegistry.FindOrAdd(ChunkCoord);
+                    Data.SavedDeltas.Empty(); 
+
+                    for (int32 i = 0; i < NextGrid.Num(); ++i)
+                    {
+                        if (NextGrid[i] != 0) 
+                        {
+                            FVoxelDeltaItem Item;
+                            Item.VoxelIndex = i;
+                            Item.VoxelTypeID = NextGrid[i];
+                            if (const FDynamicMaterialDef* MDef = FastVoxelDefs.Find(Item.VoxelTypeID))
+                            {
+                                Item.CurrentHP = MDef->BaseMaxHP;
+                            }
+                            Data.SavedDeltas.Add(Item);
+                        }
+                    }
+
+                    if (ADynamicVoxelChunkActor* ChunkActor = StrongThis->ActiveSpawnedChunks.FindRef(ChunkCoord))
+                    {
+                        ChunkActor->ReplicatedDeltas.Items = Data.SavedDeltas;
+                        ChunkActor->ReplicatedDeltas.MarkArrayDirty();
+                        ChunkActor->OnRep_VoxelDeltas();
+                    }
+                }
+            });
+        }
     });
 }
-
-
 
 bool UDynamicVoxelSubsystem::LoadTextureDataToCache(TSoftObjectPtr<UTexture2D> TexturePtr, TArray<FColor>& OutData, int32& OutWidth, int32& OutHeight)
 {
@@ -493,14 +636,12 @@ bool UDynamicVoxelSubsystem::ServerModifyVoxelAtLocation(const FVector& WorldLoc
     OutMinedVoxelTag = FGameplayTag::EmptyTag;
     
     UWorld* World = GetWorld();
-    if (!World) return false;
-
-    ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
-    if (!GS) return false;
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS) return false;
 
     const FIntPoint ChunkCoord = GetChunkCoordFromLocation(WorldLocation);
     FVoxelChunkPersistentData& PersistentData = VirtualChunkRegistry.FindOrAdd(ChunkCoord);
-    PersistentData.ChunkCoord = ChunkCoord; // Ensure initialized
+    PersistentData.ChunkCoord = ChunkCoord;
 
     const float ChunkWorldWidth = ADynamicVoxelChunkActor::CHUNK_SIZE * VoxelWorldSize;
     const FVector ChunkWorldOrigin(ChunkCoord.X * ChunkWorldWidth, ChunkCoord.Y * ChunkWorldWidth, 0.0f);
@@ -514,42 +655,52 @@ bool UDynamicVoxelSubsystem::ServerModifyVoxelAtLocation(const FVector& WorldLoc
     
     uint8 NewTypeID = 0; 
     uint8 MaxHP = 0;
-    
-    if (const FDynamicVoxelTypeDef* VoxelDef = GS->VoxelMasterRegistry.Find(NewVoxelTypeTag))
+
+    if (NewVoxelTypeTag.IsValid())
     {
-        NewTypeID = 1; // Map resolved ID
-        MaxHP = VoxelDef->MaxHP;
+        uint8 Counter = 1;
+        for (const auto& MatPair : GS->MaterialMasterRegistry)
+        {
+            if (MatPair.Key == NewVoxelTypeTag)
+            {
+                NewTypeID = Counter;
+                MaxHP = static_cast<uint8>(FMath::Clamp(MatPair.Value.BaseMaxHP, 1, 255));
+                break;
+            }
+            Counter++;
+        }
     }
 
-    // 1. If the Actor is currently spawned, update it visually
     if (ADynamicVoxelChunkActor* TargetChunk = ActiveSpawnedChunks.FindRef(ChunkCoord))
     {
-        uint8 OldTypeID = TargetChunk->CachedVoxelData.IsValidIndex(VoxelIndex) ? TargetChunk->CachedVoxelData[VoxelIndex] : 0;
+        const uint8 OldTypeID = TargetChunk->CachedVoxelData.IsValidIndex(VoxelIndex) ? TargetChunk->CachedVoxelData[VoxelIndex] : 0;
         
-        // Resolve Drop
-        if (OldTypeID == 1) OutMinedVoxelTag = FGameplayTag::RequestGameplayTag(TEXT("Voxel.Type.Grass"), false);
-        else if (OldTypeID == 2) OutMinedVoxelTag = FGameplayTag::RequestGameplayTag(TEXT("Voxel.Type.Dirt"), false);
-        else if (OldTypeID == 3) OutMinedVoxelTag = FGameplayTag::RequestGameplayTag(TEXT("Voxel.Type.Stone"), false);
+        uint8 MatCounter = 1;
+        for (const auto& MatPair : GS->MaterialMasterRegistry)
+        {
+            if (MatCounter == OldTypeID)
+            {
+                OutMinedVoxelTag = MatPair.Value.DefaultYieldArchetype;
+                break;
+            }
+            MatCounter++;
+        }
 
         TargetChunk->UpdateVoxelData(VoxelIndex, NewTypeID, MaxHP);
     }
     else
     {
-        // 2. If chunk is virtualized, update the mathematical delta record in memory directly
         FVoxelDeltaItem NewDelta;
         NewDelta.VoxelIndex = VoxelIndex;
         NewDelta.VoxelTypeID = NewTypeID;
         NewDelta.CurrentHP = MaxHP;
 
-        int32 FoundIdx = PersistentData.SavedDeltas.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
+        const int32 FoundIdx = PersistentData.SavedDeltas.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
             return Item.VoxelIndex == VoxelIndex;
         });
 
         if (FoundIdx != INDEX_NONE) PersistentData.SavedDeltas[FoundIdx] = NewDelta;
         else PersistentData.SavedDeltas.Add(NewDelta);
-        
-        // Virtual mining yields default assumption without full generation (can be upgraded with async mapping query)
-        OutMinedVoxelTag = FGameplayTag::RequestGameplayTag(TEXT("Voxel.Type.Stone"), false); 
     }
 
     ProcessVoxelEnvironmentFeedback(WorldLocation, OutMinedVoxelTag, NewVoxelTypeTag);
@@ -564,4 +715,137 @@ void UDynamicVoxelSubsystem::ProcessVoxelEnvironmentFeedback(const FVector& Worl
 
     const int32 GridCellIndex = GS->GetEnvironmentCellIndexAtLocation(WorldLocation);
     if (!GS->GetEnvironmentReadBuffer().IsValidIndex(GridCellIndex)) return;
+}
+
+bool UDynamicVoxelSubsystem::ServerApplyMechanicalStressAtLocation(
+    const FVector& WorldLocation, 
+    const FGameplayTagContainer& ImpactOrDamageTags, 
+    float RawForceMagnitude, 
+    AActor* Instigator, 
+    FGameplayTag& OutYieldArchetype, 
+    bool& bOutDestroyed)
+{
+    OutYieldArchetype = FGameplayTag::EmptyTag;
+    bOutDestroyed = false;
+
+    UWorld* World = GetWorld();
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS || RawForceMagnitude <= 0.0f) return false;
+
+    const FIntPoint ChunkCoord = GetChunkCoordFromLocation(WorldLocation);
+    FVoxelChunkPersistentData& PersistentData = VirtualChunkRegistry.FindOrAdd(ChunkCoord);
+    PersistentData.ChunkCoord = ChunkCoord;
+
+    const float ChunkWorldWidth = ADynamicVoxelChunkActor::CHUNK_SIZE * VoxelWorldSize;
+    const FVector ChunkWorldOrigin(ChunkCoord.X * ChunkWorldWidth, ChunkCoord.Y * ChunkWorldWidth, 0.0f);
+    const FVector LocalPos = WorldLocation - ChunkWorldOrigin;
+
+    const int32 LocalX = FMath::Clamp(FMath::FloorToInt(LocalPos.X / VoxelWorldSize), 0, ADynamicVoxelChunkActor::CHUNK_SIZE - 1);
+    const int32 LocalY = FMath::Clamp(FMath::FloorToInt(LocalPos.Y / VoxelWorldSize), 0, ADynamicVoxelChunkActor::CHUNK_SIZE - 1);
+    const int32 LocalZ = FMath::Clamp(FMath::FloorToInt(LocalPos.Z / VoxelWorldSize), 0, ADynamicVoxelChunkActor::CHUNK_SIZE - 1);
+
+    const int32 VoxelIndex = LocalX + (LocalY * ADynamicVoxelChunkActor::CHUNK_SIZE) + (LocalZ * ADynamicVoxelChunkActor::CHUNK_SIZE * ADynamicVoxelChunkActor::CHUNK_SIZE);
+
+    uint8 CurrentTypeID = 0;
+    int32 CurrentHP = 100;
+
+    ADynamicVoxelChunkActor* TargetChunk = ActiveSpawnedChunks.FindRef(ChunkCoord);
+    if (TargetChunk)
+    {
+        CurrentTypeID = TargetChunk->CachedVoxelData.IsValidIndex(VoxelIndex) ? TargetChunk->CachedVoxelData[VoxelIndex] : 0;
+        
+        const int32 FoundIdx = TargetChunk->ReplicatedDeltas.Items.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
+            return Item.VoxelIndex == VoxelIndex;
+        });
+        if (FoundIdx != INDEX_NONE)
+        {
+            CurrentHP = TargetChunk->ReplicatedDeltas.Items[FoundIdx].CurrentHP;
+        }
+    }
+    else
+    {
+        const int32 FoundIdx = PersistentData.SavedDeltas.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
+            return Item.VoxelIndex == VoxelIndex;
+        });
+        if (FoundIdx != INDEX_NONE)
+        {
+            CurrentTypeID = PersistentData.SavedDeltas[FoundIdx].VoxelTypeID;
+            CurrentHP = PersistentData.SavedDeltas[FoundIdx].CurrentHP;
+        }
+    }
+
+    if (CurrentTypeID == 0) return false; // Air cannot be stressed
+
+    // Resolve Material Definition from fast mapped index
+    FGameplayTag MaterialTag;
+    uint8 Counter = 1;
+    const FDynamicMaterialDef* MatDef = nullptr;
+
+    for (const auto& MatPair : GS->MaterialMasterRegistry)
+    {
+        if (Counter == CurrentTypeID)
+        {
+            MaterialTag = MatPair.Key;
+            MatDef = &MatPair.Value;
+            break;
+        }
+        Counter++;
+    }
+
+    if (!MatDef) return false;
+
+    // Evaluate Material Science Mechanical Failure
+    FGameplayTag DominantYield;
+    const float CalculatedDamage = MatDef->CalculateMechanicalDamage(ImpactOrDamageTags, RawForceMagnitude, DominantYield);
+    if (CalculatedDamage <= 0.0f) return false; // Force did not exceed the material's strength thresholds
+
+    CurrentHP -= FMath::CeilToInt(CalculatedDamage);
+
+    if (CurrentHP <= 0)
+    {
+        bOutDestroyed = true;
+        OutYieldArchetype = DominantYield.IsValid() ? DominantYield : MatDef->DefaultYieldArchetype;
+
+        // Voxel is replaced with Air (ID 0)
+        if (TargetChunk)
+        {
+            TargetChunk->UpdateVoxelData(VoxelIndex, 0, 0);
+        }
+        else
+        {
+            FVoxelDeltaItem AirDelta;
+            AirDelta.VoxelIndex = VoxelIndex;
+            AirDelta.VoxelTypeID = 0;
+            AirDelta.CurrentHP = 0;
+
+            const int32 FoundIdx = PersistentData.SavedDeltas.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
+                return Item.VoxelIndex == VoxelIndex;
+            });
+            if (FoundIdx != INDEX_NONE) PersistentData.SavedDeltas[FoundIdx] = AirDelta;
+            else PersistentData.SavedDeltas.Add(AirDelta);
+        }
+
+        ProcessVoxelEnvironmentFeedback(WorldLocation, MaterialTag, FGameplayTag::EmptyTag);
+    }
+    else
+    {
+        // Partial fracture / health reduction
+        bOutDestroyed = false;
+        if (TargetChunk)
+        {
+            TargetChunk->UpdateVoxelData(VoxelIndex, CurrentTypeID, static_cast<uint8>(FMath::Clamp(CurrentHP, 1, 255)));
+        }
+        else
+        {
+            const int32 FoundIdx = PersistentData.SavedDeltas.IndexOfByPredicate([VoxelIndex](const FVoxelDeltaItem& Item) {
+                return Item.VoxelIndex == VoxelIndex;
+            });
+            if (FoundIdx != INDEX_NONE)
+            {
+                PersistentData.SavedDeltas[FoundIdx].CurrentHP = static_cast<uint8>(FMath::Clamp(CurrentHP, 1, 255));
+            }
+        }
+    }
+
+    return true;
 }

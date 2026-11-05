@@ -1188,18 +1188,6 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.AIBehaviorMasterRegistry.Add(KeyTag, BehaviorDef);
         }
     }
-    if (RootObject->HasField(TEXT("VoxelMasterRegistry")))
-    {
-        for (auto& Pair : RootObject->GetObjectField(TEXT("VoxelMasterRegistry"))->Values)
-        {
-            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
-            if (!KeyTag.IsValid()) continue;
-            TSharedPtr<FJsonObject> VoxelObj = Pair.Value->AsObject();
-            FDynamicVoxelTypeDef VoxelDef;
-            FJsonObjectConverter::JsonObjectToUStruct(VoxelObj.ToSharedRef(), &VoxelDef, 0, 0);
-            OutStaging.VoxelMasterRegistry.Add(KeyTag, VoxelDef);
-        }
-    }
     if (RootObject->HasField(TEXT("VoxelGenerationConfig")))
     {
         TSharedPtr<FJsonObject> GenObj = RootObject->GetObjectField(TEXT("VoxelGenerationConfig"));
@@ -1210,16 +1198,41 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.VoxelGenerationConfig = Config;
         }
     }
-    if (RootObject->HasField(TEXT("StructureMaterialRegistry")))
+    if (RootObject->HasField(TEXT("MaterialMasterRegistry")))
     {
-        for (auto& Pair : RootObject->GetObjectField(TEXT("StructureMaterialRegistry"))->Values)
+        for (auto& Pair : RootObject->GetObjectField(TEXT("MaterialMasterRegistry"))->Values)
         {
             FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
             if (!KeyTag.IsValid()) continue;
             TSharedPtr<FJsonObject> MatObj = Pair.Value->AsObject();
-            FDynamicStructureMaterialDef MatDef;
+            if (!MatObj.IsValid()) continue;
+
+            FDynamicMaterialDef MatDef;
             FJsonObjectConverter::JsonObjectToUStruct(MatObj.ToSharedRef(), &MatDef, 0, 0);
-            OutStaging.StructureMaterialRegistry.Add(KeyTag, MatDef);
+
+            // Phase / Adhesion
+            MatDef.bIsGravityAffected = MatObj->HasField(TEXT("bIsGravityAffected")) ? MatObj->GetBoolField(TEXT("bIsGravityAffected")) : true;
+            MatDef.RequiredAdhesionNeighbors = MatObj->HasField(TEXT("RequiredAdhesionNeighbors")) ? static_cast<int32>(MatObj->GetNumberField(TEXT("RequiredAdhesionNeighbors"))) : 2;
+            MatDef.PhaseChangeTemperature = MatObj->HasField(TEXT("PhaseChangeTemperature")) ? static_cast<float>(MatObj->GetNumberField(TEXT("PhaseChangeTemperature"))) : 1000.0f;
+            if (MatObj->HasField(TEXT("TransmutedMaterialTag"))) MatDef.TransmutedMaterialTag = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("TransmutedMaterialTag"))), false);
+
+            // Thermodynamics
+            MatDef.bIsFlammable = MatObj->HasField(TEXT("bIsFlammable")) ? MatObj->GetBoolField(TEXT("bIsFlammable")) : false;
+            MatDef.IgnitionTemperature = MatObj->HasField(TEXT("IgnitionTemperature")) ? static_cast<float>(MatObj->GetNumberField(TEXT("IgnitionTemperature"))) : 300.0f;
+            MatDef.BurnRatePerSecond = MatObj->HasField(TEXT("BurnRatePerSecond")) ? static_cast<float>(MatObj->GetNumberField(TEXT("BurnRatePerSecond"))) : 5.0f;
+            MatDef.bCanRot = MatObj->HasField(TEXT("bCanRot")) ? MatObj->GetBoolField(TEXT("bCanRot")) : false;
+            MatDef.RotWetnessThreshold = MatObj->HasField(TEXT("RotWetnessThreshold")) ? static_cast<float>(MatObj->GetNumberField(TEXT("RotWetnessThreshold"))) : 80.0f;
+
+            // Conditional Material Science Yield Archetypes
+            if (MatObj->HasField(TEXT("DefaultYieldArchetype"))) MatDef.DefaultYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("DefaultYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("CrushedYieldArchetype"))) MatDef.CrushedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("CrushedYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("CleavedYieldArchetype"))) MatDef.CleavedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("CleavedYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("PiercedYieldArchetype"))) MatDef.PiercedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("PiercedYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("BurnedYieldArchetype"))) MatDef.BurnedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("BurnedYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("RottedYieldArchetype"))) MatDef.RottedYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("RottedYieldArchetype"))), false);
+            if (MatObj->HasField(TEXT("ShatteredYieldArchetype"))) MatDef.ShatteredYieldArchetype = FGameplayTag::RequestGameplayTag(FName(*MatObj->GetStringField(TEXT("ShatteredYieldArchetype"))), false);
+
+            OutStaging.MaterialMasterRegistry.Add(KeyTag, MatDef);
         }
     }
     if (RootObject->HasField(TEXT("StructurePieceRegistry")))
@@ -1601,6 +1614,54 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             }
 
             OutStaging.FactionMasterRegistry.Add(KeyTag, FacDef);
+        }
+    }
+    
+    if (RootObject->HasField(TEXT("DamageTypeMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("DamageTypeMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> DmgObj = Pair.Value->AsObject();
+            if (!DmgObj.IsValid()) continue;
+
+            FDynamicDamageTypeDef Def;
+            Def.DamageTypeTag = KeyTag;
+            
+            if (DmgObj->HasField(TEXT("ParentCategoryTag")))
+            {
+                Def.ParentCategoryTag = FGameplayTag::RequestGameplayTag(FName(*DmgObj->GetStringField(TEXT("ParentCategoryTag"))), false);
+            }
+
+            DeserializeLocalizationMap(DmgObj, TEXT("Localization"), Def.Localization);
+
+            if (DmgObj->HasField(TEXT("PrimaryResistanceAttributeTag")))
+            {
+                Def.PrimaryResistanceAttributeTag = FGameplayTag::RequestGameplayTag(FName(*DmgObj->GetStringField(TEXT("PrimaryResistanceAttributeTag"))), false);
+            }
+
+            if (DmgObj->HasField(TEXT("DefaultImpactTypeTag")))
+            {
+                Def.DefaultImpactTypeTag = FGameplayTag::RequestGameplayTag(FName(*DmgObj->GetStringField(TEXT("DefaultImpactTypeTag"))), false);
+            }
+
+            Def.DevComment = DmgObj->HasField(TEXT("DevComment")) ? DmgObj->GetStringField(TEXT("DevComment")) : TEXT("");
+
+            if (DmgObj->HasField(TEXT("AssociatedStatusEffects")))
+            {
+                for (const auto& Val : DmgObj->GetArrayField(TEXT("AssociatedStatusEffects")))
+                {
+                    FGameplayTag StatusTag = FGameplayTag::RequestGameplayTag(FName(*Val->AsString()), false);
+                    if (StatusTag.IsValid())
+                    {
+                        Def.AssociatedStatusEffects.Add(StatusTag);
+                    }
+                }
+            }
+
+            OutStaging.DamageTypeMasterRegistry.Add(KeyTag, Def);
         }
     }
 

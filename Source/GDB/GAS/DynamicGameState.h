@@ -57,8 +57,7 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
-    UPROPERTY() TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
-    UPROPERTY() TMap<FGameplayTag, FDynamicStructureMaterialDef> StructureMaterialRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicMaterialDef> MaterialMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
@@ -67,8 +66,7 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicFactionDef> FactionMasterRegistry;
-
-    // Immersion Voice & Viseme Registries
+    UPROPERTY() TMap<FGameplayTag, FDynamicDamageTypeDef> DamageTypeMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
 

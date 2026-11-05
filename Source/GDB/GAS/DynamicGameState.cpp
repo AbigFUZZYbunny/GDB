@@ -1374,8 +1374,7 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     MovementStateRegistry.Append(MoveTemp(StagingData.MovementStateRegistry));
     AIBehaviorMasterRegistry.Append(MoveTemp(StagingData.AIBehaviorMasterRegistry));
     NetworkMasterRegistry.Append(MoveTemp(StagingData.NetworkMasterRegistry));
-    VoxelMasterRegistry.Append(MoveTemp(StagingData.VoxelMasterRegistry));
-    StructureMaterialRegistry.Append(MoveTemp(StagingData.StructureMaterialRegistry));
+    MaterialMasterRegistry.Append(MoveTemp(StagingData.MaterialMasterRegistry));
     StructurePieceRegistry.Append(MoveTemp(StagingData.StructurePieceRegistry));
     StructurePrefabRegistry.Append(MoveTemp(StagingData.StructurePrefabRegistry));
     RoomTypeRegistry.Append(MoveTemp(StagingData.RoomTypeRegistry));
@@ -1386,6 +1385,7 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     DialectMasterRegistry.Append(MoveTemp(StagingData.DialectMasterRegistry));
     MarketMasterRegistry.Append(MoveTemp(StagingData.MarketMasterRegistry));
     FactionMasterRegistry.Append(MoveTemp(StagingData.FactionMasterRegistry));
+    DamageTypeMasterRegistry.Append(MoveTemp(StagingData.DamageTypeMasterRegistry));
     
     RebuildLanguageLookupCaches();
 

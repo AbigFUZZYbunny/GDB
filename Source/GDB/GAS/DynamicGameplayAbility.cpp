@@ -607,10 +607,11 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
 
     UDynamicInteractableComponent* TargetInteractable = FindBestNearbyInteractable(CurrentActorInfo);
     
-    // Fallback: Physical Construction / Nailing (Requires Hammer)
+    // 1. Fallback: Physical Construction / Nailing (Requires Hammer & Materials)
     if (!TargetInteractable) 
     {
-        if (AbilityConfig.InteractionConfig.InteractionActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Construct"))))
+        static const FGameplayTag ConstructActionTag = FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Construct"), false);
+        if (ConstructActionTag.IsValid() && AbilityConfig.InteractionConfig.InteractionActionTag.MatchesTag(ConstructActionTag))
         {
             if (UWorld* World = AvatarChar->GetWorld())
             {
@@ -630,10 +631,7 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
                             {
                                 if (const FGuid* TargetGuid = InstMap->Find(BuildHit.Item))
                                 {
-                                    // 1. Attempt to provide material from hands
                                     Chunk->ServerProvideMaterialToGhost(*TargetGuid, AvatarChar);
-                                    
-                                    // 2. Apply labor (Base swing worth 1.0 charge unit * Alpha)
                                     Chunk->ServerApplyConstructionLabor(*TargetGuid, AvatarChar, 1.0f * ChargeAlpha);
                                     
                                     PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
@@ -648,61 +646,119 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
         }
     }
 
-    // Fallback: Voxel Modification (Mining / Digging) if no standard interactable is hit
+    // 2. Physical Terrain & Foliage Mechanical Interaction (Mining, Logging, Shoveling, Cleaving)
     if (!TargetInteractable) 
     {
-        // Check if ability config allows voxels (Requires you added bCanModifyVoxels to FDynamicInteractionProfile)
-        // If not added to struct yet, you can also check if ActionTag matches a "Mining" tag
-        if (AbilityConfig.InteractionConfig.InteractionActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Mine"))))
-        {
-            if (UWorld* World = AvatarChar->GetWorld())
-            {
-                const FVector Start = AvatarChar->GetActorLocation();
-                const FVector End = Start + (AvatarChar->GetActorForwardVector() * AbilityConfig.InteractionConfig.MaxInteractionDistance);
-                
-                FHitResult VoxelHit;
-                FCollisionQueryParams Params(SCENE_QUERY_STAT(VoxelMiningSweep), false, AvatarChar);
-                
-                if (World->SweepSingleByChannel(VoxelHit, Start, End, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(AbilityConfig.InteractionConfig.TargetSweepRadius), Params))
-                {
-                    if (ADynamicVoxelChunkActor* HitChunk = Cast<ADynamicVoxelChunkActor>(VoxelHit.GetActor()))
-                    {
-                        if (UDynamicVoxelSubsystem* VoxelSub = World->GetSubsystem<UDynamicVoxelSubsystem>())
-                        {
-                            // Calculate penetration point to ensure we dig inside the hit normal
-                            const FVector DigLocation = VoxelHit.ImpactPoint - (VoxelHit.ImpactNormal * 25.0f);
-                            
-                            FGameplayTag MinedVoxelTag;
-                            // Send EmptyTag to remove the block (Air)
-                            if (VoxelSub->ServerModifyVoxelAtLocation(DigLocation, FGameplayTag::EmptyTag, AvatarChar, MinedVoxelTag))
-                            {
-                                PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
-                                GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+        UWorld* World = AvatarChar->GetWorld();
+        ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
 
-                                // SPAWN LOOT FROM VOXEL MINING
-                                ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
-                                if (GS && MinedVoxelTag.IsValid())
+        if (World && GS)
+        {
+            const FVector Start = AvatarChar->GetActorLocation();
+            const FVector End = Start + (AvatarChar->GetActorForwardVector() * AbilityConfig.InteractionConfig.MaxInteractionDistance);
+
+            // Assemble mechanical stress profile from ability and equipped main-hand tool
+            FGameplayTagContainer MechanicalImpactTags = AbilityConfig.InteractionConfig.ImpactTypeTags;
+            float TotalToolForce = 500.0f * ChargeAlpha;
+
+            if (UDynamicEquipmentComponent* EquipComp = AvatarChar->FindComponentByClass<UDynamicEquipmentComponent>())
+            {
+                static const FGameplayTag RightHandSlotTag = FGameplayTag::RequestGameplayTag(TEXT("Slot.Equipment.Hand.Right"), false);
+                const FGameplayTag EquippedTag = EquipComp->GetEquippedItemInSlot(RightHandSlotTag);
+                if (EquippedTag.IsValid())
+                {
+                    if (const FDynamicPhysicsActorDef* ToolDef = GS->MasterPhysicsActorRegistry.Find(EquippedTag))
+                    {
+                        MechanicalImpactTags.AppendTags(ToolDef->ImpactTypeTags);
+                        TotalToolForce += (ToolDef->MassOverride * 200.0f);
+                    }
+                }
+            }
+
+            if (MechanicalImpactTags.IsEmpty())
+            {
+                MechanicalImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false));
+            }
+
+            if (const UDynamicAttributeSet* AttrSet = AvatarChar->GetDynamicAttributeSet())
+            {
+                static const FGameplayTag StrengthStatTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Stat.Strength"), false);
+                if (StrengthStatTag.IsValid())
+                {
+                    TotalToolForce += AttrSet->GetDynamicAttributeValue(StrengthStatTag, 0) * 15.0f;
+                }
+            }
+
+            // A. Interact with Voxel Terrain via Material Science Evaluation
+            FHitResult VoxelHit;
+            FCollisionQueryParams VoxelParams(SCENE_QUERY_STAT(VoxelMechanicalSweep), false, AvatarChar);
+
+            if (World->SweepSingleByChannel(VoxelHit, Start, End, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(AbilityConfig.InteractionConfig.TargetSweepRadius), VoxelParams))
+            {
+                if (ADynamicVoxelChunkActor* HitChunk = Cast<ADynamicVoxelChunkActor>(VoxelHit.GetActor()))
+                {
+                    if (UDynamicVoxelSubsystem* VoxelSub = World->GetSubsystem<UDynamicVoxelSubsystem>())
+                    {
+                        const FVector DigLocation = VoxelHit.ImpactPoint - (VoxelHit.ImpactNormal * 25.0f);
+                        FGameplayTag YieldArchetype;
+                        bool bDestroyed = false;
+
+                        if (VoxelSub->ServerApplyMechanicalStressAtLocation(DigLocation, MechanicalImpactTags, TotalToolForce, AvatarChar, YieldArchetype, bDestroyed))
+                        {
+                            PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                            GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+
+                            if (bDestroyed && YieldArchetype.IsValid())
+                            {
+                                UDynamicContainerComponent* Inventory = AvatarChar->FindComponentByClass<UDynamicContainerComponent>();
+                                const FGuid OwnerGuid = AvatarChar->FindComponentByClass<UDynamicSocialComponent>() ? AvatarChar->FindComponentByClass<UDynamicSocialComponent>()->CharacterPersistentGuid : FGuid();
+
+                                if (!Inventory || !Inventory->ServerAddActorByTag(YieldArchetype, 1, TArray<FDynamicAttributeItem>(), OwnerGuid))
                                 {
-                                    if (const FDynamicVoxelTypeDef* VoxelDef = GS->VoxelMasterRegistry.Find(MinedVoxelTag))
+                                    FTransform DropTransform(FRotator::ZeroRotator, VoxelHit.ImpactPoint + (VoxelHit.ImpactNormal * 40.0f));
+                                    if (ADynamicPhysicsActor* DroppedLoot = GS->AcquirePhysicsActor(YieldArchetype, DropTransform, AvatarChar, AvatarChar))
                                     {
-                                        if (VoxelDef->DestroyedItemArchetype.IsValid())
+                                        if (UPrimitiveComponent* Prim = DroppedLoot->GetActivePhysicsPrimitive())
                                         {
-                                            // Automatically insert into character's inventory if space allows, otherwise spawn in world
-                                            UDynamicContainerComponent* Inventory = AvatarChar->FindComponentByClass<UDynamicContainerComponent>();
-                                            if (!Inventory || !Inventory->ServerAddActorByTag(VoxelDef->DestroyedItemArchetype, 1, TArray<FDynamicAttributeItem>()))
-                                            {
-                                                FTransform DropTransform(FRotator::ZeroRotator, VoxelHit.ImpactPoint + (VoxelHit.ImpactNormal * 40.0f));
-                                                ADynamicPhysicsActor* DroppedLoot = GS->AcquirePhysicsActor(VoxelDef->DestroyedItemArchetype, DropTransform, AvatarChar, AvatarChar);
-                                                if (DroppedLoot && DroppedLoot->GetActivePhysicsPrimitive())
-                                                {
-                                                    DroppedLoot->GetActivePhysicsPrimitive()->SetSimulatePhysics(true);
-                                                }
-                                            }
+                                            Prim->SetSimulatePhysics(true);
                                         }
                                     }
                                 }
-                                return; // End execution successfully
                             }
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // B. Interact with Dynamic Foliage, Trees & Harvestable Physics Actors in Range
+            TArray<FOverlapResult> Overlaps;
+            FCollisionShape QuerySphere = FCollisionShape::MakeSphere(AbilityConfig.InteractionConfig.MaxInteractionDistance);
+            FCollisionQueryParams OverlapParams(SCENE_QUERY_STAT(FoliageMechanicalSweep), false, AvatarChar);
+
+            if (World->OverlapMultiByChannel(Overlaps, AvatarChar->GetActorLocation(), FQuat::Identity, ECC_PhysicsBody, QuerySphere, OverlapParams))
+            {
+                for (const FOverlapResult& Overlap : Overlaps)
+                {
+                    AActor* OverlapActor = Overlap.GetActor();
+                    // Resolves C2446: Compares AActor* with AvatarChar (which implicitly upcasts to AActor*)
+                    if (OverlapActor && OverlapActor != AvatarChar && !OverlapActor->IsPendingKillPending())
+                    {
+                        if (ADynamicPhysicsActor* PhysActor = Cast<ADynamicPhysicsActor>(OverlapActor))
+                        {
+                            const FVector HitDir = (PhysActor->GetActorLocation() - AvatarChar->GetActorLocation()).GetSafeNormal();
+                            PhysActor->ServerProcessAuthoritativeLimbHit(
+                                FName("root"), 
+                                TotalToolForce, 
+                                1.0f, 
+                                PhysActor->GetActorLocation(), 
+                                HitDir, 
+                                AvatarChar
+                            );
+
+                            PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
+                            GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
+                            return;
                         }
                     }
                 }
@@ -712,7 +768,6 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
 
     if (!TargetInteractable) return;
     
-    // ... [Rest of existing ExecuteInteractionBehavior remains unchanged] ...
     AActor* TargetOwnerActor = TargetInteractable->GetOwner();
     if (AvatarChar && AbilityConfig.InteractionConfig.KinematicTargetTag.IsValid())
     {
@@ -729,8 +784,9 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
     
     const FGameplayTag ActionTag = AbilityConfig.InteractionConfig.InteractionActionTag;
     
-    // 1. STORE ACTION
-    if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Store"))))
+    // 3. STORE ACTION (Physical Item Ingestion)
+    static const FGameplayTag StoreActionTag = FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Store"), false);
+    if (StoreActionTag.IsValid() && ActionTag.MatchesTag(StoreActionTag))
     {
         if (ADynamicPhysicsActor* TargetPhysicsActor = Cast<ADynamicPhysicsActor>(TargetOwnerActor))
         {
@@ -744,8 +800,9 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             }
         }
     }
-    // 2. LOOT / EXTRACT ACTION
-    else if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Loot"))))
+    // 4. LOOT / EXTRACT ACTION
+    else if (static const FGameplayTag LootActionTag = FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Loot"), false);
+             LootActionTag.IsValid() && ActionTag.MatchesTag(LootActionTag))
     {
         if (UDynamicContainerComponent* TargetContainer = TargetOwnerActor->FindComponentByClass<UDynamicContainerComponent>())
         {
@@ -758,8 +815,9 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             }
         }
     }
-    // 3. READ LORE / SIGNPOST ACTION
-    else if (ActionTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Read"))))
+    // 5. READ LORE / SIGNPOST ACTION
+    else if (static const FGameplayTag ReadActionTag = FGameplayTag::RequestGameplayTag(TEXT("Interaction.Action.Read"), false);
+             ReadActionTag.IsValid() && ActionTag.MatchesTag(ReadActionTag))
     {
         if (UDynamicLanguageComponent* LangComp = AvatarChar->FindComponentByClass<UDynamicLanguageComponent>())
         {
@@ -775,13 +833,12 @@ void UDynamicGameplayAbility::ExecuteInteractionBehavior(float ChargeAlpha)
             }
         }
     }
-    // 4. STANDARD WORLD INTERACTION
+    // 6. STANDARD WORLD INTERACTION (Doors, Levers, Mounts, Tethers, Physics Pushes)
     else if (TargetInteractable->ServerExecuteInteraction(AvatarChar, AbilityConfig.InteractionConfig, ChargeAlpha))
     {
         PlayStagePresentation(AbilityConfig.StageVisuals.ImpactStage);
         GrantSourcePassBack(EPassBackTriggerEvent::OnCollision, ChargeAlpha);
         
-        // --- Pass Multi-Impact Tags to Context ---
         if (AbilityConfig.InteractionConfig.EffectsToApplyToTarget.Num() > 0 && TargetOwnerActor)
         {
             UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();

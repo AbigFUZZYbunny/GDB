@@ -1657,30 +1657,6 @@ struct FDynamicVoxelGenerationConfig
     TArray<FDynamicVoxelBiomeMapping> BiomeColorMappings;
 };
 
-USTRUCT(BlueprintType)
-struct FDynamicVoxelTypeDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag VoxelTypeTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag ElementalContributionTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float EnvironmentDensityContribution = 1.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 MaxHP = 100;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag DestroyedItemArchetype;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TSoftObjectPtr<UMaterialInterface> VoxelMaterial;
-};
-
 // ============================================================================
 // VOXEL NETWORK DELTAS (FastArray)
 // ============================================================================
@@ -2158,32 +2134,256 @@ struct FStructurePieceDef
     TArray<FBuildingSocketDef> ConnectionSockets;
 };
 
-// ============================================================================
-// BUILDING & STRUCTURAL INTEGRITY CONFIGURATION (UPDATED)
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Damage Types & Dynamic GameplayTag Registry Definition
+// ----------------------------------------------------------------------------
 
 USTRUCT(BlueprintType)
-struct FDynamicStructureMaterialDef
+struct FDynamicDamageTypeDef
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    FGameplayTag DamageTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    FGameplayTag ParentCategoryTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    FGameplayTag PrimaryResistanceAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    TArray<FGameplayTag> AssociatedStatusEffects;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    FGameplayTag DefaultImpactTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
+    FString DevComment = TEXT("");
+};
+
+// ----------------------------------------------------------------------------
+// Unified Material Science & Dynamic Physical Material Definition
+// ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// Unified Material Science & Dynamic Physical Material Definition
+// ----------------------------------------------------------------------------
+
+USTRUCT(BlueprintType)
+struct FDynamicMaterialDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material")
     FGameplayTag MaterialTag;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float StructuralDensity = 1.0f; // Affects mass and load-bearing stress
+    // --- Core Physical Properties ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Physics")
+    float StructuralDensity = 1.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float SupportStrength = 100.0f; // Base weight it can hold before snapping
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Physics")
+    float SupportStrength = 100.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float InsulationValue = 5.0f; // Weather/temperature resistance
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Physics")
+    float InsulationValue = 5.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Physics")
     float DurabilityMultiplier = 1.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FGameplayTag DestroyedYieldArchetype; // E.g., Item.Resource.Wood
+    // --- Material Science & Mechanical Resistance ---
+    // Mohs hardness scale: 1.0 (Talc/Flesh), 2.5 (Gold), 3.0 (Calcite/Wood), 4.5 (Iron), 6.5 (Granite), 10.0 (Diamond)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Material Science")
+    float Hardness = 3.0f;
+
+    // Brittleness: [0.0 = Ductile/Pliant, 1.0 = Highly Brittle/Spalling]
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Material Science")
+    float Brittleness = 0.5f;
+
+    // Elasticity (Restitution & energy damping): [0.0 = Plastic, 1.0 = Perfectly Elastic]
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Material Science")
+    float Elasticity = 0.25f;
+
+    // Compressive Strength (Threshold against Crushing/Compression in kPa equivalent)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Material Science")
+    float CompressiveStrength = 250.0f;
+
+    // Shear Strength (Threshold against Slashing/Cleaving forces)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Material Science")
+    float ShearStrength = 150.0f;
+
+    // Tensile Strength (Threshold against Piercing/Puncture/Tension forces)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Material Science")
+    float TensileStrength = 100.0f;
+
+    // --- Voxel & Environment Properties ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Voxel")
+    FGameplayTag ElementalContributionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Voxel")
+    float EnvironmentDensityContribution = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Voxel")
+    int32 BaseMaxHP = 100;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Voxel")
+    TSoftObjectPtr<UMaterialInterface> VoxelMaterial;
+
+    // --- Cellular Automata & Phase States ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Phase")
+    bool bIsGravityAffected = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Phase")
+    bool bIsFluid = false;
+
+    // Adjacent solid neighbor faces required to stay anchored. If below threshold, breaks free and falls.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Phase")
+    int32 RequiredAdhesionNeighbors = 2;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Phase")
+    float PhaseChangeTemperature = 1000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Phase")
+    FGameplayTag TransmutedMaterialTag;
+
+    // --- Thermodynamics & Decay ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Thermodynamics")
+    bool bIsFlammable = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Thermodynamics")
+    float IgnitionTemperature = 300.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Thermodynamics")
+    float BurnRatePerSecond = 5.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Thermodynamics")
+    bool bCanRot = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Thermodynamics")
+    float RotWetnessThreshold = 80.0f;
+
+    // --- Dynamic Physical Yield Archetypes ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag DefaultYieldArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag CrushedYieldArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag CleavedYieldArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag PiercedYieldArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag BurnedYieldArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag RottedYieldArchetype;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
+    FGameplayTag ShatteredYieldArchetype;
+
+    inline float CalculateMechanicalDamage(const FGameplayTagContainer& ImpactOrDamageTags, float RawForceMagnitude, FGameplayTag& OutDominantYield) const
+    {
+        OutDominantYield = DefaultYieldArchetype;
+        if (RawForceMagnitude <= 0.0f) return 0.0f;
+
+        static const FGameplayTag TagDmgCrushing   = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false);
+        static const FGameplayTag TagDmgSlashing   = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Slashing"), false);
+        static const FGameplayTag TagDmgPiercing   = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Piercing"), false);
+        static const FGameplayTag TagDmgFire       = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Fire"), false);
+
+        static const FGameplayTag TagImpCrushing   = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Crushing"), false);
+        static const FGameplayTag TagImpSlashing   = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Slashing"), false);
+        static const FGameplayTag TagImpPiercing   = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Piercing"), false);
+        static const FGameplayTag TagImpFireExpl   = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Magic.FireExplosion"), false);
+
+        float TotalDamage = 0.0f;
+        float MaxStressOverThreshold = 0.0f;
+
+        // 1. Crushing / Compression (favors brittle materials: rock, crystal, masonry, explosions)
+        const bool bIsCrushing = (TagDmgCrushing.IsValid() && ImpactOrDamageTags.HasTag(TagDmgCrushing)) ||
+                                 (TagImpCrushing.IsValid() && ImpactOrDamageTags.HasTag(TagImpCrushing)) ||
+                                 (TagImpFireExpl.IsValid() && ImpactOrDamageTags.HasTag(TagImpFireExpl));
+
+        if (bIsCrushing)
+        {
+            const float AppliedStress = RawForceMagnitude * (1.0f + Brittleness);
+            const float Resistance = CompressiveStrength * (Hardness * 0.5f);
+            if (AppliedStress > Resistance)
+            {
+                const float EffectiveDmg = (AppliedStress - Resistance) * (1.0f - Elasticity);
+                TotalDamage += EffectiveDmg;
+                if (EffectiveDmg > MaxStressOverThreshold)
+                {
+                    MaxStressOverThreshold = EffectiveDmg;
+                    OutDominantYield = CrushedYieldArchetype.IsValid() ? CrushedYieldArchetype : DefaultYieldArchetype;
+                }
+            }
+        }
+
+        // 2. Slashing / Shear (favors ductile, fibrous materials like timber, foliage, hide)
+        const bool bIsSlashing = (TagDmgSlashing.IsValid() && ImpactOrDamageTags.HasTag(TagDmgSlashing)) ||
+                                 (TagImpSlashing.IsValid() && ImpactOrDamageTags.HasTag(TagImpSlashing));
+
+        if (bIsSlashing)
+        {
+            const float AppliedStress = RawForceMagnitude * (1.0f - (Brittleness * 0.4f));
+            const float Resistance = ShearStrength * Hardness;
+            if (AppliedStress > Resistance)
+            {
+                const float EffectiveDmg = (AppliedStress - Resistance);
+                TotalDamage += EffectiveDmg;
+                if (EffectiveDmg > MaxStressOverThreshold)
+                {
+                    MaxStressOverThreshold = EffectiveDmg;
+                    OutDominantYield = CleavedYieldArchetype.IsValid() ? CleavedYieldArchetype : DefaultYieldArchetype;
+                }
+            }
+        }
+
+        // 3. Piercing / Tensile Spall (penetrating point force, fractures high-hardness minerals & ores)
+        const bool bIsPiercing = (TagDmgPiercing.IsValid() && ImpactOrDamageTags.HasTag(TagDmgPiercing)) ||
+                                 (TagImpPiercing.IsValid() && ImpactOrDamageTags.HasTag(TagImpPiercing));
+
+        if (bIsPiercing)
+        {
+            const float AppliedStress = RawForceMagnitude * (1.0f + (Brittleness * 0.5f));
+            const float Resistance = TensileStrength * (Hardness * 0.75f);
+            if (AppliedStress > Resistance)
+            {
+                const float EffectiveDmg = (AppliedStress - Resistance);
+                TotalDamage += EffectiveDmg;
+                if (EffectiveDmg > MaxStressOverThreshold)
+                {
+                    MaxStressOverThreshold = EffectiveDmg;
+                    OutDominantYield = PiercedYieldArchetype.IsValid() ? PiercedYieldArchetype : DefaultYieldArchetype;
+                }
+            }
+        }
+
+        // 4. Thermal / Fire
+        if (TagDmgFire.IsValid() && ImpactOrDamageTags.HasTag(TagDmgFire))
+        {
+            if (bIsFlammable)
+            {
+                TotalDamage += RawForceMagnitude * 1.5f;
+                OutDominantYield = BurnedYieldArchetype.IsValid() ? BurnedYieldArchetype : DefaultYieldArchetype;
+            }
+        }
+
+        // Fallback for general unclassified physical force exceeding compressive threshold
+        if (TotalDamage <= 0.0f && RawForceMagnitude > CompressiveStrength)
+        {
+            TotalDamage = (RawForceMagnitude - CompressiveStrength) * 0.1f;
+        }
+
+        return TotalDamage;
+    }
 };
 
 USTRUCT(BlueprintType)
@@ -6060,8 +6260,6 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
     TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
     TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
-    TMap<FGameplayTag, FDynamicVoxelTypeDef> VoxelMasterRegistry;
-    TMap<FGameplayTag, FDynamicStructureMaterialDef> StructureMaterialRegistry;
     TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
     TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
     TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
@@ -6073,6 +6271,8 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
     TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
     TMap<FGameplayTag, FDynamicFactionDef> FactionMasterRegistry;
+    TMap<FGameplayTag, FDynamicMaterialDef> MaterialMasterRegistry;
+    TMap<FGameplayTag, FDynamicDamageTypeDef> DamageTypeMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

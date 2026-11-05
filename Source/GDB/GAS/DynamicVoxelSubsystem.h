@@ -34,21 +34,29 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Voxels")
     bool ServerModifyVoxelAtLocation(const FVector& WorldLocation, FGameplayTag NewVoxelTypeTag, AActor* Instigator, FGameplayTag& OutMinedVoxelTag);
 
+    // Dynamic mechanical stress application replacing hardcoded mining
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Voxels")
+    bool ServerApplyMechanicalStressAtLocation(
+        const FVector& WorldLocation, 
+        const FGameplayTagContainer& ImpactOrDamageTags, 
+        float RawForceMagnitude, 
+        AActor* Instigator, 
+        FGameplayTag& OutYieldArchetype, 
+        bool& bOutDestroyed
+    );
+
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Voxels")
     ADynamicVoxelChunkActor* GetActiveChunkAtLocation(const FVector& WorldLocation) const;
 
     void InitializeVoxelGenerationData();
     void GenerateChunkDataAsync(FIntPoint ChunkCoord, int32 ChunkSize, float VoxelSize, TWeakObjectPtr<ADynamicVoxelChunkActor> RequestingChunk);
 
-    // Flushes all loaded chunk modifications to JSON for persistence
     void SerializeWorldVoxelState(struct FWorldPersistenceSnapshot& OutSnapshot);
     void RestoreWorldVoxelState(const struct FWorldPersistenceSnapshot& InSnapshot);
     
-    // Calculates the exact grid-snapped transform for placing a new block against a mined surface
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Voxels|Building")
     bool CalculateVoxelPlacementTransform(const FHitResult& VoxelHit, FTransform& OutTransform) const;
 
-    // Determines if a specific world bounds overlaps with any solid virtual/loaded voxels
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Voxels|Building")
     bool IsVoxelSpaceFree(const FVector& WorldLocation) const;
 
@@ -69,7 +77,6 @@ private:
     UPROPERTY()
     TMap<FIntPoint, ADynamicVoxelChunkActor*> ActiveSpawnedChunks;
 
-    // OPTIMIZATION: Converted to thread-safe SharedPtr to prevent 250MB deep copies
     TSharedPtr<FVoxelMapDataCache> MapDataCache;
     
     float VoxelWorldSize = 100.0f;

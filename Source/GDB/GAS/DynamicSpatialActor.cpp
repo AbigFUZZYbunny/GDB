@@ -2,9 +2,11 @@
 #include "DynamicSpatialActor.h"
 #include "DynamicGameState.h"
 #include "DynamicCharacter.h"
+#include "DynamicPhysicsActor.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicGameplayEffectContext.h"
 #include "DynamicEffectFactory.h"
+#include "DynamicVoxelSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/OverlapResult.h"
 
@@ -118,7 +120,7 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         return;
     }
 
-    // 1. Evaluate Trajectory Physics
+    // 1. Trajectory Physics
     if (DeliveryDef.MotionType == ESpatialDeliveryMotion::StraightVelocity)
     {
         AddActorWorldOffset(CurrentVelocity * DeltaSeconds, true);
@@ -153,7 +155,7 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         AddActorWorldOffset(CurrentVelocity * DeltaSeconds, true);
     }
 
-    // 2. Evaluate Dynamic Shape Expansion
+    // 2. Shape Expansion
     float ActiveRadius = DeliveryDef.MinRadius;
     if (DeliveryDef.ShapeBehavior == ESpatialShapeBehavior::ExpandOut)
     {
@@ -167,13 +169,35 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
 
     if (MeshComponent)
     {
-        MeshComponent->SetWorldScale3D(FVector(ActiveRadius / 50.0f)); // Assuming base sphere is 100 units
+        MeshComponent->SetWorldScale3D(FVector(ActiveRadius / 50.0f));
     }
 
-    // 3. Handle Overlaps & Validations
+    // 3. Environmental Terrain Cratering (Explosions shatter brittle terrain & fell trees)
     UWorld* World = GetWorld();
-    if (!World) return;
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
 
+    const float ScaledImpulse = DeliveryDef.KineticImpulseOnHit * PowerMultiplier;
+    FGameplayTagContainer ProjectileImpactTags = DeliveryDef.ImpactTypeTags;
+    if (ProjectileImpactTags.IsEmpty())
+    {
+        ProjectileImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false));
+    }
+
+    static const FGameplayTag TagCrushing = FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false);
+    static const FGameplayTag TagFireExpl = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Magic.FireExplosion"), false);
+
+    if (World && GS && (ProjectileImpactTags.HasTag(TagCrushing) || ProjectileImpactTags.HasTag(TagFireExpl)))
+    {
+        if (UDynamicVoxelSubsystem* VoxelSub = World->GetSubsystem<UDynamicVoxelSubsystem>())
+        {
+            FGameplayTag CraterYield;
+            bool bCratered = false;
+            // Evaluates ground beneath blast origin
+            VoxelSub->ServerApplyMechanicalStressAtLocation(GetActorLocation() - FVector(0, 0, 50.0f), ProjectileImpactTags, ScaledImpulse, GetInstigator(), CraterYield, bCratered);
+        }
+    }
+
+    // 4. Overlaps & Validations across Pawns and Dynamic Foliage/PhysicsActors
     TArray<FOverlapResult> Overlaps;
     FCollisionShape SphereShape = FCollisionShape::MakeSphere(ActiveRadius);
     FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(SpatialActorOverlap), false, this);
@@ -181,16 +205,24 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
 
     TSet<TWeakObjectPtr<AActor>> CurrentFrameOverlaps;
 
-    if (World->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity, ECC_Pawn, SphereShape, QueryParams))
+    if (World && World->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity, ECC_Pawn, SphereShape, QueryParams))
     {
-        ADynamicGameState* GS = World->GetGameState<ADynamicGameState>();
         for (const FOverlapResult& Result : Overlaps)
         {
             AActor* HitActor = Result.GetActor();
             if (!HitActor) continue;
 
             UAbilitySystemComponent* TargetASC = HitActor->FindComponentByClass<UAbilitySystemComponent>();
-            if (!TargetASC) continue;
+            if (!TargetASC)
+            {
+                // Physical foliage / trees don't always have an ASC: check if it's an ADynamicPhysicsActor
+                if (ADynamicPhysicsActor* PhysFoliage = Cast<ADynamicPhysicsActor>(HitActor))
+                {
+                    const FVector OutwardNormal = (HitActor->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+                    PhysFoliage->ServerProcessAuthoritativeLimbHit(FName("root"), ScaledImpulse, PowerMultiplier, HitActor->GetActorLocation(), OutwardNormal, GetInstigator());
+                }
+                continue;
+            }
 
             FGameplayTagContainer TargetTags;
             TargetASC->GetOwnedGameplayTags(TargetTags);
@@ -208,7 +240,6 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
 
             bool bShouldApplyEffects = false;
 
-            // Application Logic evaluation
             if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::SingleHit)
             {
                 if (ImpactedActors.Contains(HitActor)) continue;
@@ -237,27 +268,8 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
             {
                 ADynamicCharacter* HitChar = Cast<ADynamicCharacter>(HitActor);
                 const FName BoneName = FName("pelvis"); 
-                const FVector OutwardNormal = (GetActorLocation() - HitActor->GetActorLocation()).GetSafeNormal();
-                const float ScaledImpulse = DeliveryDef.KineticImpulseOnHit * PowerMultiplier;
+                const FVector OutwardNormal = (HitActor->GetActorLocation() - GetActorLocation()).GetSafeNormal();
 
-                FGameplayTagContainer ProjectileImpactTags = DeliveryDef.ImpactTypeTags;
-                if (ProjectileImpactTags.IsEmpty())
-                {
-                    static const FGameplayTag ImpactRootTag = FGameplayTag::RequestGameplayTag(TEXT("Impact.Type"), false);
-                    for (const FGameplayTag& Tag : DeliveryDef.PropagatedTriggerTags)
-                    {
-                        if (ImpactRootTag.IsValid() && Tag.MatchesTag(ImpactRootTag))
-                        {
-                            ProjectileImpactTags.AddTag(Tag);
-                        }
-                    }
-                }
-                if (ProjectileImpactTags.IsEmpty())
-                {
-                    ProjectileImpactTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Impact.Type.Physical.Blunt"), false));
-                }
-
-                // Apply physics impulse (TickInterval and SingleHit only; pure Passives shouldn't shove constantly)
                 if (HitChar && GS && DeliveryDef.ApplicationType != EAuraEffectApplicationType::PassiveWhileIn)
                 {
                     HitChar->ServerProcessAuthoritativeLimbHit(
@@ -291,7 +303,6 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
                             }
                             
                             FActiveGameplayEffectHandle ActiveHandle = SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
-                            
                             if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::PassiveWhileIn)
                             {
                                 AppliedHandles.Add(ActiveHandle);
@@ -314,15 +325,12 @@ void ADynamicSpatialActor::Tick(float DeltaSeconds)
         }
     }
 
-    // 4. Cleanup Passives and Timers for actors that exited the Aura
+    // 5. Cleanup Passives and Timers
     if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::TickInterval)
     {
         for (auto It = ActorTickTimers.CreateIterator(); It; ++It)
         {
-            if (!CurrentFrameOverlaps.Contains(It.Key()))
-            {
-                It.RemoveCurrent();
-            }
+            if (!CurrentFrameOverlaps.Contains(It.Key())) It.RemoveCurrent();
         }
     }
     else if (DeliveryDef.ApplicationType == EAuraEffectApplicationType::PassiveWhileIn)

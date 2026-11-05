@@ -52,6 +52,10 @@ public:
 
     const TArray<FDynamicPropertyInstance>& GetActiveProperties() const { return ActiveProperties; }
 
+protected:
+    void ProcessThermodynamicDecay(float DeltaTime);
+    float ThermoDecayTimer = 0.0f;
+    
 private:
     UPROPERTY()
     TMap<FIntPoint, ADynamicBuildingChunkActor*> ActiveBuildingChunks;

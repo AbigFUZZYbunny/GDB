@@ -44,12 +44,12 @@ public:
     void ServerApplyConstructionLabor(const FGuid& InstanceID, AActor* WorkerActor, float LaborAmount);
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Building|Damage")
-    void ServerDamageBuildingInstance(const FGuid& InstanceID, float DamageAmount, const FVector& HitLocation, const FVector& HitNormal, AActor* DamageInstigator);
+    void ServerDamageBuildingInstance(const FGuid& InstanceID, float DamageAmount, const FVector& HitLocation, const FVector& HitNormal, AActor* DamageInstigator, FGameplayTag DamageCauseTag = FGameplayTag());
 
     static constexpr float CHUNK_SIZE_UNITS = 5000.0f;
     TMap<FGuid, TArray<FGuid>> AdjacencyGraph;
     TMap<UHierarchicalInstancedStaticMeshComponent*, TMap<int32, FGuid>> InstanceHitMap;
-    
+
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Navigation")
     UNavModifierComponent* NavModifierComponent;

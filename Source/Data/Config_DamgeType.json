@@ -1,0 +1,122 @@
+﻿{
+  "_comment": "Master Damage Types Schema: Defines hierarchical damage types, associated resistances, and status tags for ini generation.",
+  "DamageTypeMasterRegistry": {
+    "Damage.Type.Physical": {
+      "ParentCategoryTag": "Damage.Type",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Physical Damage" },
+          { "KeyTag": "Localization.Description", "Value": "Physical kinetic damage." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "Attribute.Stat.Armor",
+      "DefaultImpactTypeTag": "Impact.Type.Crushing",
+      "AssociatedStatusEffects": [ "State.Debuff.Fractured", "State.Debuff.Stunned" ],
+      "DevComment": ""
+    },
+    "Damage.Type.Environmental": {
+      "ParentCategoryTag": "Damage.Type",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Environmental Damage" },
+          { "KeyTag": "Localization.Description", "Value": "Environmental damage." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "Attribute.Stat.Armor",
+      "DefaultImpactTypeTag": "Impact.Type.Crushing",
+      "AssociatedStatusEffects": [ "State.Debuff.Fractured", "State.Debuff.Stunned" ],
+      "DevComment": ""
+    },
+    "Damage.Type.Physical.Crushing": {
+      "ParentCategoryTag": "Damage.Type.Physical",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Crushing / Compression" },
+          { "KeyTag": "Localization.Description", "Value": "Compressive kinetic impact force. Fractures brittle stone, masonry, crystal, and bones." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "Attribute.Stat.Armor",
+      "DefaultImpactTypeTag": "Impact.Type.Crushing",
+      "AssociatedStatusEffects": [ "State.Debuff.Fractured", "State.Debuff.Crippled" ],
+      "DevComment": "Compressive stress emitted by warhammers, clubs, falling boulders, and shockwaves."
+    },
+    "Damage.Type.Physical.Slashing": {
+      "ParentCategoryTag": "Damage.Type.Physical",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Slashing / Shear" },
+          { "KeyTag": "Localization.Description", "Value": "Transverse shearing blade force. Cleaves timber, branches, vines, hide, and flesh." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "Attribute.Stat.Armor",
+      "DefaultImpactTypeTag": "Impact.Type.Slashing",
+      "AssociatedStatusEffects": [ "State.Debuff.Lacerated" ],
+      "DevComment": "Lateral shearing stress applied by axes, swords, scythes, and claws."
+    },
+    "Damage.Type.Physical.Piercing": {
+      "ParentCategoryTag": "Damage.Type.Physical",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Piercing / Tension" },
+          { "KeyTag": "Localization.Description", "Value": "Concentrated focal puncture force. Spalls dense minerals, chips ores, and penetrates armor plate." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "Attribute.Stat.Armor",
+      "DefaultImpactTypeTag": "Impact.Type.Piercing",
+      "AssociatedStatusEffects": [ "State.Debuff.PuncturedLung", "State.Debuff.SevereBleed" ],
+      "DevComment": "High-pressure tensile puncture stress emitted by pickaxes, arrows, spears, and rapiers."
+    },
+    "Damage.Type.Environmental.Fire": {
+      "ParentCategoryTag": "Damage.Type.Environmental",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Thermal / Combustion" },
+          { "KeyTag": "Localization.Description", "Value": "Extreme heat inducing ignition, charring, and thermal shock." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "GDBMagic.Attribute.Genetic.Affinity.Fire",
+      "DefaultImpactTypeTag": "Impact.Type.Magic.FireExplosion",
+      "AssociatedStatusEffects": [ "Effect.Magic.Fire.IgniteDOT", "Effect.Magic.Fire.ArmorMelt" ],
+      "DevComment": "Combustive heat that chars wood into charcoal and melts ice voxels into water."
+    },
+    "Damage.Type.Environmental.Frost": {
+      "ParentCategoryTag": "Damage.Type.Environmental",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Cryogenic / Freezing" },
+          { "KeyTag": "Localization.Description", "Value": "Sub-zero thermal extraction, inducing brittleness and freezing." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "GDBMagic.Attribute.Genetic.Affinity.Water",
+      "DefaultImpactTypeTag": "Impact.Type.Magic.Frost",
+      "AssociatedStatusEffects": [ "Effect.Magic.Frost.Chilled", "Effect.Magic.Frost.FreezeRoot" ],
+      "DevComment": "Freezing cold that solidifies water into ice and increases the brittleness of metal/rock."
+    },
+    "Damage.Type.Environmental.Rot": {
+      "ParentCategoryTag": "Damage.Type.Environmental",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Decay / Putrefaction" },
+          { "KeyTag": "Localization.Description", "Value": "Biological degradation from moisture, fungus, and mold." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "GDBSurvival.Attribute.Resource.Immunity.Disease",
+      "DefaultImpactTypeTag": "Impact.Type.Physical.Blunt",
+      "AssociatedStatusEffects": [ "Effect.Debuff.PoisonDOT" ],
+      "DevComment": "Slow decomposition resulting from saturated humidity and stagnant water."
+    },
+    "Damage.Type.Environmental.Shattered": {
+      "ParentCategoryTag": "Damage.Type.Environmental",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Structural Collapse" },
+          { "KeyTag": "Localization.Description", "Value": "Catastrophic structural failure when load-bearing capacity reaches zero." }
+        ]
+      },
+      "PrimaryResistanceAttributeTag": "Attribute.Stat.Armor",
+      "DefaultImpactTypeTag": "Impact.Type.Crushing",
+      "AssociatedStatusEffects": [ "State.Debuff.Fractured" ],
+      "DevComment": "Dynamic rubble and splinter yield generated when buildings or cliffs snap under gravity."
+    }
+  }
+}

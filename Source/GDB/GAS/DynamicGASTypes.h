@@ -21,6 +21,7 @@ class UDynamicQuestComponent;
 class UDynamicLifeComponent;
 class UDynamicEquipmentComponent;
 class ADynamicEnvironmentChunkActor;
+class UCustomizableObject;
 class UDynamicQuestComponent;
 
 // ============================================================================
@@ -4340,6 +4341,10 @@ struct FCharacterTemplateDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     TSoftObjectPtr<USkeletalMesh> SkeletalMeshAsset;
 
+    // Client-side Mutable Customizable Object asset for draw call & texture atlas consolidation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Mutable")
+    TSoftObjectPtr<UCustomizableObject> MutableObjectAsset;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     TSoftClassPtr<UAnimInstance> AnimationControllerClass;
 
@@ -4349,11 +4354,9 @@ struct FCharacterTemplateDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
     FGameplayTag DefaultAIAgentTag;
 
-    // Mother tongue of this race/template (e.g., Language.Elvish, Language.Orcish)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Language")
     FGameplayTag NativeLanguageTag;
 
-    // Starting repertoire of spoken languages (e.g., [Language.Elvish, Language.Common])
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Language")
     TArray<FGameplayTag> KnownLanguageTags;
 

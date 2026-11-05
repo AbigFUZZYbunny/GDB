@@ -352,6 +352,7 @@ void ADynamicPhysicsActor::ResetToDefaultPoolState()
 
     if (SkeletalMeshComponent)
     {
+        SkeletalMeshComponent->SetHiddenInGame(false); // Reset visibility for dropping back into the world
         SkeletalMeshComponent->SetSimulatePhysics(false);
         SkeletalMeshComponent->SetPhysicsLinearVelocity(FVector::ZeroVector);
         SkeletalMeshComponent->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);

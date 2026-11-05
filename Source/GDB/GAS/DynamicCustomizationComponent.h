@@ -7,6 +7,10 @@
 #include "DynamicGASTypes.h"
 #include "DynamicCustomizationComponent.generated.h"
 
+class UCustomizableSkeletalComponent;
+class UCustomizableObjectInstance;
+class UCustomizableObject;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCharacterMorphUpdatedSignature, FGameplayTag, SliderTag, float, NewValue);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -47,10 +51,20 @@ public:
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Transformation")
     FGameplayTagContainer ActiveInheritedCategories;
 
+    // --- EPIC GAMES MUTABLE INTEGRATION (CLIENT ONLY) ---
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Dynamic GAS|Customization|Mutable")
+    TObjectPtr<UCustomizableSkeletalComponent> MutableMeshComponent;
+
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Customization|Mutable")
+    TObjectPtr<UCustomizableObjectInstance> MutableInstance;
+
     UFUNCTION() void OnRep_CharacterIdentity();
     UFUNCTION() void OnRep_ReplicatedMorphs();
     UFUNCTION() void OnRep_AppearanceColors();
     UFUNCTION() void OnRep_HairStyle();
+
+    UFUNCTION()
+    void HandleEquipmentChanged(FGameplayTag SlotTag, FGameplayTag ItemArchetypeTag, bool bIsEquipped);
 
     void HandleSingleMorphReplicated(const FDynamicCharacterMorphItem& MorphItem);
 
@@ -95,17 +109,14 @@ public:
 
 private:
     float ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const;
-    
-    // Overload 1: Bulk-optimized variant accepting pre-queried modular meshes
     void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value, const TArray<USkeletalMeshComponent*>& ModularMeshes);
-    // Overload 2: Convenience single-call variant that resolves meshes once on demand
     void ApplySingleSliderDeformation(FGameplayTag SliderTag, float Value);
-    
     void UpdateSignificanceEvaluation();
 
     TMap<FGameplayTag, float> LocalMorphCache;
     TArray<FGameplayTag> DeferredMorphSliders;
     bool bIsSignificantlyVisible = true;
+    bool bMutableUpdatePending = false;
     
     FTimerHandle TimerHandle_SignificancePoll;
     FTSTicker::FDelegateHandle FlushTickerHandle;

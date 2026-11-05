@@ -28,7 +28,8 @@ public class GDB : ModuleRules
 			"SignificanceManager",
 			"ProceduralMeshComponent",
 			"Voice",
-			"NavigationSystem"
+			"NavigationSystem",
+			"CustomizableObject"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

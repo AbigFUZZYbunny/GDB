@@ -133,13 +133,16 @@ bool UDynamicEquipmentComponent::ServerEquipItem(ADynamicPhysicsActor* ActorToEq
     }
 
     if (USkeletalMeshComponent* EquipMesh = ActorToEquip->GetMeshComponent())
-    {
-        EquipMesh->AttachToComponent(CharOwner->GetMeshComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-        if (Def->EquipmentRequirement.bUseLeaderPoseComponent)
         {
-            EquipMesh->SetLeaderPoseComponent(CharOwner->GetMeshComponent(), true, true);
+            EquipMesh->AttachToComponent(CharOwner->GetMeshComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+            if (Def->EquipmentRequirement.bUseLeaderPoseComponent)
+            {
+                EquipMesh->SetLeaderPoseComponent(CharOwner->GetMeshComponent(), true, true);
+            }
+    
+            // HIDE VISUALLY: Mutable Customization takes over rendering, we keep the attached skeleton purely for potential physical hitboxes/collision.
+            EquipMesh->SetHiddenInGame(true);
         }
-    }
 
     if (!Def->EquipmentRequirement.EquipAnimMontage.IsNull())
     {

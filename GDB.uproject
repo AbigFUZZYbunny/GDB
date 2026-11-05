@@ -145,6 +145,14 @@
 		{
 			"Name": "ActorModifierCore",
 			"Enabled": true
+		},
+		{
+			"Name": "MutableClothing",
+			"Enabled": true
+		},
+		{
+			"Name": "HairStrandsMutable",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

@@ -2,15 +2,21 @@
 #include "DynamicCustomizationComponent.h"
 #include "DynamicCharacter.h"
 #include "DynamicGameState.h"
+#include "MuCO/CustomizableObjectInstance.h"
+#include "MuCO/CustomizableObject.h"
+#include "MuCO/CustomizableSkeletalComponent.h"
+#include "DynamicEquipmentComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicGameplayAbility.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
 #include "SignificanceManager.h"
+#include "Engine/AssetManager.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/StreamableManager.h"
 
 UDynamicCustomizationComponent::UDynamicCustomizationComponent()
 {
@@ -23,6 +29,15 @@ void UDynamicCustomizationComponent::BeginPlay()
 {
     Super::BeginPlay();
     ReplicatedMorphs.OwningCustomizationComp = this;
+
+    // Listen to equipment changes to drive Mutable client modular clothing
+    if (ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
+    {
+        if (UDynamicEquipmentComponent* EquipComp = CharOwner->FindComponentByClass<UDynamicEquipmentComponent>())
+        {
+            EquipComp->OnEquipmentChanged.AddUniqueDynamic(this, &UDynamicCustomizationComponent::HandleEquipmentChanged);
+        }
+    }
 
     if (UWorld* World = GetWorld())
     {
@@ -78,14 +93,12 @@ void UDynamicCustomizationComponent::BeginPlay()
 
 void UDynamicCustomizationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    // 1. Remove active time-sliced ticker delegate from CoreTicker
     if (FlushTickerHandle.IsValid())
     {
         FTSTicker::GetCoreTicker().RemoveTicker(FlushTickerHandle);
         FlushTickerHandle.Reset();
     }
 
-    // 2. Clear timer handles and unregister from Significance Manager
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(TimerHandle_SignificancePoll);
@@ -101,6 +114,12 @@ void UDynamicCustomizationComponent::EndPlay(const EEndPlayReason::Type EndPlayR
             }
         }
     }
+
+    if (MutableMeshComponent)
+    {
+        MutableMeshComponent->SetCustomizableObjectInstance(nullptr);
+    }
+    MutableInstance = nullptr;
 
     DeferredMorphSliders.Empty();
     Super::EndPlay(EndPlayReason);
@@ -192,7 +211,7 @@ void UDynamicCustomizationComponent::SetSignificanceState(bool bNewSignificant)
 
 void UDynamicCustomizationComponent::FlushDeferredMorphs()
 {
-    if (DeferredMorphSliders.Num() == 0 || FlushTickerHandle.IsValid()) return;
+    if ((DeferredMorphSliders.Num() == 0 && !bMutableUpdatePending) || FlushTickerHandle.IsValid()) return;
 
     TWeakObjectPtr<UDynamicCustomizationComponent> WeakThis(this);
 
@@ -204,7 +223,6 @@ void UDynamicCustomizationComponent::FlushDeferredMorphs()
         ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(StrongThis->GetOwner());
         if (!CharOwner) return false;
 
-        // Hoisted outside the time-sliced `while` loop to prevent repeated hierarchical allocation
         TArray<USkeletalMeshComponent*> ModularMeshes;
         CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
 
@@ -218,11 +236,21 @@ void UDynamicCustomizationComponent::FlushDeferredMorphs()
             {
                 StrongThis->ApplySingleSliderDeformation(SliderTag, *Val, ModularMeshes);
                 StrongThis->OnMorphUpdated.Broadcast(SliderTag, *Val);
+                
+                if (StrongThis->GetNetMode() != NM_DedicatedServer && StrongThis->MutableInstance)
+                {
+                    StrongThis->MutableInstance->SetFloatParameterSelectedOption(SliderTag.ToString(), *Val);
+                }
             }
         }
 
         if (StrongThis->DeferredMorphSliders.Num() == 0)
         {
+            if (StrongThis->bMutableUpdatePending && StrongThis->MutableInstance)
+            {
+                StrongThis->MutableInstance->UpdateSkeletalMeshAsync(true);
+                StrongThis->bMutableUpdatePending = false;
+            }
             StrongThis->FlushTickerHandle.Reset();
             return false;
         }
@@ -236,13 +264,19 @@ void UDynamicCustomizationComponent::HandleSingleMorphReplicated(const FDynamicC
 
     if (CheckCurrentSignificance())
     {
-        // Line 239 resolved: Calls single-slider convenience overload
         ApplySingleSliderDeformation(MorphItem.SliderTag, MorphItem.SliderValue);
         OnMorphUpdated.Broadcast(MorphItem.SliderTag, MorphItem.SliderValue);
+
+        if (GetNetMode() != NM_DedicatedServer && MutableInstance)
+        {
+            MutableInstance->SetFloatParameterSelectedOption(MorphItem.SliderTag.ToString(), MorphItem.SliderValue);
+            MutableInstance->UpdateSkeletalMeshAsync(true);
+        }
     }
     else
     {
         DeferredMorphSliders.AddUnique(MorphItem.SliderTag);
+        bMutableUpdatePending = true;
     }
 }
 
@@ -354,6 +388,45 @@ void UDynamicCustomizationComponent::InitializeCustomization(FGameplayTag Templa
 
     ReplicatedMorphs.MarkArrayDirty();
     ApplyCustomizationToMesh();
+
+    // Client-side Mutable Initialization
+    if (GetNetMode() != NM_DedicatedServer && !TemplateDef.MutableObjectAsset.IsNull())
+    {
+        ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
+        if (!CharOwner || !CharOwner->GetMeshComponent()) return;
+
+        if (!MutableMeshComponent)
+        {
+            MutableMeshComponent = NewObject<UCustomizableSkeletalComponent>(GetOwner(), TEXT("MutableSkeletalComponent"));
+            MutableMeshComponent->SetupAttachment(CharOwner->GetMeshComponent());
+            MutableMeshComponent->RegisterComponent();
+        }
+
+        const FSoftObjectPath MutableAssetPath = TemplateDef.MutableObjectAsset.ToSoftObjectPath();
+        TWeakObjectPtr<UDynamicCustomizationComponent> WeakThis(this);
+
+        UAssetManager::GetStreamableManager().RequestAsyncLoad(MutableAssetPath, FStreamableDelegate::CreateLambda([WeakThis, MutableAssetPath]() {
+            if (UDynamicCustomizationComponent* StrongThis = WeakThis.Get())
+            {
+                if (UCustomizableObject* LoadedObj = Cast<UCustomizableObject>(MutableAssetPath.ResolveObject()))
+                {
+                    if (!StrongThis->MutableInstance)
+                    {
+                        StrongThis->MutableInstance = LoadedObj->CreateInstance();
+                        if (!StrongThis->MutableInstance)
+                        {
+                            StrongThis->MutableInstance = NewObject<UCustomizableObjectInstance>(StrongThis);
+                            StrongThis->MutableInstance->SetObject(LoadedObj);
+                        }
+
+                        // FIXED: Access through public setter method
+                        StrongThis->MutableMeshComponent->SetCustomizableObjectInstance(StrongThis->MutableInstance);
+                    }
+                    StrongThis->ApplyCustomizationToMesh();
+                }
+            }
+        }));
+    }
 }
 
 float UDynamicCustomizationComponent::ClampSliderToLimits(FGameplayTag SliderTag, float RawValue) const
@@ -430,23 +503,52 @@ void UDynamicCustomizationComponent::ApplyCustomizationToMesh()
 {
     if (!CheckCurrentSignificance())
     {
-        for (const auto& Pair : LocalMorphCache)
+        for (const auto& Pair : LocalMorphCache) 
         {
             DeferredMorphSliders.AddUnique(Pair.Key);
         }
+        bMutableUpdatePending = true;
         return;
     }
 
     ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner());
     if (!CharOwner) return;
 
-    // Hoisted outside the slider loop
     TArray<USkeletalMeshComponent*> ModularMeshes;
     CharOwner->GetComponents<USkeletalMeshComponent>(ModularMeshes);
 
+    // 1. Evaluate Exact Physical Bone Constraints (Server & Client Physics Match)
     for (const auto& Pair : LocalMorphCache)
     {
         ApplySingleSliderDeformation(Pair.Key, Pair.Value, ModularMeshes);
+    }
+
+    // 2. Client-Side Mutable Synthesis (Visual Only)
+    if (GetNetMode() != NM_DedicatedServer && MutableInstance)
+    {
+        for (const auto& Pair : LocalMorphCache)
+        {
+            MutableInstance->SetFloatParameterSelectedOption(Pair.Key.ToString(), Pair.Value);
+        }
+
+        MutableInstance->SetColorParameterSelectedOption(TEXT("SkinColorPrimary"), SkinColor.PrimaryColor);
+        MutableInstance->SetColorParameterSelectedOption(TEXT("SkinColorSecondary"), SkinColor.SecondaryColor);
+        MutableInstance->SetColorParameterSelectedOption(TEXT("HairColorPrimary"), HairColor.PrimaryColor);
+        MutableInstance->SetColorParameterSelectedOption(TEXT("HairColorSecondary"), HairColor.SecondaryColor);
+
+        if (UDynamicEquipmentComponent* EquipComp = CharOwner->FindComponentByClass<UDynamicEquipmentComponent>())
+        {
+            for (const FDynamicEquipmentSlotItem& Slot : EquipComp->ReplicatedEquipmentSlots.Items)
+            {
+                if (Slot.EquippedItemArchetypeTag.IsValid())
+                {
+                    MutableInstance->SetBoolParameterSelectedOption(Slot.EquippedItemArchetypeTag.ToString(), true);
+                }
+            }
+        }
+
+        MutableInstance->UpdateSkeletalMeshAsync(true);
+        bMutableUpdatePending = false;
     }
 }
 
@@ -527,10 +629,40 @@ void UDynamicCustomizationComponent::OnRep_AppearanceColors()
         CharOwner->GetMeshComponent()->SetVectorParameterValueOnMaterials(TEXT("HairColorPrimary"), FVector(HairColor.PrimaryColor));
         CharOwner->GetMeshComponent()->SetVectorParameterValueOnMaterials(TEXT("HairColorSecondary"), FVector(HairColor.SecondaryColor));
     }
+
+    if (GetNetMode() != NM_DedicatedServer && MutableInstance)
+    {
+        MutableInstance->SetColorParameterSelectedOption(TEXT("SkinColorPrimary"), SkinColor.PrimaryColor);
+        MutableInstance->SetColorParameterSelectedOption(TEXT("SkinColorSecondary"), SkinColor.SecondaryColor);
+        MutableInstance->SetColorParameterSelectedOption(TEXT("HairColorPrimary"), HairColor.PrimaryColor);
+        MutableInstance->SetColorParameterSelectedOption(TEXT("HairColorSecondary"), HairColor.SecondaryColor);
+        
+        if (CheckCurrentSignificance())
+        {
+            MutableInstance->UpdateSkeletalMeshAsync(true);
+        }
+        else
+        {
+            bMutableUpdatePending = true;
+        }
+    }
 }
 
 void UDynamicCustomizationComponent::OnRep_HairStyle()
 {
+    if (GetNetMode() != NM_DedicatedServer && MutableInstance && ActiveHairArchetypeTag.IsValid())
+    {
+        MutableInstance->SetBoolParameterSelectedOption(ActiveHairArchetypeTag.ToString(), true);
+        
+        if (CheckCurrentSignificance())
+        {
+            MutableInstance->UpdateSkeletalMeshAsync(true);
+        }
+        else
+        {
+            bMutableUpdatePending = true;
+        }
+    }
 }
 
 void UDynamicCustomizationComponent::ServerApplyTransformation(FGameplayTag TransformationTag)
@@ -762,6 +894,25 @@ void UDynamicCustomizationComponent::ApplyEmotion(FGameplayTag EmotionTag)
         {
             // Reusing our morph slider pipeline to smoothly handle facial muscle states across the network
             ServerSetMorphSliderValue(MorphPair.KeyTag, MorphPair.Value);
+        }
+    }
+}
+
+void UDynamicCustomizationComponent::HandleEquipmentChanged(FGameplayTag SlotTag, FGameplayTag ItemArchetypeTag, bool bIsEquipped)
+{
+    if (GetNetMode() != NM_DedicatedServer && MutableInstance && ItemArchetypeTag.IsValid())
+    {
+        // 1. Dispatch equipped ArchetypeTag directly into Mutable's node tree
+        MutableInstance->SetBoolParameterSelectedOption(ItemArchetypeTag.ToString(), bIsEquipped);
+        
+        // 2. Throttle compilation using our established MMO Significance framework
+        if (CheckCurrentSignificance())
+        {
+            MutableInstance->UpdateSkeletalMeshAsync(true);
+        }
+        else
+        {
+            bMutableUpdatePending = true;
         }
     }
 }

@@ -623,6 +623,12 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             FJsonObjectConverter::JsonObjectToUStruct(TempObj.ToSharedRef(), &TempDef, 0, 0);
             DeserializeLocalizationMap(TempObj, TEXT("Localization"), TempDef.Localization);
 
+            // Parse client-side Mutable Asset
+            if (TempObj->HasField(TEXT("MutableObjectAsset")))
+            {
+                TempDef.MutableObjectAsset = TSoftObjectPtr<UCustomizableObject>(FSoftObjectPath(TempObj->GetStringField(TEXT("MutableObjectAsset"))));
+            }
+
             if (TempObj->HasField(TEXT("PersonalityProfile")))
             {
                 TSharedPtr<FJsonObject> PersObj = TempObj->GetObjectField(TEXT("PersonalityProfile"));

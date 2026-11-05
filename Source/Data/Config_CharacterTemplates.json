@@ -102,6 +102,7 @@
       "TemplateTag": "Character.Humanoid.Human",
       "ParentTemplateTag": "Character.Humanoid",
       "SkeletalMeshAsset": "/Game/Characters/Humanoid/SK_Human.SK_Human",
+      "MutableObjectAsset": "/Game/Characters/Humanoid/Mutable/MO_Human.MO_Human",
       "AnimationControllerClass": "/Game/Characters/Humanoid/ABP_GASPCharacter.ABP_GASPCharacter_C",
       "SkeletonTypeTag": "Skeleton.Humanoid.Standard",
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",

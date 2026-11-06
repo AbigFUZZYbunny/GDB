@@ -1,6 +1,48 @@
 ﻿{
   "_comment": "Dynamic Non-Character Physics Actors & Container Definitions Schema",
   "MasterPhysicsActorRegistry": {
+    "Actor.Environment.Door.HeavyOak": {
+      "Localization": {
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Heavy Oak Door" } ]
+      },
+      "SkeletalMeshAsset": "/Game/Environment/Doors/SK_OakDoor.SK_OakDoor",
+      "CollisionProfileName": "PhysicsActor",
+      "bSimulatePhysicsByDefault": true,
+      "MassOverride": 65.0,
+      "CustomLimbs": [
+        {
+          "LimbId": 1,
+          "LimbTypeTag": "Limb.Object.DoorPanel",
+          "JointChain": [
+            {
+              "BoneName": "hinge_top",
+              "JointChainIndex": 0,
+              "MotorDriveWeight": 0.9,
+              "LinearBreakForce": 15000.0,
+              "AngularBreakForce": 18000.0,
+              "BrokenStateTags": [ "State.Interactable.BrokenHinge" ]
+            },
+            {
+              "BoneName": "hinge_bottom",
+              "JointChainIndex": 1,
+              "MotorDriveWeight": 0.9,
+              "LinearBreakForce": 15000.0,
+              "AngularBreakForce": 18000.0,
+              "BrokenStateTags": [ "State.Interactable.BrokenHinge" ]
+            },
+            {
+              "BoneName": "latch_mechanism",
+              "JointChainIndex": 2,
+              "MotorDriveWeight": 1.0,
+              "LinearBreakForce": 4500.0,
+              "AngularBreakForce": 3000.0,
+              "BrokenStateTags": [ "State.Interactable.Open", "State.Interactable.BrokenLatch" ],
+              "CanBreakStateTags": ["State.Interactable.Closed", "State.Interactable.Locked"]
+            }
+          ]
+        }
+      ]
+    },
     "Actor.Container.Chest.Ironbound": {
       "SkeletalMeshAsset": "/Game/Props/Containers/SK_IronboundChest.SK_IronboundChest",
       "StaticMeshAsset": "None",
@@ -151,6 +193,37 @@
         "DropSpawnBoneOrSocket": "bag_strap_grip",
         "DefaultStoredItems": []
       }
+    },
+    "Actor.Combat.Armor.Chestplate.Chainmail": {
+      "ArchetypeTag": "Actor.Combat.Armor.Chestplate.Chainmail",
+      "AcousticMaterialTag": "AcousticMaterial.Metal",
+      "MassOverride": 14.0,
+      "ActionAudioLayers": [
+        {
+          "ActionOrMovementTag": "Action.Movement.Step",
+          "PrimaryAudioTag": "Audio.Movement.Rattle.Chainmail",
+          "GuaranteedSecondaryAudioTags": [],
+          "BaseProbability": 1.0,
+          "PaceModifier": {
+            "MinSpeedThreshold": 50.0,
+            "MaxSpeedThreshold": 650.0,
+            "VolumeMultiplierAtMin": 0.15,
+            "VolumeMultiplierAtMax": 1.85,
+            "PitchMultiplierAtMin": 0.9,
+            "PitchMultiplierAtMax": 1.15,
+            "SpeedScalingAttribute": "Attribute.Movement.Pace"
+          },
+          "ConditionalAudioLayers": [
+            {
+              "AudioTag": "Audio.Movement.Chime.HeavyClatter",
+              "BaseProbability": 0.4,
+              "ProbabilityScalingAttribute": "Attribute.Object.Weight",
+              "bInvertAttributeScaling": false,
+              "AttributeScalingWeight": 0.05
+            }
+          ]
+        }
+      ]
     }
   }
 }

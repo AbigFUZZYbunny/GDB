@@ -3,6 +3,7 @@
     "CalculationMode": "ImpulseMagnitude",
     "PrimaryDamageTargetAttributeTag": "Attribute.Resource.Health",
     "ObjectWeightAttributeTag": "Attribute.Object.Weight",
+    "StumbleThreshold": 450.0,
     "BaselineCharacterMassKg": 80.0,
     "CarriedMassProximityRadius": 300.0,
     "BaseHoldSweepRadius": 50.0,

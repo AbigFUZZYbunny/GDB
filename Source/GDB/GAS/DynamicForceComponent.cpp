@@ -5,6 +5,7 @@
 #include "DynamicGameState.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
+#include "DynamicAudioSubsystem.h"
 #include "DefaultMovementSet/LayeredMoves/LaunchMove.h"
 
 UDynamicForceComponent::UDynamicForceComponent()
@@ -123,7 +124,6 @@ void UDynamicForceComponent::ApplyHitReactionLocal(uint8 LimbId, const FName& Bo
         }
         else if (CharacterOwner->IsLocallyControlled())
         {
-            // Locally predicted clients ignore external non-ragdoll skeletal impulses to prevent jitter
             return;
         }
 
@@ -137,6 +137,20 @@ void UDynamicForceComponent::ApplyHitReactionLocal(uint8 LimbId, const FName& Bo
         if (UPrimitiveComponent* Prim = PhysActor->GetActivePhysicsPrimitive())
         {
             Prim->AddImpulseAtLocation(DirectedImpulse, HitLocation, BoneName);
+        }
+    }
+
+    // Trigger Material-based Acoustic Sound locally
+    if (UWorld* World = GetWorld())
+    {
+        if (UDynamicAudioSubsystem* AudioSub = World->GetSubsystem<UDynamicAudioSubsystem>())
+        {
+            AActor* AcousticInstigator = Owner->HasAuthority() ? Owner : nullptr;
+            const FGameplayTag SelfAcoustic = AudioSub->ResolveActorAcousticMaterial(Owner);
+            static const FGameplayTag DefaultImpactAcoustic = FGameplayTag::RequestGameplayTag(TEXT("AcousticMaterial.Metal"), false);
+
+            // Calls the clean 5-parameter overload
+            AudioSub->PlayMaterialImpactAudio(SelfAcoustic, DefaultImpactAcoustic, HitLocation, AcousticInstigator, ImpulseMagnitude);
         }
     }
 }

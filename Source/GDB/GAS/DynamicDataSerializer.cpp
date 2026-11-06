@@ -451,6 +451,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                     DeserializeMapWrapper(LimbObj, TEXT("LinearMotorAttributeScalars"), ActorDef.CustomLimbs[i].LinearMotorAttributeScalars);
                 }
             }
+            if (ActorObj->HasField(TEXT("AcousticMaterialTag")))
+            {
+                ActorDef.AcousticMaterialTag = FGameplayTag::RequestGameplayTag(FName(*ActorObj->GetStringField(TEXT("AcousticMaterialTag"))), false);
+            }
             OutStaging.MasterPhysicsActorRegistry.Add(KeyTag, ActorDef);
             if (ActorDef.CraftingRecipes.Num() > 0)
             {
@@ -760,6 +764,10 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 TSharedPtr<FJsonObject> StanceObj = TempObj->GetObjectField(TEXT("StanceProneConfig"));
                 TempDef.StanceProneConfig.BaseHeight = StanceObj->HasField(TEXT("BaseHeight")) ? static_cast<float>(StanceObj->GetNumberField(TEXT("BaseHeight"))) : 22.0f;
                 DeserializeMapWrapper(StanceObj, TEXT("AttributeModifiers"), TempDef.StanceProneConfig.AttributeModifiers);
+            }
+            if (TempObj->HasField(TEXT("AcousticMaterialTag")))
+            {
+                TempDef.AcousticMaterialTag = FGameplayTag::RequestGameplayTag(FName(*TempObj->GetStringField(TEXT("AcousticMaterialTag"))), false);
             }
             
             OutStaging.CharacterTemplatesRegistry.Add(KeyTag, TempDef);
@@ -1956,6 +1964,101 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             Def.ProfileTag = KeyTag;
 
             OutStaging.CameraMasterRegistry.Add(KeyTag, Def);
+        }
+    }
+    
+    if (RootObject->HasField(TEXT("AudioMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("AudioMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> AudioObj = Pair.Value->AsObject();
+            if (!AudioObj.IsValid()) continue;
+
+            FDynamicAudioDef Def;
+            Def.AudioTag = KeyTag;
+            if (AudioObj->HasField(TEXT("SoundAsset"))) Def.SoundAsset = TSoftObjectPtr<USoundBase>(FSoftObjectPath(AudioObj->GetStringField(TEXT("SoundAsset"))));
+            Def.DefaultVolumeMultiplier = AudioObj->HasField(TEXT("DefaultVolumeMultiplier")) ? static_cast<float>(AudioObj->GetNumberField(TEXT("DefaultVolumeMultiplier"))) : 1.0f;
+            Def.DefaultPitchMultiplier = AudioObj->HasField(TEXT("DefaultPitchMultiplier")) ? static_cast<float>(AudioObj->GetNumberField(TEXT("DefaultPitchMultiplier"))) : 1.0f;
+            Def.VelocityToVolumeScalar = AudioObj->HasField(TEXT("VelocityToVolumeScalar")) ? static_cast<float>(AudioObj->GetNumberField(TEXT("VelocityToVolumeScalar"))) : 0.001f;
+            
+            if (AudioObj->HasField(TEXT("AssociatedStimulusTag")))
+            {
+                Def.AssociatedStimulusTag = FGameplayTag::RequestGameplayTag(FName(*AudioObj->GetStringField(TEXT("AssociatedStimulusTag"))), false);
+            }
+            Def.BaseStimulusMagnitude = AudioObj->HasField(TEXT("BaseStimulusMagnitude")) ? static_cast<float>(AudioObj->GetNumberField(TEXT("BaseStimulusMagnitude"))) : 1000.0f;
+
+            OutStaging.AudioMasterRegistry.Add(KeyTag, Def);
+        }
+    }
+
+    if (RootObject->HasField(TEXT("AudioMaterialMatrix")))
+    {
+        for (auto& OuterPair : RootObject->GetObjectField(TEXT("AudioMaterialMatrix"))->Values)
+        {
+            FGameplayTag OuterTag = FGameplayTag::RequestGameplayTag(FName(*OuterPair.Key), false);
+            if (!OuterTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> InnerMapObj = OuterPair.Value->AsObject();
+            if (!InnerMapObj.IsValid()) continue;
+
+            FAcousticMaterialMatrixRow MatrixRow;
+
+            for (auto& InnerPair : InnerMapObj->Values)
+            {
+                FGameplayTag InnerTag = FGameplayTag::RequestGameplayTag(FName(*InnerPair.Key), false);
+                if (!InnerTag.IsValid()) continue;
+
+                FAcousticInteractionProfile Profile;
+
+                // Support both short string shorthand and full nested object schema
+                if (InnerPair.Value->Type == EJson::String)
+                {
+                    Profile.PrimaryAudioTag = FGameplayTag::RequestGameplayTag(FName(*InnerPair.Value->AsString()), false);
+                }
+                else if (InnerPair.Value->Type == EJson::Object)
+                {
+                    TSharedPtr<FJsonObject> ProfObj = InnerPair.Value->AsObject();
+                    Profile.PrimaryAudioTag = FGameplayTag::RequestGameplayTag(FName(*ProfObj->GetStringField(TEXT("PrimaryAudioTag"))), false);
+
+                    if (ProfObj->HasField(TEXT("GuaranteedSecondaryAudioTags")))
+                    {
+                        for (const auto& SecVal : ProfObj->GetArrayField(TEXT("GuaranteedSecondaryAudioTags")))
+                        {
+                            FGameplayTag SecTag = FGameplayTag::RequestGameplayTag(FName(*SecVal->AsString()), false);
+                            if (SecTag.IsValid()) Profile.GuaranteedSecondaryAudioTags.Add(SecTag);
+                        }
+                    }
+
+                    if (ProfObj->HasField(TEXT("ConditionalAudioLayers")))
+                    {
+                        for (const auto& CondVal : ProfObj->GetArrayField(TEXT("ConditionalAudioLayers")))
+                        {
+                            TSharedPtr<FJsonObject> CondObj = CondVal->AsObject();
+                            if (!CondObj.IsValid()) continue;
+
+                            FAcousticConditionalLayer CondLayer;
+                            CondLayer.AudioTag = FGameplayTag::RequestGameplayTag(FName(*CondObj->GetStringField(TEXT("AudioTag"))), false);
+                            CondLayer.BaseProbability = CondObj->HasField(TEXT("BaseProbability")) ? static_cast<float>(CondObj->GetNumberField(TEXT("BaseProbability"))) : 0.25f;
+                            CondLayer.ChanceConditionTreeName = CondObj->HasField(TEXT("ChanceConditionTreeName")) ? FName(*CondObj->GetStringField(TEXT("ChanceConditionTreeName"))) : NAME_None;
+                            if (CondObj->HasField(TEXT("ProbabilityScalingAttribute")))
+                            {
+                                CondLayer.ProbabilityScalingAttribute = FGameplayTag::RequestGameplayTag(FName(*CondObj->GetStringField(TEXT("ProbabilityScalingAttribute"))), false);
+                            }
+                            CondLayer.bInvertAttributeScaling = CondObj->HasField(TEXT("bInvertAttributeScaling")) ? CondObj->GetBoolField(TEXT("bInvertAttributeScaling")) : false;
+                            CondLayer.AttributeScalingWeight = CondObj->HasField(TEXT("AttributeScalingWeight")) ? static_cast<float>(CondObj->GetNumberField(TEXT("AttributeScalingWeight"))) : 1.0f;
+
+                            Profile.ConditionalAudioLayers.Add(CondLayer);
+                        }
+                    }
+                }
+
+                MatrixRow.TargetMaterialProfiles.Add(InnerTag, Profile);
+            }
+
+            OutStaging.AudioMaterialMatrix.Add(OuterTag, MatrixRow);
         }
     }
 

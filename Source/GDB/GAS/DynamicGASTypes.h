@@ -866,6 +866,90 @@ struct TStructOpsTypeTraits<FFastNetworkConnectionArray> : public TStructOpsType
 };
 
 USTRUCT(BlueprintType)
+struct GDB_API FAcousticConditionalLayer
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag AudioTag;
+
+    // Base probability [0.0 to 1.0] of this sound firing (e.g. 0.25 for a 25% chance)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float BaseProbability = 0.25f;
+
+    // Optional dynamic condition tree evaluated on the floor/target (e.g. check if wet, rotted, or low stability)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FName ChanceConditionTreeName = NAME_None;
+
+    // Attribute on the character or target floor that scales the chance (e.g., lower SupportValue increases probability)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag ProbabilityScalingAttribute;
+
+    // If true, probability increases as the scaling attribute decreases (e.g. low stability/health -> higher creak chance)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    bool bInvertAttributeScaling = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float AttributeScalingWeight = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FAcousticInteractionProfile
+{
+    GENERATED_BODY()
+
+    // Primary impact layer (e.g., Audio.Impact.MetalOnWood)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag PrimaryAudioTag;
+
+    // Guaranteed simultaneous layers (e.g., heavy dull thud underneath a metal click)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    TArray<FGameplayTag> GuaranteedSecondaryAudioTags;
+
+    // Conditional or probabilistic layers (e.g., floorboard creaks, loose gravel scatter)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    TArray<FAcousticConditionalLayer> ConditionalAudioLayers;
+};
+
+// Wrapper struct to make the inner mapping UHT-compliant
+USTRUCT(BlueprintType)
+struct GDB_API FAcousticMaterialMatrixRow
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    TMap<FGameplayTag, FAcousticInteractionProfile> TargetMaterialProfiles;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicAudioDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag AudioTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    TSoftObjectPtr<USoundBase> SoundAsset;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float DefaultVolumeMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float DefaultPitchMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float VelocityToVolumeScalar = 0.001f;
+
+    // The AI stimulus this sound generates (e.g., Stimulus.Sound.Explosion)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|AI")
+    FGameplayTag AssociatedStimulusTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|AI")
+    float BaseStimulusMagnitude = 1000.0f;
+};
+
+USTRUCT(BlueprintType)
 struct FDynamicEQSTestDef
 {
     GENERATED_BODY()
@@ -1441,6 +1525,9 @@ struct FAbilityStagePresentation
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
     FGameplayTag StageVfxCueTag;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FGameplayTag StageAudioTag;
 };
 
 USTRUCT(BlueprintType)
@@ -1747,6 +1834,9 @@ struct FDynamicMaterialDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Yields")
     FGameplayTag DefaultYieldArchetype;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material")
+    FGameplayTag AcousticMaterialTag;
 
     // --- Fully Data-Driven Mechanical Calculation ---
     inline float CalculateMechanicalDamage(const FGameplayTagContainer& ImpactOrDamageTags, float RawForceMagnitude, FGameplayTag& OutDominantYield) const
@@ -4254,7 +4344,7 @@ struct FPhysicsCalculationSettings
 };
 
 USTRUCT(BlueprintType)
-struct FPhysicsJointNodeConfig
+struct GDB_API FPhysicsJointNodeConfig
 {
     GENERATED_BODY()
 
@@ -4269,6 +4359,19 @@ struct FPhysicsJointNodeConfig
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal")
     float LocalBoneDamageMultiplier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal|Breakage")
+    float LinearBreakForce = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal|Breakage")
+    float AngularBreakForce = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal|Breakage")
+    TArray<FGameplayTag> BrokenStateTags;
+
+    // Prerequisite interactable state tags required for this joint/latch to be breakable
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Skeletal|Breakage")
+    FGameplayTagContainer CanBreakStateTags;
 };
 
 USTRUCT(BlueprintType)
@@ -4375,17 +4478,83 @@ struct FDynamicEquipmentRequirementDef
 };
 
 // ============================================================================
+// DYNAMIC ACOUSTIC ACTION & MOVEMENT LAYERS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct GDB_API FAcousticPaceVolumeModifier
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float MinSpeedThreshold = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float MaxSpeedThreshold = 750.0f;
+
+    // Volume multiplier applied when speed/pace is at or below MinSpeedThreshold (e.g. 0.15 for slow sneak/crawl)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float VolumeMultiplierAtMin = 0.15f;
+
+    // Volume multiplier applied when speed/pace is at or above MaxSpeedThreshold (e.g. 1.8 for full sprint)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float VolumeMultiplierAtMax = 1.8f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float PitchMultiplierAtMin = 0.9f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float PitchMultiplierAtMax = 1.15f;
+
+    // Optional dynamic attribute to query instead of raw velocity (e.g. Attribute.Movement.Pace)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag SpeedScalingAttribute;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FAcousticActionLayer
+{
+    GENERATED_BODY()
+
+    // The action or movement mode tag triggering this layer (e.g., Action.Movement.Step, Movement.Mode.Sprint, Action.Combat.Swing)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag ActionOrMovementTag;
+
+    // Primary audio cue emitted by this item/slot
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FGameplayTag PrimaryAudioTag;
+
+    // Simultaneous secondary layers (e.g., leather squeak underneath a chainmail clink)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    TArray<FGameplayTag> GuaranteedSecondaryAudioTags;
+
+    // Probabilistic or conditional acoustic layers (e.g., chance for loose strap clatter, buckle chime)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    TArray<FAcousticConditionalLayer> ConditionalAudioLayers;
+
+    // Velocity / Pace scaling response
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FAcousticPaceVolumeModifier PaceModifier;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    float BaseProbability = 1.0f;
+
+    // Optional condition tree evaluated before firing (e.g., condition checks if submerged, rotted, or broken)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio")
+    FName ChanceConditionTreeName = NAME_None;
+};
+
+// ============================================================================
 // PHYSICS ACTOR DEFINITION (RESTORED ORIGINAL MEMBERS)
 // ============================================================================
 USTRUCT(BlueprintType)
-struct FDynamicPhysicsActorDef
+struct GDB_API FDynamicPhysicsActorDef
 {
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FGameplayTag ArchetypeTag;
 
-    // Intrinsic impact types of the tool/weapon (e.g. Impact.Type.Weapon.Piercing, Impact.Type.Weapon.Slashing)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     FGameplayTagContainer ImpactTypeTags;
 
@@ -4436,6 +4605,14 @@ struct FDynamicPhysicsActorDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics")
     TArray<FDynamicRecipeDef> CraftingRecipes;
+
+    // Contact material tag (e.g., AcousticMaterial.Metal, AcousticMaterial.Wood)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Acoustics")
+    FGameplayTag AcousticMaterialTag;
+
+    // Data-driven action and movement audio layers for this physical item
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Acoustics")
+    TArray<FAcousticActionLayer> ActionAudioLayers;
 };
 
 USTRUCT(BlueprintType)
@@ -4514,7 +4691,7 @@ struct FDynamicNpcWorkOrderRequest
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicEquipmentSlotProfile
+struct GDB_API FDynamicEquipmentSlotProfile
 {
     GENERATED_BODY()
 
@@ -4529,6 +4706,14 @@ struct FDynamicEquipmentSlotProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment")
     FGameplayTagContainer AllowedItemTags;
+
+    // Dampening multiplier applied to acoustic layers beneath this slot (e.g. 0.3 for a cloth tabard/cloak dampening mail beneath it)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment|Acoustics")
+    float AcousticDampingMultiplier = 1.0f;
+
+    // Slot-level action audio overrides
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Equipment|Acoustics")
+    TArray<FAcousticActionLayer> SlotActionAudioLayers;
 };
 
 // ============================================================================
@@ -4659,6 +4844,37 @@ struct FCharacterGenderProfile
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Gender Modifiers")
     TArray<FGameplayTag> CulturalHairArchetypes;
+};
+
+UENUM(BlueprintType)
+enum class ECharacterHandedness : uint8
+{
+    RightHanded,
+    Southpaw
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterDominanceProfile
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ECharacterHandedness Handedness = ECharacterHandedness::RightHanded;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName MainHandBone = TEXT("hand_r");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName OffHandBone = TEXT("hand_l");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName MainLegBone = TEXT("foot_r");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName OffLegBone = TEXT("foot_l");
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FName HeadStrikeBone = TEXT("head");
 };
 
 USTRUCT(BlueprintType)
@@ -5060,6 +5276,12 @@ struct FCharacterTemplateDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Stance")
     FDynamicStanceConfig StanceProneConfig;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FCharacterDominanceProfile DominanceProfile;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag AcousticMaterialTag; // Defines the sound of hitting this character (e.g., AcousticMaterial.Flesh)
 };
 
 USTRUCT(BlueprintType)
@@ -6830,6 +7052,8 @@ struct GDB_API FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicStateTreeDef> StateTreeMasterRegistry;
     TMap<FGameplayTag, FDynamicInputActionDef> InputMasterRegistry;
     TMap<FGameplayTag, FDynamicCameraProfileDef> CameraMasterRegistry;
+    TMap<FGameplayTag, FDynamicAudioDef> AudioMasterRegistry;
+    TMap<FGameplayTag, FAcousticMaterialMatrixRow> AudioMaterialMatrix;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

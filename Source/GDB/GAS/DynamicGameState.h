@@ -73,6 +73,8 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicStateTreeDef> StateTreeMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicInputActionDef> InputMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicCameraProfileDef> CameraMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicAudioDef> AudioMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FAcousticMaterialMatrixRow> AudioMaterialMatrix;
 
     // Asynchronous Native Evaluation for Dynamic JSON EQS Queries
     void ExecuteDynamicEQSAsync(

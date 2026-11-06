@@ -6,6 +6,7 @@
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
 #include "DynamicCharacter.h"
+#include "DynamicAudioSubsystem.h"
 #include "DynamicForceComponent.h"
 #include "DynamicGameState.h"
 #include "DynamicAttributeSet.h"
@@ -236,7 +237,19 @@ bool UDynamicGameplayAbility::EvaluateDynamicRule(const FGameplayTag& RuleTag, c
 
 void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentation& StageConfig)
 {
-    if (StageConfig.StageMontage.IsNull()) return; // Removed semicolon after if()
+    if (StageConfig.StageAudioTag.IsValid())
+    {
+        if (UWorld* World = GetWorld())
+        {
+            if (UDynamicAudioSubsystem* AudioSub = World->GetSubsystem<UDynamicAudioSubsystem>())
+            {
+                AActor* Avatar = GetAvatarActorFromActorInfo();
+                AudioSub->PlayDynamicAudioAtLocation(StageConfig.StageAudioTag, Avatar ? Avatar->GetActorLocation() : FVector::ZeroVector, Avatar);
+            }
+        }
+    }
+
+    if (StageConfig.StageMontage.IsNull()) return;
 
     const FSoftObjectPath MontagePath = StageConfig.StageMontage.ToSoftObjectPath();
     TWeakObjectPtr<UDynamicGameplayAbility> WeakThis(this);

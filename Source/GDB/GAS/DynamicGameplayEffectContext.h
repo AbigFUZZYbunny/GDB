@@ -42,18 +42,22 @@ public:
     float GetKineticImpulse() const { return KineticImpulse; }
     float GetMassRatioFactor() const { return MassRatioFactor; }
 
-    void SetAuthoritativePhysicsPayload(uint8 InLimbId, float InImpulse, float InMassRatio, const FVector& InNormal, const FVector& InLocation)
+    virtual UScriptStruct* GetScriptStruct() const override;
+    virtual FDynamicGameplayEffectContext* Duplicate() const override;
+    virtual bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess) override;
+    
+    UPROPERTY()
+    FName SourceEffectorBone = NAME_None;
+
+    void SetAuthoritativePhysicsPayload(uint8 InLimbId, float InImpulse, float InMassRatio, const FVector& InNormal, const FVector& InLocation, FName InSourceBone = NAME_None)
     {
         TargetLimbId = InLimbId;
         KineticImpulse = InImpulse;
         MassRatioFactor = InMassRatio;
         QuantizedImpactNormal = InNormal;
         QuantizedImpactLocation = InLocation;
+        SourceEffectorBone = InSourceBone;
     }
-
-    virtual UScriptStruct* GetScriptStruct() const override;
-    virtual FDynamicGameplayEffectContext* Duplicate() const override;
-    virtual bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess) override;
 };
 
 template<>

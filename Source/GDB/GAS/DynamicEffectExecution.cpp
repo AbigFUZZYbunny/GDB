@@ -12,7 +12,9 @@
 
 UDynamicEffectExecution::UDynamicEffectExecution() {}
 
-void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustomExecutionParameters& ExecutionParams, FGameplayEffectCustomExecutionOutput& ExecutionOutput) const
+void UDynamicEffectExecution::Execute_Implementation(
+    const FGameplayEffectCustomExecutionParameters& ExecutionParams, 
+    FGameplayEffectCustomExecutionOutput& ExecutionOutput) const
 {
     const FGameplayEffectSpec& Spec = ExecutionParams.GetOwningSpec();
     FDynamicGameplayEffectContext* DynContext = static_cast<FDynamicGameplayEffectContext*>(Spec.GetContext().Get());
@@ -24,6 +26,8 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
 
     AActor* TargetActor = TargetASC->GetOwner();
     if (!TargetActor) return;
+
+    AActor* InstigatorActor = DynContext->GetInstigator();
 
     UWorld* World = TargetASC->GetWorld();
     ADynamicGameState* DynamicGS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
@@ -62,16 +66,20 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
     }
 
     float EvaluatedDamage = 0.0f;
+    float HighestTargetImpulse = 0.0f;
+    float HighestRecoilImpulse = 0.0f;
 
-    // 2. Authoritative Kinetic & Environmental Physics Calculation across ALL impact tags
+    // 2. Authoritative Kinetic & Environmental Physics Calculation
     if (DynContext->GetKineticImpulse() > 0.0f && !DynContext->ContextPayloadTags.IsEmpty())
     {
         float HighestMitigatedDamage = 0.0f;
+        const float WeaponMomentum = DynContext->GetKineticImpulse() * DynContext->GetMassRatioFactor();
 
         for (const FGameplayTag& ImpactTag : DynContext->ContextPayloadTags)
         {
             if (const FDynamicImpactReactionRule* ImpactRule = CalcSettings.ImpactReactionRules.Find(ImpactTag))
             {
+                // Velocity Mitigations (Armor, Agility, Resistance)
                 float TotalVelocityDamping = 0.0f;
                 for (const auto& Pair : ImpactRule->VelocityMitigationScalars.LocalLookupMap)
                 {
@@ -87,6 +95,7 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
 
                 if (ExcessVelocity > 0.0f)
                 {
+                    // Damage Mitigations
                     float TotalDamageAbsorption = 0.0f;
                     for (const auto& Pair : ImpactRule->DamageMitigationScalars.LocalLookupMap)
                     {
@@ -99,14 +108,14 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
 
                     const float RawUnmitigatedDamage = ExcessVelocity * DynContext->GetMassRatioFactor();
                     const float MitigatedDamage = RawUnmitigatedDamage * FMath::Clamp(1.0f - TotalDamageAbsorption, 0.05f, 5.0f);
-                    
                     HighestMitigatedDamage = FMath::Max(HighestMitigatedDamage, MitigatedDamage);
 
+                    // Apply Data-Driven Status Consequences
                     for (const FDynamicImpactConsequence& Conseq : ImpactRule->Consequences)
                     {
                         if (!Conseq.TargetAttributeTag.IsValid()) continue;
                         
-                        float AppliedDamage = MitigatedDamage * Conseq.DamageScalar;
+                        const float AppliedDamage = MitigatedDamage * Conseq.DamageScalar;
                         if (AppliedDamage >= Conseq.StatusEffectThreshold)
                         {
                             for (const FGameplayTag& EffectTag : Conseq.StatusEffectsToApply)
@@ -116,6 +125,7 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
                         }
                     }
 
+                    // Stability Evaluation
                     float StabilityBonus = 0.0f;
                     for (const auto& Pair : ImpactRule->StabilityRetentionScalars.LocalLookupMap)
                     {
@@ -126,26 +136,74 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
                         }
                     }
 
-                    const float EffectiveStabilityThreshold = (ImpactRule->BaseStabilityLossThreshold + StabilityBonus) / DynContext->GetMassRatioFactor();
-                    if (MitigatedDamage > EffectiveStabilityThreshold || (LimbData && MitigatedDamage >= LimbData->BreakRagdollThreshold))
+                    const float StaggerThreshold = (ImpactRule->BaseStabilityLossThreshold + StabilityBonus) / FMath::Max(0.01f, DynContext->GetMassRatioFactor());
+                    
+                    // Stagger / Stumble / Ragdoll Resolution (Data-driven, no redundant threshold floats)
+                    if (MitigatedDamage > StaggerThreshold)
                     {
-                        if (ImpactRule->bTriggersRagdollOnInstability)
+                        bool bOverpoweredToRagdoll = false;
+
+                        // Check Overpower Rules first
+                        for (const FDynamicOverpowerRule& OverpowerRule : ImpactRule->OverpowerRules)
                         {
-                            if (ADynamicCharacter* DynChar = Cast<ADynamicCharacter>(TargetActor))
+                            float ResistanceAccum = OverpowerRule.BasePenetrationThreshold;
+                            for (const auto& Pair : OverpowerRule.ResistanceAttributeScalars.LocalLookupMap)
                             {
-                                DynChar->StartRagdoll();
+                                if (Pair.Key.IsValid())
+                                {
+                                    ResistanceAccum += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                                }
+                            }
+
+                            if (WeaponMomentum > ResistanceAccum && OverpowerRule.bForceRagdollOnOverpower)
+                            {
+                                bOverpoweredToRagdoll = true;
+                                break;
+                            }
+                        }
+
+                        if (ADynamicCharacter* DynChar = Cast<ADynamicCharacter>(TargetActor))
+                        {
+                            if (bOverpoweredToRagdoll || (LimbData && MitigatedDamage >= LimbData->BreakRagdollThreshold))
+                            {
+                                if (ImpactRule->bTriggersRagdollOnInstability)
+                                {
+                                    DynChar->StartRagdoll();
+                                    if (UDynamicForceComponent* ForceComp = DynChar->FindComponentByClass<UDynamicForceComponent>())
+                                    {
+                                        const FVector ReboundDir = (DynContext->QuantizedImpactNormal + FVector::UpVector * 0.35f).GetSafeNormal();
+                                        ForceComp->QueueInstantMovementImpulse(ReboundDir, MitigatedDamage * 25.0f);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Directional Stumble: Destabilized without full overpower
+                                static const FGameplayTag StumbleTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving.Stumble"), false);
+                                if (StumbleTag.IsValid())
+                                {
+                                    TargetASC->AddLooseGameplayTags(FGameplayTagContainer(StumbleTag));
+                                }
+
                                 if (UDynamicForceComponent* ForceComp = DynChar->FindComponentByClass<UDynamicForceComponent>())
                                 {
-                                    const FVector ReboundDirection = (DynContext->QuantizedImpactNormal + FVector::UpVector * 0.35f).GetSafeNormal();
-                                    ForceComp->QueueInstantMovementImpulse(ReboundDirection, MitigatedDamage * 25.0f);
+                                    ForceComp->QueueInstantMovementImpulse(DynContext->QuantizedImpactNormal, MitigatedDamage * 12.0f);
                                 }
                             }
                         }
                     }
+
+                    // Newton Exchange Recoil Calculation
+                    const float DefenderStaggerResist = TargetAttributes->GetDynamicAttributeValue(FGameplayTag::RequestGameplayTag(TEXT("Attribute.Stat.Strength"), false), 0) * 10.0f;
+                    const float SafeTotalPower = FMath::Max(1.0f, WeaponMomentum + DefenderStaggerResist);
+                    const float TargetRatio = FMath::Clamp(WeaponMomentum / SafeTotalPower, 0.0f, 1.0f);
+
+                    HighestTargetImpulse = FMath::Max(HighestTargetImpulse, WeaponMomentum * TargetRatio);
+                    HighestRecoilImpulse = FMath::Max(HighestRecoilImpulse, (WeaponMomentum * (1.0f - TargetRatio)) * ImpactRule->BaseRecoilMultiplier);
                 }
             }
         }
-        
+
         EvaluatedDamage = HighestMitigatedDamage;
         if (EvaluatedDamage > 0.0f && DamageTargetTag.IsValid())
         {
@@ -176,7 +234,7 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
         }
     }
 
-    // 3. Dynamic Modifiers Evaluation from Specific GameplayEffect Definitions across all payload tags
+    // 3. Dynamic Modifiers Evaluation across all payload tags
     for (const FGameplayTag& PayloadTag : DynContext->ContextPayloadTags)
     {
         if (!PayloadTag.IsValid()) continue;
@@ -241,6 +299,43 @@ void UDynamicEffectExecution::Execute_Implementation(const FGameplayEffectCustom
                     const float OldSourceVal = SourceAttributes->GetDynamicAttributeValue(Rule.SourceAttributeTag, 0);
                     SourceAttributes->SetDynamicAttributeValue(Rule.SourceAttributeTag, OldSourceVal + GrantAmount, 0);
                 }
+            }
+        }
+    }
+
+    // 5. Dynamic Attacking Bone Physical Recoil
+    HighestRecoilImpulse = FMath::Min(HighestRecoilImpulse, CalcSettings.MaxImpulseCap);
+    if (HighestRecoilImpulse > CalcSettings.MinImpulseThreshold && InstigatorActor && InstigatorActor != TargetActor)
+    {
+        if (ADynamicCharacter* AttackerChar = Cast<ADynamicCharacter>(InstigatorActor))
+        {
+            if (UDynamicForceComponent* AttackerForceComp = AttackerChar->FindComponentByClass<UDynamicForceComponent>())
+            {
+                FName AttackingBone = DynContext->SourceEffectorBone;
+
+                // Fallback to Character Template Handedness / Dominance profile if none specified
+                if (AttackingBone.IsNone())
+                {
+                    if (const UDynamicCustomizationComponent* Cust = AttackerChar->GetCustomizationComponent())
+                    {
+                        FCharacterTemplateDef TempDef;
+                        if (DynamicGS->GetCharacterTemplate(Cust->ActiveCharacterTemplateTag, TempDef))
+                        {
+                            AttackingBone = TempDef.DominanceProfile.MainHandBone;
+                        }
+                    }
+                }
+
+                if (AttackingBone.IsNone()) AttackingBone = FName("hand_r");
+
+                const uint8 AttackerLimbId = DynamicGS->GetLimbIdForBone(AttackingBone);
+                AttackerForceComp->ServerApplyLimbForce(
+                    AttackerLimbId, 
+                    AttackingBone, 
+                    HighestRecoilImpulse, 
+                    AttackerChar->GetActorLocation(), 
+                    DynContext->QuantizedImpactNormal
+                );
             }
         }
     }

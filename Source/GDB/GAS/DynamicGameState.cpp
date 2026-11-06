@@ -1391,6 +1391,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     StateTreeMasterRegistry.Append(MoveTemp(StagingData.StateTreeMasterRegistry));
     InputMasterRegistry.Append(MoveTemp(StagingData.InputMasterRegistry));
     CameraMasterRegistry.Append(MoveTemp(StagingData.CameraMasterRegistry));
+    AudioMasterRegistry.Append(MoveTemp(StagingData.AudioMasterRegistry)); 
+    AudioMaterialMatrix.Append(MoveTemp(StagingData.AudioMaterialMatrix));
     
     RebuildLanguageLookupCaches();
 

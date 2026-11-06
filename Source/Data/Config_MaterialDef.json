@@ -15,6 +15,13 @@
       "BurnRatePerSecond": 10.0,
       "bCanRot": true,
       "RotWetnessThreshold": 70.0,
+      "AcousticProperties": {
+        "HarmonicProfile": "Wood",
+        "FundamentalFrequency": 120.0,
+        "QFactor": 25.0,
+        "DecayMultiplier": 0.6,
+        "HighFreqDamping": 0.2
+      },
       "StressResponses": {
         "Damage.Type.Physical.Crushing": {
           "BaseResistance": 300.0,

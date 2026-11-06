@@ -452,7 +452,13 @@ void ADynamicPhysicsActor::OnServerPrimitiveHit(UPrimitiveComponent* HitComponen
     ServerProcessAuthoritativeLimbHit(Hit.MyBoneName != NAME_None ? Hit.MyBoneName : Hit.BoneName, ImpulseMagnitude, 1.0f, Hit.ImpactPoint, Hit.ImpactNormal, OtherActor);
 }
 
-void ADynamicPhysicsActor::ServerProcessAuthoritativeLimbHit(const FName& HitBoneName, float RawImpulseMagnitude, float MassRatio, const FVector& HitLocation, const FVector& HitNormal, AActor* InstigatorActor)
+void ADynamicPhysicsActor::ServerProcessAuthoritativeLimbHit(
+    const FName& HitBoneName, 
+    float RawImpulseMagnitude, 
+    float MassRatio, 
+    const FVector& HitLocation, 
+    const FVector& HitNormal, 
+    AActor* InstigatorActor)
 {
     if (!HasAuthority()) return;
 
@@ -465,7 +471,101 @@ void ADynamicPhysicsActor::ServerProcessAuthoritativeLimbHit(const FName& HitBon
     const uint8 ResolvedLimbId = ResolveLimbIdForBone(HitBoneName);
     const float ClampedImpulse = FMath::Min(RawImpulseMagnitude, Settings.MaxImpulseCap);
 
-    if (ForceComponent) ForceComponent->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, ClampedImpulse, HitLocation, HitNormal);
+    // 1. MATERIAL STRUCTURAL CLEAVE / CHOP-IN-HALF CHECK
+    // Evaluates whether the weapon force shatters or splits the door's material directly
+    const FDynamicPhysicsActorDef* ActorDef = DynamicGS->MasterPhysicsActorRegistry.Find(ActorArchetypeTag);
+    if (ActorDef)
+    {
+        // Query material definitions
+        static const FGameplayTag WoodMaterialTag = FGameplayTag::RequestGameplayTag(TEXT("Material.Wood.Pine"), false);
+        if (const FDynamicMaterialDef* MatDef = DynamicGS->MaterialMasterRegistry.Find(WoodMaterialTag))
+        {
+            FGameplayTag DominantYield;
+            FGameplayTagContainer StressTags;
+            StressTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Slashing"), false));
+            StressTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Damage.Type.Physical.Crushing"), false));
+
+            const float MaterialStressDamage = MatDef->CalculateMechanicalDamage(StressTags, ClampedImpulse, DominantYield);
+            
+            // If the shearing/slashing force exceeds the door panel's total structural resistance, it breaks in half
+            if (MaterialStressDamage >= MatDef->SupportStrength * 2.5f)
+            {
+                if (DominantYield.IsValid())
+                {
+                    FTransform DropTM(GetActorRotation(), HitLocation);
+                    if (ADynamicPhysicsActor* DroppedDebris = DynamicGS->AcquirePhysicsActor(DominantYield, DropTM, this, Cast<APawn>(InstigatorActor)))
+                    {
+                        if (UPrimitiveComponent* Prim = DroppedDebris->GetActivePhysicsPrimitive())
+                        {
+                            Prim->SetSimulatePhysics(true);
+                            Prim->AddImpulse(HitNormal * ClampedImpulse, NAME_None, true);
+                        }
+                    }
+                }
+
+                // Deactivate the physical door actor completely
+                DeactivateAndReturnToPool();
+                return;
+            }
+        }
+    }
+
+    // Apply baseline physical impulse to the actor body
+    if (ForceComponent)
+    {
+        ForceComponent->ServerApplyLimbForce(ResolvedLimbId, HitBoneName, ClampedImpulse, HitLocation, HitNormal);
+    }
+
+    // 2. LOCALIZED JOINT CONSTRAINTS & BREAKING (LATCH VS HINGE)
+    const FPhysicsLimbConfig* LimbData = DynamicGS->GetLimbData(ResolvedLimbId);
+    if (LimbData && SkeletalMeshComponent)
+    {
+        for (const FPhysicsJointNodeConfig& Joint : LimbData->JointChain)
+        {
+            if (Joint.LinearBreakForce > 0.0f || Joint.AngularBreakForce > 0.0f)
+            {
+                // Verify if current interactable states permit breaking this joint
+                if (InteractableComponent && Joint.CanBreakStateTags.Num() > 0)
+                {
+                    if (!InteractableComponent->GetCurrentStateTags().HasAll(Joint.CanBreakStateTags))
+                    {
+                        continue;
+                    }
+                }
+
+                // Calculate distance from impact location to joint socket
+                const FVector JointLoc = SkeletalMeshComponent->GetSocketLocation(Joint.BoneName);
+                const float DistToJoint = FVector::Dist(HitLocation, JointLoc);
+                
+                // Attenuate force based on physical distance to the joint
+                const float AttenuationRadius = 150.0f;
+                const float DistanceFalloff = FMath::Clamp(1.0f - (DistToJoint / AttenuationRadius), 0.05f, 1.0f);
+                const float LocalizedForce = ClampedImpulse * DistanceFalloff * Joint.LocalBoneDamageMultiplier;
+
+                if (LocalizedForce >= Joint.LinearBreakForce)
+                {
+                    // Snap joint motor tension
+                    if (PhysicsControlComponent)
+                    {
+                        const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *Joint.BoneName.ToString()));
+                        FPhysicsControlMultiplier BrokenMult;
+                        BrokenMult.LinearStrengthMultiplier = FVector(0.0f);
+                        BrokenMult.AngularStrengthMultiplier = 0.0f;
+                        PhysicsControlComponent->SetControlMultiplier(ControlName, BrokenMult);
+                    }
+
+                    // Apply the JSON-defined broken state tags
+                    if (InteractableComponent)
+                    {
+                        for (const FGameplayTag& BrokenTag : Joint.BrokenStateTags)
+                        {
+                            InteractableComponent->AddStateTag(BrokenTag);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 void ADynamicPhysicsActor::RecalculateLimbPhysicsMotors(uint8 LimbId, bool bCascadeToChildren)

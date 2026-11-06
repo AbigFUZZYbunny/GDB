@@ -1,9 +1,10 @@
 ﻿{
-  "_comment": "Global settings defining UI hints and world configurations.",
   "GameSettingsConfig": {
-    "ShowAbilityCombosInUI": {
-      "bIsOptionalSetting": true,
-      "bDefaultValue": false
+    "ShowAbilityCombosInUI": { "bIsOptionalSetting": true, "bDefaultValue": false, "fDifficultyLevel": 3.0 },
+    "MasterAcousticMetaSounds": {
+      "PhysicsImpact": "/Game/Audio/MetaSounds/MS_PhysicsImpact.MS_PhysicsImpact",
+      "EquipmentRustle": "/Game/Audio/MetaSounds/MS_EquipmentRustle.MS_EquipmentRustle",
+      "FoliageWind": "/Game/Audio/MetaSounds/MS_FoliageWind.MS_FoliageWind"
     }
   }
 }

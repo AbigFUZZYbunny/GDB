@@ -525,6 +525,7 @@ void ADynamicCharacter::ConfigureClimbingPhysics(bool bEnableClimbing, bool bHas
 
 void ADynamicCharacter::HandleMovementModePhysicsStateChanged(const FGameplayTag& OldStateTag, const FGameplayTag& NewStateTag)
 {
+    static const FGameplayTag FallModeTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Fall"), false);
     static const FGameplayTag HangTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Hang"), false);
     static const FGameplayTag ClimbTag = FGameplayTag::RequestGameplayTag(TEXT("Movement.Mode.Climb"), false);
 
@@ -536,9 +537,39 @@ void ADynamicCharacter::HandleMovementModePhysicsStateChanged(const FGameplayTag
     {
         ConfigureClimbingPhysics(true, true);
     }
-    else if (OldStateTag.MatchesTag(HangTag) || OldStateTag.MatchesTag(ClimbTag))
+    else if (NewStateTag.MatchesTag(FallModeTag))
     {
-        ConfigureClimbingPhysics(false, false);
+        // 1. DIRECTIONAL FALLING ANIMATIONS
+        // If the character enters falling state with high lateral velocity, trigger a flailing/brace animation
+        const FVector Velocity = GetVelocity();
+        if (Velocity.SizeSquared2D() > FMath::Square(300.0f))
+        {
+            const float ForwardDot = FVector::DotProduct(GetActorForwardVector(), Velocity.GetSafeNormal2D());
+            FGameplayTag FallAnimTag;
+            
+            if (ForwardDot > 0.5f) FallAnimTag = FGameplayTag::RequestGameplayTag(TEXT("Anim.Falling.ForwardBrace"), false);
+            else if (ForwardDot < -0.5f) FallAnimTag = FGameplayTag::RequestGameplayTag(TEXT("Anim.Falling.BackwardFlail"), false);
+            else FallAnimTag = FGameplayTag::RequestGameplayTag(TEXT("Anim.Falling.Tumble"), false);
+
+            if (AbilitySystemComponent && FallAnimTag.IsValid())
+            {
+                // Let the AnimBP pick up the tag and transition to the brace/tumble sequence
+                AbilitySystemComponent->AddLooseGameplayTags(FGameplayTagContainer(FallAnimTag));
+            }
+        }
+    }
+    else
+    {
+        if (OldStateTag.MatchesTag(HangTag) || OldStateTag.MatchesTag(ClimbTag))
+        {
+            ConfigureClimbingPhysics(false, false);
+        }
+        
+        // Remove fall animation tags upon landing
+        if (AbilitySystemComponent)
+        {
+            AbilitySystemComponent->RemoveLooseGameplayTags(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(TEXT("Anim.Falling"), false)));
+        }
     }
 }
 
@@ -1741,7 +1772,6 @@ void ADynamicCharacter::UpdateRagdollHyperextension(float DeltaSeconds)
         {
             HyperextendedJoints.Add(JointProfile.BoneName);
             
-            // Sever the physics control motor tension entirely, making the limb go limp
             if (PhysicsControlComponent)
             {
                 const FName ControlName = FName(*FString::Printf(TEXT("Control_%s"), *JointProfile.BoneName.ToString()));
@@ -1751,10 +1781,14 @@ void ADynamicCharacter::UpdateRagdollHyperextension(float DeltaSeconds)
                 PhysicsControlComponent->SetControlMultiplier(ControlName, BrokenMult);
             }
 
-            // Apply data-driven consequences (e.g. Muscle Tear, Broken Bone)
-            if (AbilitySystemComponent && JointProfile.HyperextensionEffects.Num() > 0)
+            // 2. DISLOCATION SEPARATION: Apply specific dislocation tags, separate from blunt fractures
+            if (AbilitySystemComponent)
             {
                 FGameplayTagContainer DebuffContainer;
+                // Add the generic dislocation tag
+                DebuffContainer.AddTag(FGameplayTag::RequestGameplayTag(TEXT("State.Debuff.Dislocated"), false));
+                
+                // Add specific configured effects from the JSON definition
                 for (const FGameplayTag& EffTag : JointProfile.HyperextensionEffects)
                 {
                     if (EffTag.IsValid()) DebuffContainer.AddTag(EffTag);

@@ -33,9 +33,10 @@ bool FDynamicGameplayEffectContext::NetSerialize(FArchive& Ar, UPackageMap* Map,
         if (!QuantizedImpactNormal.IsZero()) RepBits |= (1 << 3);
         if (!QuantizedImpactLocation.IsZero()) RepBits |= (1 << 4);
         if (SourcePassBackRules.Num() > 0) RepBits |= (1 << 5);
+        if (!SourceEffectorBone.IsNone()) RepBits |= (1 << 6);
     }
 
-    Ar.SerializeBits(&RepBits, 6);
+    Ar.SerializeBits(&RepBits, 7);
 
     if (RepBits & (1 << 0))
     {
@@ -89,6 +90,17 @@ bool FDynamicGameplayEffectContext::NetSerialize(FArchive& Ar, UPackageMap* Map,
     else if (Ar.IsLoading())
     {
         SourcePassBackRules.Empty();
+    }
+
+    if (RepBits & (1 << 6))
+    {
+        FString BoneStr = SourceEffectorBone.ToString();
+        Ar << BoneStr;
+        if (Ar.IsLoading()) SourceEffectorBone = FName(*BoneStr);
+    }
+    else if (Ar.IsLoading())
+    {
+        SourceEffectorBone = NAME_None;
     }
 
     bOutSuccess = true;

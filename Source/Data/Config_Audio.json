@@ -1,0 +1,58 @@
+﻿{
+  "_comment": "Master Audio Registry & Material Acoustic Matrix with layered and probabilistic profiles.",
+  "AudioMasterRegistry": {
+    "Audio.Impact.MetalOnWood": {
+      "AudioTag": "Audio.Impact.MetalOnWood",
+      "SoundAsset": "/Game/Audio/Impacts/SFX_MetalChopWood.SFX_MetalChopWood",
+      "DefaultVolumeMultiplier": 1.0,
+      "DefaultPitchMultiplier": 1.0,
+      "AssociatedStimulusTag": "Stimulus.Sound.Footstep",
+      "BaseStimulusMagnitude": 1200.0,
+      "VelocityToVolumeScalar": 0.001
+    },
+    "Audio.Impact.Thud.Heavy": {
+      "AudioTag": "Audio.Impact.Thud.Heavy",
+      "SoundAsset": "/Game/Audio/Impacts/SFX_HeavyBodyThud.SFX_HeavyBodyThud",
+      "DefaultVolumeMultiplier": 0.85,
+      "DefaultPitchMultiplier": 0.95,
+      "AssociatedStimulusTag": "Stimulus.Sound.Footstep",
+      "BaseStimulusMagnitude": 900.0
+    },
+    "Audio.Environment.WoodCreak": {
+      "AudioTag": "Audio.Environment.WoodCreak",
+      "SoundAsset": "/Game/Audio/Environment/SFX_FloorboardCreak.SFX_FloorboardCreak",
+      "DefaultVolumeMultiplier": 0.75,
+      "DefaultPitchMultiplier": 1.0,
+      "AssociatedStimulusTag": "Stimulus.Sound.Footstep",
+      "BaseStimulusMagnitude": 600.0
+    },
+    "Audio.Movement.Rattle.Chainmail": {
+      "AudioTag": "Audio.Movement.Rattle.Chainmail",
+      "SoundAsset": "/Game/Audio/Armor/SFX_ChainmailJingle.SFX_ChainmailJingle",
+      "DefaultVolumeMultiplier": 0.65,
+      "DefaultPitchMultiplier": 1.0,
+      "AssociatedStimulusTag": "Stimulus.Sound.Footstep",
+      "BaseStimulusMagnitude": 450.0
+    }
+  },
+  "AudioMaterialMatrix": {
+    "AcousticMaterial.Metal": {
+      "AcousticMaterial.Wood": {
+        "PrimaryAudioTag": "Audio.Impact.MetalOnWood",
+        "GuaranteedSecondaryAudioTags": [
+          "Audio.Impact.Thud.Heavy"
+        ],
+        "ConditionalAudioLayers": [
+          {
+            "AudioTag": "Audio.Environment.WoodCreak",
+            "BaseProbability": 0.35,
+            "ChanceConditionTreeName": "Condition.Structure.IsLowSupportOrAged",
+            "ProbabilityScalingAttribute": "Attribute.Stat.Stability",
+            "bInvertAttributeScaling": true,
+            "AttributeScalingWeight": 0.01
+          }
+        ]
+      }
+    }
+  }
+}

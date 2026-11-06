@@ -18,6 +18,7 @@
 #include "Async/Async.h"
 #include "Serialization/JsonSerializer.h"
 #include "JsonObjectConverter.h"
+#include "Engine/Engine.h"
 
 void UDynamicDataSerializer::DeserializeMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagFloatMapWrapper& OutWrapper)
 {
@@ -379,6 +380,41 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
                 if (MovObj->HasField(TEXT("GaspMotorSettings")))
                     DeserializeMapWrapper(MovObj->GetObjectField(TEXT("GaspMotorSettings")), TEXT("RequiredAttributeThresholds"), AbilityDef.MovementConfig.GaspMotorSettings.RequiredAttributeThresholds);
             }
+            if (AbilityObj->HasField(TEXT("StageInputSequences")))
+            {
+                TSharedPtr<FJsonObject> SeqMapObj = AbilityObj->GetObjectField(TEXT("StageInputSequences"));
+                for (const auto& SeqPair : SeqMapObj->Values)
+                {
+                    EValidationPhase Phase = UDynamicDataSerializer::StringToEnum<EValidationPhase>(FString(SeqPair.Key));
+                    TSharedPtr<FJsonObject> SeqObj = SeqPair.Value->AsObject();
+                    if (!SeqObj.IsValid()) continue;
+
+                    FAbilityStageInputSequence SeqDef;
+                    SeqDef.BypassConditionTreeName = SeqObj->HasField(TEXT("BypassConditionTreeName")) ? FName(*SeqObj->GetStringField(TEXT("BypassConditionTreeName"))) : NAME_None;
+                    SeqDef.SequenceTimeoutSeconds = SeqObj->HasField(TEXT("SequenceTimeoutSeconds")) ? static_cast<float>(SeqObj->GetNumberField(TEXT("SequenceTimeoutSeconds"))) : 2.0f;
+                    SeqDef.bCancelAbilityOnFailure = SeqObj->HasField(TEXT("bCancelAbilityOnFailure")) ? SeqObj->GetBoolField(TEXT("bCancelAbilityOnFailure")) : true;
+                    SeqDef.bProceedOnFailure = SeqObj->HasField(TEXT("bProceedOnFailure")) ? SeqObj->GetBoolField(TEXT("bProceedOnFailure")) : false;
+
+                    if (SeqObj->HasField(TEXT("Steps")))
+                    {
+                        for (const auto& StepVal : SeqObj->GetArrayField(TEXT("Steps")))
+                        {
+                            TSharedPtr<FJsonObject> StepObj = StepVal->AsObject();
+                            FAbilityInputStep Step;
+                            Step.RequiredInputAction = FGameplayTag::RequestGameplayTag(FName(*StepObj->GetStringField(TEXT("RequiredInputAction"))), false);
+                            Step.bIsHold = StepObj->HasField(TEXT("bIsHold")) ? StepObj->GetBoolField(TEXT("bIsHold")) : false;
+                            Step.TimeWindowSeconds = StepObj->HasField(TEXT("TimeWindowSeconds")) ? static_cast<float>(StepObj->GetNumberField(TEXT("TimeWindowSeconds"))) : 1.5f;
+                            SeqDef.Steps.Add(Step);
+                        }
+                    }
+                    DeserializeMapWrapper(SeqObj, TEXT("ParameterAdjustmentsOnFailure"), SeqDef.ParameterAdjustmentsOnFailure);
+                    
+                    FStageInputSequencePair PairEntry;
+                    PairEntry.Phase = Phase;
+                    PairEntry.Sequence = SeqDef;
+                    AbilityDef.StageInputSequences.Add(PairEntry);
+                }
+            }
             OutStaging.AbilityMasterRegistry.Add(KeyTag, AbilityDef);
         }
     }
@@ -703,6 +739,29 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             {
                 DeserializeMapWrapper(TempObj->GetObjectField(TEXT("AlleleDominanceOverrides")), TEXT("ReplicatedEntries"), TempDef.AlleleDominanceOverrides);
             }
+            if (TempObj->HasField(TEXT("DefaultCameraProfileTag")))
+            {
+                TempDef.DefaultCameraProfileTag = FGameplayTag::RequestGameplayTag(FName(*TempObj->GetStringField(TEXT("DefaultCameraProfileTag"))), false);
+            }
+            if (TempObj->HasField(TEXT("StanceStandConfig")))
+            {
+                TSharedPtr<FJsonObject> StanceObj = TempObj->GetObjectField(TEXT("StanceStandConfig"));
+                TempDef.StanceStandConfig.BaseHeight = StanceObj->HasField(TEXT("BaseHeight")) ? static_cast<float>(StanceObj->GetNumberField(TEXT("BaseHeight"))) : 88.0f;
+                DeserializeMapWrapper(StanceObj, TEXT("AttributeModifiers"), TempDef.StanceStandConfig.AttributeModifiers);
+            }
+            if (TempObj->HasField(TEXT("StanceCrouchConfig")))
+            {
+                TSharedPtr<FJsonObject> StanceObj = TempObj->GetObjectField(TEXT("StanceCrouchConfig"));
+                TempDef.StanceCrouchConfig.BaseHeight = StanceObj->HasField(TEXT("BaseHeight")) ? static_cast<float>(StanceObj->GetNumberField(TEXT("BaseHeight"))) : 44.0f;
+                DeserializeMapWrapper(StanceObj, TEXT("AttributeModifiers"), TempDef.StanceCrouchConfig.AttributeModifiers);
+            }
+            if (TempObj->HasField(TEXT("StanceProneConfig")))
+            {
+                TSharedPtr<FJsonObject> StanceObj = TempObj->GetObjectField(TEXT("StanceProneConfig"));
+                TempDef.StanceProneConfig.BaseHeight = StanceObj->HasField(TEXT("BaseHeight")) ? static_cast<float>(StanceObj->GetNumberField(TEXT("BaseHeight"))) : 22.0f;
+                DeserializeMapWrapper(StanceObj, TEXT("AttributeModifiers"), TempDef.StanceProneConfig.AttributeModifiers);
+            }
+            
             OutStaging.CharacterTemplatesRegistry.Add(KeyTag, TempDef);
         }
     }
@@ -1879,6 +1938,24 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             }
 
             OutStaging.StateTreeMasterRegistry.Add(KeyTag, TreeDef);
+        }
+    }
+    
+    if (RootObject->HasField(TEXT("CameraMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("CameraMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> CamObj = Pair.Value->AsObject();
+            if (!CamObj.IsValid()) continue;
+
+            FDynamicCameraProfileDef Def;
+            FJsonObjectConverter::JsonObjectToUStruct(CamObj.ToSharedRef(), &Def, 0, 0);
+            Def.ProfileTag = KeyTag;
+
+            OutStaging.CameraMasterRegistry.Add(KeyTag, Def);
         }
     }
 

@@ -1146,15 +1146,6 @@ FString UDynamicSocialComponent::FormatDialogueTokens(
     const FString& TemplateString,
     AActor* TargetActor,
     const FString& CustomLocation,
-    const FString& CustomTime) const
-{
-    return FormatDialogueTokens(TemplateString, TargetActor, CustomLocation, CustomTime, TMap<FString, FString>());
-}
-
-FString UDynamicSocialComponent::FormatDialogueTokens(
-    const FString& TemplateString,
-    AActor* TargetActor,
-    const FString& CustomLocation,
     const FString& CustomTime,
     const TMap<FString, FString>& CustomWildcards) const
 {
@@ -1192,24 +1183,12 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
     FString& OutUtterance,
     TSoftObjectPtr<UAnimMontage>& OutMontage,
     FGameplayTag& OutVoiceCueTag,
-    FGameplayTag SpecificProfileTag)
-{
-    return TryResolveFastPathDialogue(CategoryTag, TargetActor, OutUtterance, OutMontage, OutVoiceCueTag, TMap<FString, FString>(), SpecificProfileTag);
-}
-
-bool UDynamicSocialComponent::TryResolveFastPathDialogue(
-    FGameplayTag CategoryTag,
-    AActor* TargetActor,
-    FString& OutUtterance,
-    TSoftObjectPtr<UAnimMontage>& OutMontage,
-    FGameplayTag& OutVoiceCueTag,
     const TMap<FString, FString>& CustomWildcards,
     FGameplayTag SpecificProfileTag)
 {
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
-    // 1. Resolve Best Spoken Language dynamically (Sociolinguistic Code-Switching)
     FGameplayTag SpokenLanguageTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false);
     UDynamicLanguageComponent* SpeakerLang = GetOwner() ? GetOwner()->FindComponentByClass<UDynamicLanguageComponent>() : nullptr;
     if (SpeakerLang)
@@ -1324,7 +1303,6 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
         }
     }
 
-    // 2. Dynamic Physiological Volume Modulation (Health / Stance overrides)
     if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
     {
         if (const UDynamicAttributeSet* AttrSet = CharOwner->GetDynamicAttributeSet())
@@ -1349,7 +1327,6 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
         }
     }
 
-    // 3. Format Tokens and Formulate Speech
     const FString FormattedEnglish = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
     if (SpeakerLang)
     {
@@ -1362,20 +1339,9 @@ bool UDynamicSocialComponent::TryResolveFastPathDialogue(
 
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
 
-    // 4. Acoustic Broadcast & Linguistic Exposure
     const FGameplayTag ResolvedVoice = SpeakerLang ? SpeakerLang->ResolveActiveVoiceProfile() : FGameplayTag();
     BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag, SelectedEmotionTag, ResolvedVoice);
     return true;
-}
-
-bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
-    const FDynamicAIBehaviorDef& BehaviorDef,
-    AActor* TargetActor,
-    FString& OutUtterance,
-    TSoftObjectPtr<UAnimMontage>& OutMontage,
-    FGameplayTag& OutVoiceCueTag)
-{
-    return TryResolveDialogueForBehavior(BehaviorDef, TargetActor, OutUtterance, OutMontage, OutVoiceCueTag, TMap<FString, FString>());
 }
 
 bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
@@ -1389,7 +1355,6 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
     ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
     if (!GS) return false;
 
-    // 1. Resolve Best Spoken Language dynamically (Sociolinguistic Code-Switching)
     FGameplayTag SpokenLanguageTag = FGameplayTag::RequestGameplayTag(TEXT("Language.Common"), false);
     UDynamicLanguageComponent* SpeakerLang = GetOwner() ? GetOwner()->FindComponentByClass<UDynamicLanguageComponent>() : nullptr;
     if (SpeakerLang)
@@ -1439,7 +1404,6 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
 
     if (!bResolved) return false;
 
-    // 2. Dynamic Physiological Volume Modulation (Health / Stance overrides)
     if (const ADynamicCharacter* CharOwner = Cast<ADynamicCharacter>(GetOwner()))
     {
         if (const UDynamicAttributeSet* AttrSet = CharOwner->GetDynamicAttributeSet())
@@ -1464,7 +1428,6 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
         }
     }
 
-    // 3. Format Tokens and Formulate Speech
     const FString FormattedEnglish = FormatDialogueTokens(TemplateText, TargetActor, TEXT("the area"), TEXT("recently"), CustomWildcards);
     if (SpeakerLang)
     {
@@ -1477,7 +1440,6 @@ bool UDynamicSocialComponent::TryResolveDialogueForBehavior(
 
     OnFastPathDialogueSpoken.Broadcast(GetOwner(), TargetActor, OutUtterance);
 
-    // 4. Acoustic Broadcast & Linguistic Exposure
     const FGameplayTag ResolvedVoice = SpeakerLang ? SpeakerLang->ResolveActiveVoiceProfile() : FGameplayTag();
     BroadcastLanguageExposureAcoustic(GetOwner(), SpokenLanguageTag, OutUtterance, SelectedAudibleRadius, SelectedVolumeTag, SelectedEmotionTag, ResolvedVoice);
     return true;

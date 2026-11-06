@@ -11,7 +11,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "DynamicGASTypes.h"
-
+#include "CoreMinimal.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
 #include "DynamicLifeComponent.h"
 #include "DynamicLanguageComponent.h"
 #include "DynamicQuestComponent.h"
@@ -19,7 +21,6 @@
 #include "DynamicEquipmentComponent.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicCustomizationComponent.h"
-
 #include "DynamicCharacter.generated.h"
 
 class UAbilitySystemComponent;
@@ -38,6 +39,30 @@ public:
     ADynamicCharacter(const FObjectInitializer& ObjectInitializer);
     virtual void Tick(float DeltaSeconds) override;
     virtual void PostInitializeComponents() override;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    TObjectPtr<USpringArmComponent> CameraBoom;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+    TObjectPtr<UCameraComponent> FollowCamera;
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Camera")
+    void ApplyCameraProfile(FGameplayTag ProfileTag);
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Camera")
+    void SetCameraPerspective(bool bFirstPerson);
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Camera")
+    void ZoomCamera(float Delta);
+
+    UFUNCTION(BlueprintCallable, Category = "DynamicGAS|Camera")
+    void TogglePerspective();
+
+    UPROPERTY(BlueprintReadOnly, Category = "DynamicGAS|Camera")
+    FGameplayTag ActiveCameraProfileTag;
+
+    UPROPERTY(BlueprintReadOnly, Category = "DynamicGAS|Camera")
+    bool bIsFirstPerson = false;
 
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
     USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
@@ -165,6 +190,12 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "DynamicGAS|Navigation")
     bool TryExecuteLedgeTraversal(const FVector& TargetLedgeLocation);
+    
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "DynamicGAS|Movement")
+    float TargetPaceScale = 1.0f;
+
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "DynamicGAS|Movement")
+    float TargetStanceScale = 1.0f; // 1.0 = Stand, 0.5= Crouch, 0.0 = Prone
 
 protected:
     virtual void BeginPlay() override;

@@ -1,0 +1,28 @@
+﻿{
+  "_comment": "Dynamic Camera Profiles for characters, dictating offsets, FOV, and perspective transitions.",
+  "CameraMasterRegistry": {
+    "Camera.Profile.Humanoid.Default": {
+      "ProfileTag": "Camera.Profile.Humanoid.Default",
+      "bAllowsFirstPerson": true,
+      "bAllowsThirdPerson": true,
+      "AutoTransitionDistance": 60.0,
+      "ZoomSpeed": 35.0,
+      "FirstPersonConfig": {
+        "FOV": 95.0,
+        "MinDistance": 0.0,
+        "MaxDistance": 0.0,
+        "DefaultDistance": 0.0,
+        "CameraOffset": { "X": 15.0, "Y": 0.0, "Z": 75.0 },
+        "bUsePawnControlRotation": true
+      },
+      "ThirdPersonConfig": {
+        "FOV": 85.0,
+        "MinDistance": 80.0,
+        "MaxDistance": 800.0,
+        "DefaultDistance": 350.0,
+        "CameraOffset": { "X": 0.0, "Y": 45.0, "Z": 60.0 },
+        "bUsePawnControlRotation": true
+      }
+    }
+  }
+}

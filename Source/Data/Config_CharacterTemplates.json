@@ -10,6 +10,38 @@
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
       "NativeLanguageTag": "Language.Common",
       "KnownLanguageTags": [ "Language.Common" ],
+      "DefaultMovement": {
+        "DefaultPaceScale": 1.0,
+        "DefaultStanceScale": 1.0,
+        "StanceStandConfig": {
+          "BaseHeight": 88.0,
+          "AttributeModifiers": {
+            "ReplicatedEntries": []
+          }
+        },
+        "StanceCrouchConfig": {
+          "BaseHeight": 44.0,
+          "AttributeModifiers": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Attribute.Stat.Agility",
+                "Value": -0.2
+              }
+            ]
+          }
+        },
+        "StanceProneConfig": {
+          "BaseHeight": 22.0,
+          "AttributeModifiers": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Attribute.Stat.Agility",
+                "Value": -0.1
+              }
+            ]
+          }
+        }
+      },
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Base Humanoid" },
@@ -108,6 +140,38 @@
       "DefaultAIAgentTag": "AI.Type.Humanoid.Standard",
       "NativeLanguageTag": "Language.Common",
       "KnownLanguageTags": [ "Language.Common" ],
+      "DefaultMovement": {
+        "DefaultPaceScale": 1.0,
+        "DefaultStanceScale": 1.0,
+        "StanceStandConfig": {
+          "BaseHeight": 88.0,
+          "AttributeModifiers": {
+            "ReplicatedEntries": []
+          }
+        },
+        "StanceCrouchConfig": {
+          "BaseHeight": 44.0,
+          "AttributeModifiers": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Attribute.Stat.Agility",
+                "Value": -0.2
+              }
+            ]
+          }
+        },
+        "StanceProneConfig": {
+          "BaseHeight": 22.0,
+          "AttributeModifiers": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Attribute.Stat.Agility",
+                "Value": -0.1
+              }
+            ]
+          }
+        }
+      },
       "Localization": {
         "ReplicatedEntries": [
           { "KeyTag": "Localization.Name", "Value": "Human" },

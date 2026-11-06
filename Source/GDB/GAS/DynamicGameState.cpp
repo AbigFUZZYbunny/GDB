@@ -1389,6 +1389,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     DamageTypeMasterRegistry.Append(MoveTemp(StagingData.DamageTypeMasterRegistry));
     EQSMasterRegistry.Append(MoveTemp(StagingData.EQSMasterRegistry));
     StateTreeMasterRegistry.Append(MoveTemp(StagingData.StateTreeMasterRegistry));
+    InputMasterRegistry.Append(MoveTemp(StagingData.InputMasterRegistry));
+    CameraMasterRegistry.Append(MoveTemp(StagingData.CameraMasterRegistry));
     
     RebuildLanguageLookupCaches();
 
@@ -1432,6 +1434,10 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     if (StagingData.bHasCloudAIConfig)
     {
         CloudAIConfig = StagingData.CloudAIConfig;
+    }
+    if (StagingData.bHasGameSettingsConfig)
+    {
+        GameSettingsConfig = StagingData.GameSettingsConfig;
     }
 
     RebuildAllAbilityScores();

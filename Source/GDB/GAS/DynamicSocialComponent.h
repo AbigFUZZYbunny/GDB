@@ -196,13 +196,35 @@ public:
     FString ExtractFirstName(const FString& FullName) const;
 
     bool SelectBestUtterance(const TArray<FDynamicDialogueUtteranceDef>& CandidateUtterances, AActor* TargetActor, FDynamicDialogueUtteranceDef& OutSelectedUtterance, float& OutComputedWeight) const;
-    FString FormatDialogueTokens(const FString& TemplateString, AActor* TargetActor, const FString& CustomLocation, const FString& CustomTime) const;
-    FString FormatDialogueTokens(const FString& TemplateString, AActor* TargetActor, const FString& CustomLocation, const FString& CustomTime, const TMap<FString, FString>& CustomWildcards) const;
+    
+    // Streamlined FormatDialogueTokens accepting CustomWildcards map exclusively
+    FString FormatDialogueTokens(
+        const FString& TemplateString,
+        AActor* TargetActor,
+        const FString& CustomLocation,
+        const FString& CustomTime,
+        const TMap<FString, FString>& CustomWildcards = TMap<FString, FString>()
+    ) const;
 
-    bool TryResolveFastPathDialogue(FGameplayTag CategoryTag, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag, FGameplayTag SpecificProfileTag = FGameplayTag());
-    bool TryResolveFastPathDialogue(FGameplayTag CategoryTag, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag, const TMap<FString, FString>& CustomWildcards, FGameplayTag SpecificProfileTag = FGameplayTag());
-    bool TryResolveDialogueForBehavior(const FDynamicAIBehaviorDef& BehaviorDef, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag);
-    bool TryResolveDialogueForBehavior(const FDynamicAIBehaviorDef& BehaviorDef, AActor* TargetActor, FString& OutUtterance, TSoftObjectPtr<UAnimMontage>& OutMontage, FGameplayTag& OutVoiceCueTag, const TMap<FString, FString>& CustomWildcards);
+    // Streamlined TryResolveFastPathDialogue accepting CustomWildcards map exclusively
+    bool TryResolveFastPathDialogue(
+        FGameplayTag CategoryTag,
+        AActor* TargetActor,
+        FString& OutUtterance,
+        TSoftObjectPtr<UAnimMontage>& OutMontage,
+        FGameplayTag& OutVoiceCueTag,
+        const TMap<FString, FString>& CustomWildcards = TMap<FString, FString>(),
+        FGameplayTag SpecificProfileTag = FGameplayTag()
+    );
+
+    bool TryResolveDialogueForBehavior(
+        const FDynamicAIBehaviorDef& BehaviorDef,
+        AActor* TargetActor,
+        FString& OutUtterance,
+        TSoftObjectPtr<UAnimMontage>& OutMontage,
+        FGameplayTag& OutVoiceCueTag,
+        const TMap<FString, FString>& CustomWildcards = TMap<FString, FString>()
+    );
 
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Dialogue")
     bool TriggerCalloutToTarget(AActor* TargetActor, float IgnoreTimeout = 5.0f);

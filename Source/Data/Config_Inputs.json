@@ -1,0 +1,127 @@
+﻿{
+  "_comment": "Dynamic Enhanced Input Actions & Mapping Context Definitions",
+  "InputMasterRegistry": {
+    "InputAction.Combat.UseMainHand": {
+      "ActionTag": "InputAction.Combat.UseMainHand",
+      "ActionName": "Use Main Hand",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "LeftMouseButton" } ]
+    },
+    "InputAction.Combat.UseOffHand": {
+      "ActionTag": "InputAction.Combat.UseOffHand",
+      "ActionName": "Use Off Hand",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "RightMouseButton" } ]
+    },
+    "InputAction.Combat.KickMainLeg": {
+      "ActionTag": "InputAction.Combat.KickMainLeg",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "LeftMouseButton", "ChordKeyName": "LeftAlt" } ]
+    },
+    "InputAction.Combat.KickOffLeg": {
+      "ActionTag": "InputAction.Combat.KickOffLeg",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "RightMouseButton", "ChordKeyName": "LeftAlt" } ]
+    },
+    "InputAction.Movement.WASD": {
+      "ActionTag": "InputAction.Movement.WASD",
+      "ValueType": "Axis2D",
+      "DefaultBindings": [
+        { "KeyName": "W", "SwizzleOrder": "YAxis" },
+        { "KeyName": "S", "SwizzleOrder": "YAxis", "bNegate": true },
+        { "KeyName": "A", "SwizzleOrder": "XAxis", "bNegate": true },
+        { "KeyName": "D", "SwizzleOrder": "XAxis" }
+      ]
+    },
+    "InputAction.Movement.JumpVault": {
+      "ActionTag": "InputAction.Movement.JumpVault",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "SpaceBar" } ]
+    },
+    "InputAction.Movement.Sprint": {
+      "ActionTag": "InputAction.Movement.Sprint",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "LeftShift" } ]
+    },
+    "InputAction.Movement.WalkRunToggle": {
+      "ActionTag": "InputAction.Movement.WalkRunToggle",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "LeftAlt" } ]
+    },
+    "InputAction.Movement.SpeedAdjust": {
+      "ActionTag": "InputAction.Movement.SpeedAdjust",
+      "ValueType": "Axis1D",
+      "DefaultBindings": [ { "KeyName": "MouseWheelAxis", "ChordKeyName": "LeftAlt" } ]
+    },
+    "InputAction.Movement.Crouch": {
+      "ActionTag": "InputAction.Movement.Crouch",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "LeftControl" } ]
+    },
+    "InputAction.Movement.CrouchHeightAdjust": {
+      "ActionTag": "InputAction.Movement.CrouchHeightAdjust",
+      "ValueType": "Axis1D",
+      "DefaultBindings": [ { "KeyName": "MouseWheelAxis", "ChordKeyName": "LeftControl" } ]
+    },
+    "InputAction.Movement.Prone": {
+      "ActionTag": "InputAction.Movement.Prone",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "Z" } ]
+    },
+    "InputAction.Camera.Look": {
+      "ActionTag": "InputAction.Camera.Look",
+      "ValueType": "Axis2D",
+      "DefaultBindings": [ { "KeyName": "Mouse2D" } ]
+    },
+    "InputAction.Camera.Zoom": {
+      "ActionTag": "InputAction.Camera.Zoom",
+      "ValueType": "Axis1D",
+      "DefaultBindings": [ { "KeyName": "MouseWheelAxis" } ]
+    },
+    "InputAction.Camera.TogglePerspective": {
+      "ActionTag": "InputAction.Camera.TogglePerspective",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "V" } ]
+    },
+    "InputAction.UI.Wheel.Ability": {
+      "ActionTag": "InputAction.UI.Wheel.Ability",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "Q" } ]
+    },
+    "InputAction.UI.Wheel.Action": {
+      "ActionTag": "InputAction.UI.Wheel.Action",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "E" } ]
+    },
+    "InputAction.UI.Wheel.Container": {
+      "ActionTag": "InputAction.UI.Wheel.Container",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "I" } ]
+    },
+    "InputAction.UI.Wheel.Stance": {
+      "ActionTag": "InputAction.UI.Wheel.Stance",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "R" } ]
+    },
+    "InputAction.UI.Wheel.Cycle": {
+      "ActionTag": "InputAction.UI.Wheel.Cycle",
+      "ValueType": "Axis1D",
+      "DefaultBindings": [ { "KeyName": "MouseWheelAxis" } ]
+    },
+    "InputAction.UI.Wheel.SelectConfirm": {
+      "ActionTag": "InputAction.UI.Wheel.SelectConfirm",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "LeftMouseButton" }, { "KeyName": "RightMouseButton" } ]
+    },
+    "InputAction.UI.QuickUse1": {
+      "ActionTag": "InputAction.UI.QuickUse1",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "One" } ]
+    },
+    "InputAction.UI.QuickUse2": {
+      "ActionTag": "InputAction.UI.QuickUse2",
+      "ValueType": "Boolean",
+      "DefaultBindings": [ { "KeyName": "Two" } ]
+    }
+  }
+}

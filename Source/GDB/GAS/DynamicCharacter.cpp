@@ -2,16 +2,16 @@
 #include "DynamicCharacter.h"
 #include "DynamicEquipmentComponent.h"
 #include "DynamicInteractableComponent.h"
+#include "DynamicAIController.h"
+#include "DynamicGameState.h"
+#include "DynamicCustomizationComponent.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicSocialComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
 #include "DynamicWorldDirectorSubsystem.h"
-#include "DynamicGameState.h"
 #include "DynamicContainerComponent.h"
-#include "DynamicAIController.h"
-#include "DynamicEffectExecution.h"
 #include "DynamicGameplayEffectContext.h"
 #include "MoverComponent.h"
 #include "DefaultMovementSet/Modes/WalkingMode.h"
@@ -19,7 +19,6 @@
 #include "DefaultMovementSet/Modes/FlyingMode.h"
 #include "DefaultMovementSet/Modes/SwimmingMode.h"
 #include "EngineUtils.h"
-#include "DynamicCustomizationComponent.h"
 #include "DynamicLogicEvaluator.h"
 #include "Engine/OverlapResult.h"
 #include "DynamicPhysicsActor.h"
@@ -33,6 +32,9 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     SetReplicateMovement(false);
     bIsRagdolling = false;
     bCurrentFootingActive = false;
+    
+    AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+    AIControllerClass = ADynamicAIController::StaticClass();
 
     CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
     CapsuleComponent->InitCapsuleSize(34.0f, 88.0f);
@@ -89,6 +91,18 @@ ADynamicCharacter::ADynamicCharacter(const FObjectInitializer& ObjectInitializer
     ClimbProximitySphere->SetCollisionResponseToAllChannels(ECR_Ignore);
     ClimbProximitySphere->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
     ClimbProximitySphere->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
+    
+    CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+    CameraBoom->SetupAttachment(RootComponent);
+    CameraBoom->bUsePawnControlRotation = true;
+    CameraBoom->TargetArmLength = 300.0f;
+    CameraBoom->SocketOffset = FVector(0.0f, 0.0f, 60.0f);
+    CameraBoom->bEnableCameraLag = true;
+    CameraBoom->CameraLagSpeed = 15.0f;
+
+    FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+    FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+    FollowCamera->bUsePawnControlRotation = false;
 }
 
 void ADynamicCharacter::SetupDefaultMoverModes()
@@ -601,13 +615,22 @@ void ADynamicCharacter::PossessedBy(AController* NewController)
     Super::PossessedBy(NewController);
     InitializeAbilitySystem();
 
-    if (HasAuthority() && ActiveMovementStateTag.IsValid())
+    if (NewController->IsLocalPlayerController())
     {
-        if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+        // Hydrate default camera profile based on the character template
+        if (UDynamicCustomizationComponent* CustComp = GetCustomizationComponent())
         {
-            if (const FDynamicMovementStateDef* Def = GS->MovementStateRegistry.Find(ActiveMovementStateTag))
+            if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
             {
-                ApplyMovementStateConfig(*Def);
+                FCharacterTemplateDef Def;
+                if (GS->GetCharacterTemplate(CustComp->ActiveCharacterTemplateTag, Def) && Def.DefaultCameraProfileTag.IsValid())
+                {
+                    ApplyCameraProfile(Def.DefaultCameraProfileTag);
+                }
+                else
+                {
+                    ApplyCameraProfile(FGameplayTag::RequestGameplayTag(TEXT("Camera.Profile.Humanoid.Default"), false));
+                }
             }
         }
     }
@@ -739,9 +762,50 @@ void ADynamicCharacter::ApplyMovementStateConfig(const FDynamicMovementStateDef&
         return StatConfig.BaseValue * FMath::Max(0.01f, Multiplier);
     };
 
-    if (Def.TargetCapsuleHalfHeight.BaseValue > 0.0f)
+    // 1. DYNAMIC STANCE SCALING (Capsule Height sourced from Character Templates)
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (GS && CustomizationComponent)
     {
-        CachedTargetCapsuleHalfHeight = EvaluateMovementStat(Def.TargetCapsuleHalfHeight);
+        FCharacterTemplateDef TemplateDef;
+        if (GS->GetCharacterTemplate(CustomizationComponent->ActiveCharacterTemplateTag, TemplateDef))
+        {
+            auto EvaluateStanceMod = [&](const FDynamicStanceConfig& StanceConfig) -> float
+            {
+                float ModAccum = 0.0f;
+                if (AttributeSet)
+                {
+                    for (const auto& Pair : StanceConfig.AttributeModifiers.LocalLookupMap)
+                    {
+                        ModAccum += AttributeSet->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                    }
+                }
+                return StanceConfig.BaseHeight + ModAccum;
+            };
+
+            const float StandHeight = EvaluateStanceMod(TemplateDef.StanceStandConfig);
+            const float CrouchHeight = EvaluateStanceMod(TemplateDef.StanceCrouchConfig);
+            const float ProneHeight = EvaluateStanceMod(TemplateDef.StanceProneConfig);
+
+            if (TargetStanceScale > 0.5f)
+            {
+                // Lerp Crouch -> Stand
+                const float Alpha = (TargetStanceScale - 0.5f) * 2.0f;
+                CachedTargetCapsuleHalfHeight = FMath::Lerp(CrouchHeight, StandHeight, Alpha);
+            }
+            else
+            {
+                // Lerp Prone -> Crouch
+                const float Alpha = TargetStanceScale * 2.0f;
+                CachedTargetCapsuleHalfHeight = FMath::Lerp(ProneHeight, CrouchHeight, Alpha);
+            }
+        }
+    }
+    
+    // Set TargetSpeedPace inside the ASC to multiply final max velocities downstream inside UDynamicPhysicsMode
+    if (HasAuthority() && AttributeSet)
+    {
+        static const FGameplayTag PaceTag = FGameplayTag::RequestGameplayTag(TEXT("Attribute.Movement.Pace"), false);
+        AttributeSet->SetDynamicAttributeValue(PaceTag, TargetPaceScale, 0);
     }
 
     if (HasAuthority() && AbilitySystemComponent)
@@ -751,6 +815,17 @@ void ADynamicCharacter::ApplyMovementStateConfig(const FDynamicMovementStateDef&
             AbilitySystemComponent->RemoveLooseGameplayTags(GrantedMovementTags);
         }
         GrantedMovementTags = Def.GrantsTags;
+
+        // Automatically assign logical tags based on current physical stance scale
+        if (TargetStanceScale < 0.25f)
+        {
+            GrantedMovementTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("State.Moving.Prone"), false));
+        }
+        else if (TargetStanceScale <= 0.75f)
+        {
+            GrantedMovementTags.AddTag(FGameplayTag::RequestGameplayTag(TEXT("State.Moving.Crouch"), false));
+        }
+
         if (GrantedMovementTags.Num() > 0)
         {
             AbilitySystemComponent->AddLooseGameplayTags(GrantedMovementTags);
@@ -2191,4 +2266,93 @@ bool ADynamicCharacter::TryExecuteLedgeTraversal(const FVector& TargetLedgeLocat
     ASC->TryActivateAbilitiesByTag(VaultAbilityTags);
 
     return true;
+}
+
+void ADynamicCharacter::ApplyCameraProfile(FGameplayTag ProfileTag)
+{
+    if (!ProfileTag.IsValid()) return;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    if (const FDynamicCameraProfileDef* Profile = GS->CameraMasterRegistry.Find(ProfileTag))
+    {
+        ActiveCameraProfileTag = ProfileTag;
+        
+        // Default to third person if allowed, otherwise first person
+        if (Profile->bAllowsThirdPerson)
+        {
+            SetCameraPerspective(false);
+        }
+        else if (Profile->bAllowsFirstPerson)
+        {
+            SetCameraPerspective(true);
+        }
+    }
+}
+
+void ADynamicCharacter::SetCameraPerspective(bool bSetFirstPerson)
+{
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS || !ActiveCameraProfileTag.IsValid()) return;
+
+    const FDynamicCameraProfileDef* Profile = GS->CameraMasterRegistry.Find(ActiveCameraProfileTag);
+    if (!Profile) return;
+
+    if (bSetFirstPerson && !Profile->bAllowsFirstPerson) return;
+    if (!bSetFirstPerson && !Profile->bAllowsThirdPerson) return;
+
+    bIsFirstPerson = bSetFirstPerson;
+    const FCameraPerspectiveDef& Config = bIsFirstPerson ? Profile->FirstPersonConfig : Profile->ThirdPersonConfig;
+
+    CameraBoom->TargetArmLength = Config.DefaultDistance;
+    CameraBoom->SocketOffset = Config.CameraOffset;
+    CameraBoom->bUsePawnControlRotation = Config.bUsePawnControlRotation;
+    FollowCamera->SetFieldOfView(Config.FOV);
+
+    // In first person, we hide the head locally so it doesn't clip the camera
+    if (USkeletalMeshComponent* Mesh = GetMeshComponent())
+    {
+        // Usually handled by OwnerNoSee on specific head bones via material masking, 
+        // or by attaching the camera directly to a head socket. We use offset for stability.
+    }
+}
+
+void ADynamicCharacter::TogglePerspective()
+{
+    SetCameraPerspective(!bIsFirstPerson);
+}
+
+void ADynamicCharacter::ZoomCamera(float Delta)
+{
+    if (FMath::IsNearlyZero(Delta)) return;
+
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS || !ActiveCameraProfileTag.IsValid()) return;
+
+    const FDynamicCameraProfileDef* Profile = GS->CameraMasterRegistry.Find(ActiveCameraProfileTag);
+    if (!Profile) return;
+
+    if (bIsFirstPerson)
+    {
+        // Scroll backwards (Delta < 0 typically) to zoom out into Third Person
+        if (Delta < 0.0f && Profile->bAllowsThirdPerson)
+        {
+            SetCameraPerspective(false);
+            CameraBoom->TargetArmLength = Profile->ThirdPersonConfig.MinDistance + Profile->ZoomSpeed;
+        }
+    }
+    else
+    {
+        const float NewDistance = CameraBoom->TargetArmLength - (Delta * Profile->ZoomSpeed);
+        
+        if (NewDistance < Profile->AutoTransitionDistance && Profile->bAllowsFirstPerson)
+        {
+            SetCameraPerspective(true);
+        }
+        else
+        {
+            CameraBoom->TargetArmLength = FMath::Clamp(NewDistance, Profile->ThirdPersonConfig.MinDistance, Profile->ThirdPersonConfig.MaxDistance);
+        }
+    }
 }

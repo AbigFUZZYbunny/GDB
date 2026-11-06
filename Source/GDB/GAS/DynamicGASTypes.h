@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "StateTreeTaskBase.h"
 #include "Animation/AnimMontage.h"
+#include "InputAction.h"
 #include "DynamicGASTypes.generated.h"
 
 class UDynamicLanguageComponent;
@@ -102,8 +103,7 @@ UENUM(BlueprintType)
 enum class EMovementPhysicsType : uint8
 {
     LaunchVelocity,
-    RootMotionSource,
-    CustomWallRun
+    RootMotionSource
 };
 
 UENUM(BlueprintType)
@@ -489,6 +489,15 @@ enum class EDynamicStateTreeRunStatus : uint8
     Failed
 };
 
+UENUM(BlueprintType)
+enum class EDynamicInputSwizzleOrder : uint8
+{
+    None,
+    YAxis,
+    ZAxis,
+    XAxis
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -519,30 +528,6 @@ struct FDynamicTagStringPair
     bool operator==(const FDynamicTagStringPair& Other) const
     {
         return KeyTag == Other.KeyTag;
-    }
-};
-
-USTRUCT(BlueprintType)
-struct FDynamicTagStringMapWrapper
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
-    TArray<FDynamicTagStringPair> ReplicatedEntries;
-
-    UPROPERTY(NotReplicated)
-    TMap<FGameplayTag, FString> LocalLookupMap;
-
-    void SyncMapFromChangesArray()
-    {
-        LocalLookupMap.Empty(ReplicatedEntries.Num());
-        for (const auto& Pair : ReplicatedEntries)
-        {
-            if (Pair.KeyTag.IsValid())
-            {
-                LocalLookupMap.Add(Pair.KeyTag, Pair.Value);
-            }
-        }
     }
 };
 
@@ -1059,6 +1044,57 @@ struct GDB_API FDynamicStateTreeDef
     float FallbackTimeoutSeconds = 4.0f;
 };
 
+USTRUCT(BlueprintType)
+struct GDB_API FCameraPerspectiveDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    float FOV = 90.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    float MinDistance = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    float MaxDistance = 600.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    float DefaultDistance = 300.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    FVector CameraOffset = FVector::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    bool bUsePawnControlRotation = true;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicCameraProfileDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    FGameplayTag ProfileTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    bool bAllowsFirstPerson = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    bool bAllowsThirdPerson = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    float AutoTransitionDistance = 50.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    float ZoomSpeed = 25.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    FCameraPerspectiveDef FirstPersonConfig;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Camera")
+    FCameraPerspectiveDef ThirdPersonConfig;
+};
+
 // ============================================================================
 // ACOUSTIC TOPIC & GOSSIP MEMORY (REPLICATED OVERHEARD RUMORS)
 // ============================================================================
@@ -1469,6 +1505,42 @@ struct FDynamicDeliveryArchetype
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery")
     FDynamicTagFloatMapWrapper Metrics;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicInputBindingDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString KeyName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ChordKeyName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bNegate = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    EDynamicInputSwizzleOrder SwizzleOrder = EDynamicInputSwizzleOrder::None;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicInputActionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag ActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ActionName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    EInputActionValueType ValueType = EInputActionValueType::Boolean;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FDynamicInputBindingDef> DefaultBindings;
 };
 
 // ============================================================================
@@ -3323,6 +3395,93 @@ struct FDynamicChargeProfile
 };
 
 USTRUCT(BlueprintType)
+struct GDB_API FDynamicGameSettingBool
+{
+    GENERATED_BODY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bIsOptionalSetting = false;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bDefaultValue = false;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FGameSettingsConfig
+{
+    GENERATED_BODY()
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Settings")
+    FDynamicGameSettingBool ShowAbilityCombosInUI;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStanceConfig
+{
+    GENERATED_BODY()
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Stance")
+    float BaseHeight = 88.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Stance")
+    FDynamicTagFloatMapWrapper AttributeModifiers;
+};
+
+// --- ABILITY QTE SEQUENCES ---
+
+USTRUCT(BlueprintType)
+struct GDB_API FAbilityInputStep
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    FGameplayTag RequiredInputAction;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    bool bIsHold = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    float TimeWindowSeconds = 1.5f; 
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FAbilityStageInputSequence
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    FName BypassConditionTreeName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    float SequenceTimeoutSeconds = 2.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    bool bCancelAbilityOnFailure = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    bool bProceedOnFailure = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input")
+    TArray<FAbilityInputStep> Steps;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input|Penalties")
+    TArray<FDynamicModifierDef> PenaltyModifiers;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input|Penalties")
+    TArray<FGameplayTag> PenaltyEffects;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Input|Penalties")
+    FDynamicTagFloatMapWrapper ParameterAdjustmentsOnFailure;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FStageInputSequencePair
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    EValidationPhase Phase = EValidationPhase::Attempt;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    FAbilityStageInputSequence Sequence;
+};
+
+USTRUCT(BlueprintType)
 struct FDynamicAbilityDef
 {
     GENERATED_BODY()
@@ -3371,12 +3530,27 @@ struct FDynamicAbilityDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
     FComboGateRule ComboGate;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
+    TArray<FStageInputSequencePair> StageInputSequences;
+
+    // Helper lookup method to replace TMap::Find()
+    const FAbilityStageInputSequence* FindStageSequence(EValidationPhase Phase) const
+    {
+        for (const FStageInputSequencePair& Pair : StageInputSequences)
+        {
+            if (Pair.Phase == Phase)
+            {
+                return &Pair.Sequence;
+            }
+        }
+        return nullptr;
+    }
 };
 
 // ============================================================================
 // ABILITY SCORING
 // ============================================================================
-
 USTRUCT(BlueprintType)
 struct FAbilityPropertyScoreRule
 {
@@ -3631,7 +3805,7 @@ struct FDynamicBiomeDef
     FGameplayTag BiomeTag;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
-    FDynamicTagStringMapWrapper Localization;
+    FDynamicLocalizationProfile Localization;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Environment")
     TArray<FTagFloatPair> DefaultElementalEquilibrium;
@@ -4868,6 +5042,24 @@ struct FCharacterTemplateDef
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite) 
     FSensoryProfileDef SensoryProfile;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template")
+    FGameplayTag DefaultCameraProfileTag;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Stance")
+    float DefaultPaceScale = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Stance")
+    float DefaultStanceScale = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Stance")
+    FDynamicStanceConfig StanceStandConfig;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Stance")
+    FDynamicStanceConfig StanceCrouchConfig;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Character Template|Stance")
+    FDynamicStanceConfig StanceProneConfig;
 };
 
 USTRUCT(BlueprintType)
@@ -6588,7 +6780,7 @@ struct GDB_API FDynamicStateContextData
 // ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
 // ============================================================================
 USTRUCT(BlueprintType)
-struct FMasterRegistryStagingData
+struct GDB_API FMasterRegistryStagingData
 {
     GENERATED_BODY()
 
@@ -6636,6 +6828,8 @@ struct FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicDamageTypeDef> DamageTypeMasterRegistry;
     TMap<FGameplayTag, FDynamicEQSDef> EQSMasterRegistry;
     TMap<FGameplayTag, FDynamicStateTreeDef> StateTreeMasterRegistry;
+    TMap<FGameplayTag, FDynamicInputActionDef> InputMasterRegistry;
+    TMap<FGameplayTag, FDynamicCameraProfileDef> CameraMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;
@@ -6660,4 +6854,7 @@ struct FMasterRegistryStagingData
 
     bool bHasCloudAIConfig = false;
     FCloudAISystemConfig CloudAIConfig;
+
+    bool bHasGameSettingsConfig = false;
+    FGameSettingsConfig GameSettingsConfig;
 };

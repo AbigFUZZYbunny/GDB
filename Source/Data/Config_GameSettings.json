@@ -1,0 +1,9 @@
+﻿{
+  "_comment": "Global settings defining UI hints and world configurations.",
+  "GameSettingsConfig": {
+    "ShowAbilityCombosInUI": {
+      "bIsOptionalSetting": true,
+      "bDefaultValue": false
+    }
+  }
+}

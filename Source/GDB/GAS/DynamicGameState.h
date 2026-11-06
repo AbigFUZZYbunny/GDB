@@ -27,7 +27,7 @@ public:
     virtual void BeginPlay() override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-    // Master Registries loaded from JSON
+    // Master Registries loaded asynchronously from JSON
     UPROPERTY() TMap<FGameplayTag, FDynamicAttributeDef> AttributeMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicDeliveryArchetype> DeliveryArchetypes;
     UPROPERTY() TMap<FGameplayTag, FDynamicAbilityDef> AbilityMasterRegistry;
@@ -69,10 +69,10 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicDamageTypeDef> DamageTypeMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
-
-    // --- NEW: DYNAMIC DATA-DRIVEN EQS & STATETREE MASTER REGISTRIES ---
     UPROPERTY() TMap<FGameplayTag, FDynamicEQSDef> EQSMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicStateTreeDef> StateTreeMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicInputActionDef> InputMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicCameraProfileDef> CameraMasterRegistry;
 
     // Asynchronous Native Evaluation for Dynamic JSON EQS Queries
     void ExecuteDynamicEQSAsync(
@@ -88,6 +88,7 @@ public:
     UPROPERTY() FAbilityScoreConfigData AbilityScoreConfig;
     UPROPERTY() FDynamicEnvironmentSystemConfig EnvironmentConfig;
     UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Cloud AI") FCloudAISystemConfig CloudAIConfig;
+    UPROPERTY(BlueprintReadOnly, Category = "Dynamic GAS|Settings") FGameSettingsConfig GameSettingsConfig;
 
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedCoinedWords)
     FFastCoinedWordArray ReplicatedCoinedWords;

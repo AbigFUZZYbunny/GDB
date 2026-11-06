@@ -31,7 +31,8 @@ public class GDB : ModuleRules
 			"NavigationSystem",
 			"CustomizableObject",
 			"StateTreeModule", 
-			"GameplayStateTreeModule"
+			"GameplayStateTreeModule", 
+			"EnhancedInput"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

@@ -70,8 +70,16 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Ability")
     void PlayStagePresentation(const FAbilityStagePresentation& StageConfig);
+    
+    void HandleInputStep(FGameplayTag ActionTag, bool bIsPressed);
 
 protected:
+    // QTE State Machine Pipeline
+    void EvaluateStageEntry(EValidationPhase Phase);
+    void ProceedWithStage(EValidationPhase Phase);
+
+    void OnQTEWindowFailed();
+    
     bool EvaluateDynamicRule(const FGameplayTag& RuleTag, const FGameplayAbilityActorInfo* ActorInfo) const;
     UDynamicInteractableComponent* FindBestNearbyInteractable(const FGameplayAbilityActorInfo* ActorInfo) const;
     void GrantSourcePassBack(EPassBackTriggerEvent EventType, float Scalar = 1.0f) const;
@@ -104,4 +112,11 @@ private:
     UPROPERTY()
     TObjectPtr<UAT_WaitChargeTime> ActiveChargeTask;
     float LastComboEvalTime = -1.0f;
+    
+    int32 CurrentInputStepIndex = 0;
+    FTimerHandle TimerHandle_QTEWindow;
+    bool bIsAwaitingQTE = false;
+
+    // Stores any parameter penalties accrued if a combo is failed but allowed to proceed
+    FDynamicTagFloatMapWrapper QTEParameterAdjustments;
 };

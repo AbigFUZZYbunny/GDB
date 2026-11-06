@@ -92,6 +92,36 @@
         "RecoveryStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" },
         "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Fire.BoltImpact" }
       },
+      "StageInputSequences": {
+        "ChargingStage": {
+          "BypassConditionTreeName": "Trigger.Condition.HasMasteredFireboltCombo",
+          "bCancelAbilityOnFailure": false,
+          "bProceedOnFailure": true,
+          "SequenceTimeoutSeconds": 2.0,
+          "Steps": [
+            {
+              "RequiredInputAction": "InputAction.Combat.UseMainHand",
+              "bIsHold": false,
+              "TimeWindowSeconds": 1.0
+            }
+          ],
+          "PenaltyModifiers": [
+            {
+              "TargetAttributeTag": "Attribute.Resource.Mana.Fire",
+              "ModifierOp": "Additive",
+              "BaseMagnitude": -15.0,
+              "SourceTagRequirements": [],
+              "TargetTagRequirements": []
+            }
+          ],
+          "PenaltyEffects": [],
+          "ParameterAdjustmentsOnFailure": {
+            "ReplicatedEntries": [
+              { "KeyTag": "Ability.Param.BaseDamage", "Value": -20.0 }
+            ]
+          }
+        }
+      },
       "SourcePassBackRules": [
         { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 3.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
         { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.Element.Fire", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },

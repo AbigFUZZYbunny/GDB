@@ -69,10 +69,24 @@
           { "KeyTag": "Actor.Tool.Axe.Felling", "Value": 100.0 }
         ]
       },
-      "GrantedBehaviors": [
-        "Behavior.Work.FellTimber"
-      ],
-      "SensoryResponses": []
+      "GrantedBehaviors": [ "Behavior.Work.FellTimber" ],
+      "SensoryResponses": [],
+      "DailySchedule": [
+        {
+          "StartHour24": 8.0,
+          "EndHour24": 18.0,
+          "ScheduledActivityTag": "StateTree.Event.Work",
+          "PreferredPlaceRoleTag": "Role.Place.Workplace",
+          "ScheduleAdherenceWeight": 1.0
+        },
+        {
+          "StartHour24": 18.0,
+          "EndHour24": 8.0,
+          "ScheduledActivityTag": "StateTree.Event.Sleep",
+          "PreferredPlaceRoleTag": "Role.Place.Home",
+          "ScheduleAdherenceWeight": 1.0
+        }
+      ]
     },
     "Profession.Combat.UrukBerserker": {
       "ProfessionTag": "Profession.Combat.UrukBerserker",

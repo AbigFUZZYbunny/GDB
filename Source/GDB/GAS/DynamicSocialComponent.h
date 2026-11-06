@@ -1,5 +1,4 @@
-﻿// DynamicSocialComponent.h
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -42,7 +41,6 @@ public:
     UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Social")
     FGuid CurrentPropertyID;
 
-    // Conversational Lock & Arbitration
     UPROPERTY(ReplicatedUsing = OnRep_ActiveTurnState, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
     EConversationalTurnState ActiveTurnState = EConversationalTurnState::Idle;
 
@@ -64,7 +62,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Social|Conversation")
     void ServerReleaseConversationalLock();
 
-    // Multi-Party Conversational Circles
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Dynamic GAS|Social|Conversation")
     FGuid ActiveConversationalCircleGuid;
 
@@ -80,7 +77,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Dynamic GAS|Social|Conversation")
     void UpdateConversationalGaze(float DeltaSeconds);
 
-    // Memory & Dialogue Buffers
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social|Conversation")
     float ConversationalMemoryTimeoutSeconds = 300.0f;
 
@@ -259,6 +255,12 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Dynamic GAS|Law")
     FGameplayTag GetAuthorizedForceLevel(ADynamicCharacter* Suspect, FGameplayTag JurisdictionTag) const;
+
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "Dynamic GAS|Schedule")
+    FGameplayTag ActiveScheduleStateTag;
+
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|Schedule")
+    void ServerEvaluateDailySchedule(float CurrentGameTimeHours);
 
 private:
     void HandleCalloutIgnored();

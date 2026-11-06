@@ -10,6 +10,7 @@
 #include "DynamicWorldDirectorSubsystem.h"
 #include "DynamicGameState.h"
 #include "DynamicContainerComponent.h"
+#include "DynamicAIController.h"
 #include "DynamicEffectExecution.h"
 #include "DynamicGameplayEffectContext.h"
 #include "MoverComponent.h"
@@ -22,6 +23,7 @@
 #include "DynamicLogicEvaluator.h"
 #include "Engine/OverlapResult.h"
 #include "DynamicPhysicsActor.h"
+#include "DynamicStateTreeComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 
@@ -1083,7 +1085,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
     UDynamicAttributeSet* TargetAttr = TargetCharacter->GetDynamicAttributeSet();
     UAbilitySystemComponent* TargetASC = TargetCharacter->GetAbilitySystemComponent();
 
-    // Helper Lambda: Sums both Global Body Attributes and Local Limb Armor cleanly
     auto GatherLocalResistance = [&](const FDynamicTagFloatMapWrapper& Scalars) -> float 
     {
         float AccumulatedResistance = 0.0f;
@@ -1133,7 +1134,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
         if (const FDynamicImpactReactionRule* ImpactRule = Settings.ImpactReactionRules.Find(ImpactTag))
         {
             const float CurrentDefenderResistance = TargetBaseMassResistance + GatherLocalResistance(ImpactRule->StaggerResistanceScalars);
-
             const float SafeTotalPower = FMath::Max(1.0f, WeaponMomentum + CurrentDefenderResistance);
             const float TargetPowerRatio = FMath::Clamp(WeaponMomentum / SafeTotalPower, 0.0f, 1.0f);
             
@@ -1144,7 +1144,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
             {
                 const float OverpowerResistance = OverpowerRule.BasePenetrationThreshold + GatherLocalResistance(OverpowerRule.ResistanceAttributeScalars);
 
-                // FIXED: Use OverpowerResistance consistently
                 if (WeaponMomentum > OverpowerResistance)
                 {
                     UPrimitiveComponent* AttackerPrim = nullptr;
@@ -1157,7 +1156,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
                         AttackerPrim = PhysWeapon->GetActivePhysicsPrimitive();
                     }
 
-                    // A. PIERCE: Spawns a physical constraint locking penetration to the normal up to Max Depth
                     if (OverpowerRule.bIsPiercing && OverpowerRule.MaxPiercingDepth > 0.0f)
                     {
                         RuleRecoilImpulse *= 0.25f;
@@ -1204,7 +1202,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
                             }
                         }
                     }
-                    // B. CLEAVE: Phasing collision for slashing follow-through
                     else if (OverpowerRule.bIgnoreCollisionOnOverpower)
                     {
                         RuleRecoilImpulse *= 0.15f; 
@@ -1227,7 +1224,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
                         }
                     }
 
-                    // C. HYPEREXTENSION: Sever the physics control motor on the struck limb
                     if (OverpowerRule.bHyperextendLimbOnOverpower)
                     {
                         RuleRecoilImpulse *= 0.3f;
@@ -1243,13 +1239,11 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
                         }
                     }
 
-                    // D. CRUSH: Force whole-body ragdoll collapse
                     if (OverpowerRule.bForceRagdollOnOverpower)
                     {
                         TargetCharacter->StartRagdoll();
                     }
 
-                    // E. Apply data-driven status debuff tags
                     if (TargetASC && OverpowerRule.StatusEffectsToApply.Num() > 0)
                     {
                         FGameplayTagContainer DebuffContainer;
@@ -1270,7 +1264,6 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
         }
     }
 
-    // Apply Stagger / Reaction to Defender
     HighestTargetImpulse = FMath::Min(HighestTargetImpulse, Settings.MaxImpulseCap);
     if (HighestTargetImpulse > Settings.MinImpulseThreshold)
     {
@@ -1280,7 +1273,20 @@ void ADynamicCharacter::ServerProcessAuthoritativeLimbHit(
         }
     }
 
-    // Apply Recoil / Deflection back to Attacker
+    // REACTIVE STATE TREE EVENT DISPATCH: React immediately upon being hit
+    if (AAIController* AICon = Cast<AAIController>(TargetCharacter->GetController()))
+    {
+        if (UDynamicStateTreeComponent* StateTreeComp = AICon->FindComponentByClass<UDynamicStateTreeComponent>())
+        {
+            FDynamicStateTreeEvent DmgEvent;
+            DmgEvent.EventTag = FGameplayTag::RequestGameplayTag(TEXT("Sense.Damage"), false);
+            DmgEvent.EventInstigator = InstigatorActor;
+            DmgEvent.EventLocation = HitLocation;
+            DmgEvent.EventMagnitude = HighestTargetImpulse;
+            StateTreeComp->SendStateTreeEvent(DmgEvent);
+        }
+    }
+
     HighestRecoilImpulse = FMath::Min(HighestRecoilImpulse, Settings.MaxImpulseCap);
     if (HighestRecoilImpulse > Settings.MinImpulseThreshold && InstigatorActor && InstigatorActor != TargetCharacter)
     {

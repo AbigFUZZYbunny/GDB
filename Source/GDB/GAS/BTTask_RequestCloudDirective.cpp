@@ -7,6 +7,7 @@
 #include "AbilitySystemComponent.h"
 #include "DynamicSocialComponent.h"
 #include "DynamicCharacter.h"
+#include "DynamicStateTreeComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Engine/OverlapResult.h"
@@ -100,6 +101,12 @@ void UBTTask_RequestCloudDirective::TickTask(UBehaviorTreeComponent& OwnerComp, 
             if (UDynamicSocialComponent* SocialComp = ControlledPawn->FindComponentByClass<UDynamicSocialComponent>())
             {
                 SocialComp->ServerSetCloudAISuspension(false);
+            }
+
+            // Trigger dynamic state tree transition for LLM fallback
+            if (UDynamicStateTreeComponent* StateTreeComp = ControlledPawn->FindComponentByClass<UDynamicStateTreeComponent>())
+            {
+                StateTreeComp->TriggerLLMTimeoutFallback();
             }
         }
         FinishLatentTask(OwnerComp, EBTNodeResult::Failed);

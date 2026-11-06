@@ -70,6 +70,18 @@ public:
     UPROPERTY() TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
 
+    // --- NEW: DYNAMIC DATA-DRIVEN EQS & STATETREE MASTER REGISTRIES ---
+    UPROPERTY() TMap<FGameplayTag, FDynamicEQSDef> EQSMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicStateTreeDef> StateTreeMasterRegistry;
+
+    // Asynchronous Native Evaluation for Dynamic JSON EQS Queries
+    void ExecuteDynamicEQSAsync(
+        FGameplayTag QueryTag, 
+        AActor* Querier, 
+        const TMap<FName, float>& CustomParams, 
+        TFunction<void(bool bSuccess, AActor* BestActor, FVector BestLocation)> OnComplete
+    );
+
     UPROPERTY() FDynamicCalendarDef CalendarConfig;
     UPROPERTY() FPhysicsCalculationSettings CalculationSettings;
     UPROPERTY() TArray<FPhysicsLimbConfig> GlobalLimbs;

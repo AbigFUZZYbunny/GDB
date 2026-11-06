@@ -11,6 +11,7 @@
 #include "AbilitySystemComponent.h"
 #include "DynamicNetworkComponent.h"
 #include "AIController.h"
+#include "DynamicAIController.h"
 #include "DynamicCharacter.h"
 #include "DynamicCustomizationComponent.h"
 #include "DynamicEnvironmentChunkActor.h"
@@ -1386,6 +1387,8 @@ void ADynamicGameState::MergeStagingRegistry(FMasterRegistryStagingData&& Stagin
     MarketMasterRegistry.Append(MoveTemp(StagingData.MarketMasterRegistry));
     FactionMasterRegistry.Append(MoveTemp(StagingData.FactionMasterRegistry));
     DamageTypeMasterRegistry.Append(MoveTemp(StagingData.DamageTypeMasterRegistry));
+    EQSMasterRegistry.Append(MoveTemp(StagingData.EQSMasterRegistry));
+    StateTreeMasterRegistry.Append(MoveTemp(StagingData.StateTreeMasterRegistry));
     
     RebuildLanguageLookupCaches();
 
@@ -1457,6 +1460,12 @@ ADynamicCharacter* ADynamicGameState::AcquireCharacter(FGameplayTag TemplateTag,
                         if (AAIController* NewAICon = GetWorld()->SpawnActor<AAIController>(ControllerClass, TargetCharacter->GetActorTransform(), ConParams))
                         {
                             NewAICon->Possess(TargetCharacter);
+                            
+                            // Initialize Perception & StateTree from external JSON config
+                            if (ADynamicAIController* DynamicAICon = Cast<ADynamicAIController>(NewAICon))
+                            {
+                                DynamicAICon->InitializeFromAgentDef(*AgentDef);
+                            }
                             return;
                         }
                     }
@@ -2018,4 +2027,158 @@ ADynamicCharacter* ADynamicGameState::FindCharacterByGuid(const FGuid& Character
         }
     }
     return nullptr;
+}
+
+void ADynamicGameState::ExecuteDynamicEQSAsync(
+    FGameplayTag QueryTag, 
+    AActor* Querier, 
+    const TMap<FName, float>& CustomParams, 
+    TFunction<void(bool bSuccess, AActor* BestActor, FVector BestLocation)> OnComplete)
+{
+    if (!Querier || !QueryTag.IsValid())
+    {
+        if (OnComplete) OnComplete(false, nullptr, FVector::ZeroVector);
+        return;
+    }
+
+    const FDynamicEQSDef* QueryDef = EQSMasterRegistry.Find(QueryTag);
+    if (!QueryDef)
+    {
+        if (OnComplete) OnComplete(false, nullptr, FVector::ZeroVector);
+        return;
+    }
+
+    const FVector QuerierLoc = Querier->GetActorLocation();
+    const FVector QuerierForward = Querier->GetActorForwardVector();
+    const float SearchRadius = QueryDef->BaseSearchRadius;
+
+    // 1. Generate Candidates on GameThread (Pointers & Actors)
+    struct FEQSCandidateItem
+    {
+        TWeakObjectPtr<AActor> CandidateActor = nullptr;
+        FVector CandidateLocation = FVector::ZeroVector;
+        float ComputedScore = 0.0f;
+        bool bPassedFilters = true;
+    };
+
+    TArray<FEQSCandidateItem> CandidatePool;
+
+    if (QueryDef->GeneratorType == EDynamicEQSGeneratorType::ActorsWithRoleTag)
+    {
+        TArray<AActor*> RoleActors;
+        GetActorsWithRoleTag(QueryDef->ContextRoleTag, RoleActors);
+
+        for (AActor* Candidate : RoleActors)
+        {
+            if (IsValid(Candidate) && Candidate != Querier)
+            {
+                FEQSCandidateItem Item;
+                Item.CandidateActor = Candidate;
+                Item.CandidateLocation = Candidate->GetActorLocation();
+                CandidatePool.Add(Item);
+            }
+        }
+    }
+    else if (QueryDef->GeneratorType == EDynamicEQSGeneratorType::SpatialPointsGrid2D)
+    {
+        const float Spacing = FMath::Max(50.0f, QueryDef->GridDensityOrItemSpacing);
+        const int32 Steps = FMath::CeilToInt(SearchRadius / Spacing);
+
+        for (int32 X = -Steps; X <= Steps; ++X)
+        {
+            for (int32 Y = -Steps; Y <= Steps; ++Y)
+            {
+                const FVector Point = QuerierLoc + FVector(X * Spacing, Y * Spacing, 0.0f);
+                if (FVector::DistSquared(QuerierLoc, Point) <= FMath::Square(SearchRadius))
+                {
+                    FEQSCandidateItem Item;
+                    Item.CandidateLocation = Point;
+                    CandidatePool.Add(Item);
+                }
+            }
+        }
+    }
+
+    if (CandidatePool.Num() == 0)
+    {
+        if (OnComplete) OnComplete(false, nullptr, FVector::ZeroVector);
+        return;
+    }
+
+    // 2. Offload Scoring & Filtering to ThreadPool
+    const FDynamicEQSDef SafeDef = *QueryDef;
+    TWeakObjectPtr<AActor> WeakQuerier(Querier);
+
+    Async(EAsyncExecution::ThreadPool, [CandidatePool = MoveTemp(CandidatePool), SafeDef, QuerierLoc, QuerierForward, WeakQuerier, OnComplete]() mutable
+    {
+        for (FEQSCandidateItem& Item : CandidatePool)
+        {
+            float AccumulatedScore = 0.0f;
+
+            for (const FDynamicEQSTestDef& Test : SafeDef.Tests)
+            {
+                float RawMetric = 0.0f;
+
+                if (Test.TestType == EDynamicEQSTestType::Distance)
+                {
+                    RawMetric = FVector::Dist(QuerierLoc, Item.CandidateLocation);
+                }
+                else if (Test.TestType == EDynamicEQSTestType::DotAngle)
+                {
+                    const FVector ToItem = (Item.CandidateLocation - QuerierLoc).GetSafeNormal();
+                    RawMetric = FVector::DotProduct(QuerierForward, ToItem);
+                }
+
+                // Filter logic
+                if (Test.TestPurpose == EDynamicEQSTestPurpose::FilterOnly || Test.TestPurpose == EDynamicEQSTestPurpose::FilterAndScore)
+                {
+                    if (RawMetric < Test.MinThreshold || RawMetric > Test.MaxThreshold)
+                    {
+                        Item.bPassedFilters = false;
+                        break;
+                    }
+                }
+
+                // Score logic
+                if (Test.TestPurpose == EDynamicEQSTestPurpose::ScoreOnly || Test.TestPurpose == EDynamicEQSTestPurpose::FilterAndScore)
+                {
+                    const float Range = FMath::Max(1.0f, Test.MaxThreshold - Test.MinThreshold);
+                    float Normalized = FMath::Clamp((RawMetric - Test.MinThreshold) / Range, 0.0f, 1.0f);
+                    if (Test.bInvertScore) Normalized = 1.0f - Normalized;
+                    AccumulatedScore += (Normalized * Test.Weight);
+                }
+            }
+
+            Item.ComputedScore = AccumulatedScore;
+        }
+
+        CandidatePool.RemoveAll([](const FEQSCandidateItem& Item) { return !Item.bPassedFilters; });
+
+        // 3. Return Best Candidate to GameThread
+        Async(EAsyncExecution::TaskGraphMainThread, [CandidatePool = MoveTemp(CandidatePool), SafeDef, OnComplete]()
+        {
+            if (CandidatePool.Num() == 0)
+            {
+                if (OnComplete) OnComplete(false, nullptr, FVector::ZeroVector);
+                return;
+            }
+
+            int32 BestIndex = 0;
+            float HighestScore = -MAX_flt;
+
+            for (int32 i = 0; i < CandidatePool.Num(); ++i)
+            {
+                if (CandidatePool[i].ComputedScore > HighestScore)
+                {
+                    HighestScore = CandidatePool[i].ComputedScore;
+                    BestIndex = i;
+                }
+            }
+
+            if (OnComplete)
+            {
+                OnComplete(true, CandidatePool[BestIndex].CandidateActor.Get(), CandidatePool[BestIndex].CandidateLocation);
+            }
+        });
+    });
 }

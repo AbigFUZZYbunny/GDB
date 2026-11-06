@@ -1715,6 +1715,172 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.DamageTypeMasterRegistry.Add(KeyTag, Def);
         }
     }
+    
+    // ------------------------------------------------------------------------
+    // DYNAMIC EQS QUERY REGISTRY PARSING
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("EQSMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("EQSMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> EqObj = Pair.Value->AsObject();
+            if (!EqObj.IsValid()) continue;
+
+            FDynamicEQSDef Def;
+            Def.QueryTag = KeyTag;
+            Def.GeneratorType = StringToEnum<EDynamicEQSGeneratorType>(EqObj->GetStringField(TEXT("GeneratorType")));
+            Def.SelectMode = StringToEnum<EDynamicEQSSelectMode>(EqObj->GetStringField(TEXT("SelectMode")));
+            Def.BaseSearchRadius = EqObj->HasField(TEXT("BaseSearchRadius")) ? static_cast<float>(EqObj->GetNumberField(TEXT("BaseSearchRadius"))) : 3000.0f;
+            Def.GridDensityOrItemSpacing = EqObj->HasField(TEXT("GridDensityOrItemSpacing")) ? static_cast<float>(EqObj->GetNumberField(TEXT("GridDensityOrItemSpacing"))) : 250.0f;
+
+            if (EqObj->HasField(TEXT("ContextRoleTag")))
+            {
+                Def.ContextRoleTag = FGameplayTag::RequestGameplayTag(FName(*EqObj->GetStringField(TEXT("ContextRoleTag"))), false);
+            }
+
+            if (EqObj->HasField(TEXT("Tests")))
+            {
+                for (const auto& TestVal : EqObj->GetArrayField(TEXT("Tests")))
+                {
+                    TSharedPtr<FJsonObject> TObj = TestVal->AsObject();
+                    if (!TObj.IsValid()) continue;
+
+                    FDynamicEQSTestDef TestDef;
+                    TestDef.TestType = StringToEnum<EDynamicEQSTestType>(TObj->GetStringField(TEXT("TestType")));
+                    TestDef.TestPurpose = StringToEnum<EDynamicEQSTestPurpose>(TObj->GetStringField(TEXT("TestPurpose")));
+                    TestDef.Weight = TObj->HasField(TEXT("Weight")) ? static_cast<float>(TObj->GetNumberField(TEXT("Weight"))) : 1.0f;
+                    TestDef.MinThreshold = TObj->HasField(TEXT("MinThreshold")) ? static_cast<float>(TObj->GetNumberField(TEXT("MinThreshold"))) : 0.0f;
+                    TestDef.MaxThreshold = TObj->HasField(TEXT("MaxThreshold")) ? static_cast<float>(TObj->GetNumberField(TEXT("MaxThreshold"))) : 5000.0f;
+                    TestDef.bInvertScore = TObj->HasField(TEXT("bInvertScore")) ? TObj->GetBoolField(TEXT("bInvertScore")) : false;
+
+                    if (TObj->HasField(TEXT("RoleTagToMatch")))
+                    {
+                        TestDef.RoleTagToMatch = FGameplayTag::RequestGameplayTag(FName(*TObj->GetStringField(TEXT("RoleTagToMatch"))), false);
+                    }
+                    if (TObj->HasField(TEXT("ConditionTreeName")))
+                    {
+                        TestDef.ConditionTreeName = FName(*TObj->GetStringField(TEXT("ConditionTreeName")));
+                    }
+
+                    Def.Tests.Add(TestDef);
+                }
+            }
+
+            OutStaging.EQSMasterRegistry.Add(KeyTag, Def);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // DYNAMIC STATE TREE REGISTRY PARSING
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("StateTreeMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("StateTreeMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> TreeObj = Pair.Value->AsObject();
+            if (!TreeObj.IsValid()) continue;
+
+            FDynamicStateTreeDef TreeDef;
+            TreeDef.TreeTag = KeyTag;
+            TreeDef.RootNodeIndex = TreeObj->HasField(TEXT("RootNodeIndex")) ? static_cast<int32>(TreeObj->GetNumberField(TEXT("RootNodeIndex"))) : 0;
+            TreeDef.bIsLLMFallbackTree = TreeObj->HasField(TEXT("bIsLLMFallbackTree")) ? TreeObj->GetBoolField(TEXT("bIsLLMFallbackTree")) : false;
+            TreeDef.FallbackTimeoutSeconds = TreeObj->HasField(TEXT("FallbackTimeoutSeconds")) ? static_cast<float>(TreeObj->GetNumberField(TEXT("FallbackTimeoutSeconds"))) : 4.0f;
+
+            if (TreeObj->HasField(TEXT("Nodes")))
+            {
+                for (const auto& NodeVal : TreeObj->GetArrayField(TEXT("Nodes")))
+                {
+                    TSharedPtr<FJsonObject> NObj = NodeVal->AsObject();
+                    if (!NObj.IsValid()) continue;
+
+                    FDynamicStateTreeNodeDef NodeDef;
+                    NodeDef.NodeIndex = static_cast<int32>(NObj->GetNumberField(TEXT("NodeIndex")));
+                    NodeDef.NodeName = FName(*NObj->GetStringField(TEXT("NodeName")));
+                    NodeDef.StateTag = FGameplayTag::RequestGameplayTag(FName(*NObj->GetStringField(TEXT("StateTag"))), false);
+                    NodeDef.ParentNodeIndex = NObj->HasField(TEXT("ParentNodeIndex")) ? static_cast<int32>(NObj->GetNumberField(TEXT("ParentNodeIndex"))) : INDEX_NONE;
+                    NodeDef.SelectionMode = StringToEnum<EDynamicStateSelectionMode>(NObj->GetStringField(TEXT("SelectionMode")));
+                    NodeDef.NodeBasePriority = NObj->HasField(TEXT("NodeBasePriority")) ? static_cast<float>(NObj->GetNumberField(TEXT("NodeBasePriority"))) : 10.0f;
+
+                    if (NObj->HasField(TEXT("ChildNodeIndices")))
+                    {
+                        for (const auto& CVal : NObj->GetArrayField(TEXT("ChildNodeIndices")))
+                        {
+                            NodeDef.ChildNodeIndices.Add(static_cast<int32>(CVal->AsNumber()));
+                        }
+                    }
+
+                    if (NObj->HasField(TEXT("EnterConditionTreeName")))
+                    {
+                        NodeDef.EnterConditionTreeName = FName(*NObj->GetStringField(TEXT("EnterConditionTreeName")));
+                    }
+
+                    // Parse Tasks
+                    if (NObj->HasField(TEXT("Tasks")))
+                    {
+                        for (const auto& TaskVal : NObj->GetArrayField(TEXT("Tasks")))
+                        {
+                            TSharedPtr<FJsonObject> TskObj = TaskVal->AsObject();
+                            if (!TskObj.IsValid()) continue;
+
+                            FDynamicStateTreeTaskDef TaskDef;
+                            TaskDef.TaskTypeTag = FGameplayTag::RequestGameplayTag(FName(*TskObj->GetStringField(TEXT("TaskTypeTag"))), false);
+
+                            if (TskObj->HasField(TEXT("BehaviorTag")))
+                            {
+                                TaskDef.BehaviorTag = FGameplayTag::RequestGameplayTag(FName(*TskObj->GetStringField(TEXT("BehaviorTag"))), false);
+                            }
+                            if (TskObj->HasField(TEXT("TargetEQSTag")))
+                            {
+                                TaskDef.TargetEQSTag = FGameplayTag::RequestGameplayTag(FName(*TskObj->GetStringField(TEXT("TargetEQSTag"))), false);
+                            }
+                            if (TskObj->HasField(TEXT("TargetPlaceRoleTag")))
+                            {
+                                TaskDef.TargetPlaceRoleTag = FGameplayTag::RequestGameplayTag(FName(*TskObj->GetStringField(TEXT("TargetPlaceRoleTag"))), false);
+                            }
+
+                            DeserializeMapWrapper(TskObj, TEXT("TaskParameters"), TaskDef.TaskParameters);
+                            NodeDef.Tasks.Add(TaskDef);
+                        }
+                    }
+
+                    // Parse Transitions
+                    if (NObj->HasField(TEXT("Transitions")))
+                    {
+                        for (const auto& TransVal : NObj->GetArrayField(TEXT("Transitions")))
+                        {
+                            TSharedPtr<FJsonObject> TrObj = TransVal->AsObject();
+                            if (!TrObj.IsValid()) continue;
+
+                            FDynamicStateTreeTransitionDef TransDef;
+                            TransDef.Trigger = StringToEnum<EDynamicStateTransitionTrigger>(TrObj->GetStringField(TEXT("Trigger")));
+                            TransDef.TargetNodeIndex = TrObj->HasField(TEXT("TargetNodeIndex")) ? static_cast<int32>(TrObj->GetNumberField(TEXT("TargetNodeIndex"))) : INDEX_NONE;
+
+                            if (TrObj->HasField(TEXT("TargetStateTag")))
+                            {
+                                TransDef.TargetStateTag = FGameplayTag::RequestGameplayTag(FName(*TrObj->GetStringField(TEXT("TargetStateTag"))), false);
+                            }
+                            if (TrObj->HasField(TEXT("ConditionTreeName")))
+                            {
+                                TransDef.ConditionTreeName = FName(*TrObj->GetStringField(TEXT("ConditionTreeName")));
+                            }
+
+                            NodeDef.Transitions.Add(TransDef);
+                        }
+                    }
+
+                    TreeDef.Nodes.Add(NodeDef);
+                }
+            }
+
+            OutStaging.StateTreeMasterRegistry.Add(KeyTag, TreeDef);
+        }
+    }
 
     return true;
 }

@@ -1,16 +1,19 @@
-﻿#include "DynamicAIController.h"
+﻿// DynamicAIController.cpp
+#include "DynamicAIController.h"
 #include "DynamicCharacter.h"
 #include "DynamicGameState.h"
 #include "DynamicSocialComponent.h"
+#include "StateTree.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISenseConfig_Hearing.h"
 #include "Perception/AISenseConfig_Damage.h"
+#include "Perception/AISense_Sight.h"
+#include "Perception/AISense_Hearing.h"
+#include "Perception/AISense_Damage.h"
 #include "Components/StateTreeComponent.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
-#include "Runtime/AIModule/Classes/Perception/AIPerceptionTypes.h"
-#include "Runtime/Engine/Classes/Engine/StreamableManager.h"
 
 ADynamicAIController::ADynamicAIController(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -25,7 +28,10 @@ ADynamicAIController::ADynamicAIController(const FObjectInitializer& ObjectIniti
 void ADynamicAIController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
-    PerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &ADynamicAIController::OnTargetPerceptionUpdated);
+    if (PerceptionComponent)
+    {
+        PerceptionComponent->OnTargetPerceptionUpdated.AddUniqueDynamic(this, &ADynamicAIController::OnTargetPerceptionUpdated);
+    }
 }
 
 void ADynamicAIController::InitializeFromAgentDef(const FDynamicAIAgentDef& AgentDef)
@@ -51,7 +57,9 @@ void ADynamicAIController::InitializeFromAgentDef(const FDynamicAIAgentDef& Agen
     {
         PerceptionComponent->ConfigureSense(*DamageConfig);
     }
-    PerceptionComponent->SetDominantSense(SightConfig->GetSenseID());
+    
+    // Pass TSubclassOf<UAISense> instead of FAISenseID
+    PerceptionComponent->SetDominantSense(UAISense_Sight::StaticClass());
 
     // 2. Dynamic State Tree Initialization
     if (!AgentDef.StateTreeAsset.IsNull())
@@ -76,7 +84,6 @@ void ADynamicAIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus 
 {
     if (!GetPawn()) return;
 
-    // Pass data-driven perception directly into the social brain for logic and memory evaluation
     if (UDynamicSocialComponent* Social = GetPawn()->FindComponentByClass<UDynamicSocialComponent>())
     {
         if (Stimulus.WasSuccessfullySensed())
@@ -86,7 +93,7 @@ void ADynamicAIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus 
             else if (Stimulus.Type == DamageConfig->GetSenseID()) SenseTag = FGameplayTag::RequestGameplayTag(TEXT("Sense.Damage"), false);
 
             TMap<FGameplayTag, float> Signatures;
-            Signatures.Add(SenseTag, 100.0f); // Confidence/Intensity
+            Signatures.Add(SenseTag, 100.0f);
             Social->ServerProcessCrimeSensoryEvent(FGameplayTag::EmptyTag, Actor, nullptr, FGuid(), TArray<FGuid>(), Signatures);
         }
     }

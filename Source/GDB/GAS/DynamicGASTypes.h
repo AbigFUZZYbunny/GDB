@@ -5,6 +5,7 @@
 #include "Net/Serialization/FastArraySerializer.h"
 #include "Engine/NetSerialization.h"
 #include "GameplayTagContainer.h"
+#include "StateTreeTaskBase.h"
 #include "Animation/AnimMontage.h"
 #include "DynamicGASTypes.generated.h"
 
@@ -417,6 +418,78 @@ enum class EConversationalTurnState : uint8
 };
 
 // ============================================================================
+// DYNAMIC DATA-DRIVEN ENVIRONMENT QUERY SYSTEM (EQS)
+// ============================================================================
+
+UENUM(BlueprintType)
+enum class EDynamicEQSGeneratorType : uint8
+{
+    ActorsWithRoleTag,     // Samples actors registered in ADynamicGameState matching RoleTag
+    SpatialPointsGrid2D,   // Projects a 2D planar grid of point candidates around context
+    DonutCircle2D,         // Projects concentric rings of point candidates around context
+    ActorsInProximitySweep,// Sweeps physical actors/pawns in vicinity
+    VoxelSurfaceBlocks     // Samples voxel surface coordinates matching material criteria
+};
+
+UENUM(BlueprintType)
+enum class EDynamicEQSTestType : uint8
+{
+    Distance,              // Evaluates linear distance to/from Querier or Context
+    LineOfSight,           // Traces visibility channel to verify unobstructed line
+    DotAngle,              // Evaluates forward angle / viewing cone
+    LandmarkRoleMatch,     // Checks if candidate actor matches specific GameplayTag
+    PhysicalPathfinding,   // Verifies path reachability via NavigationSystem
+    ConditionTree          // Evaluates dynamic truth condition tree against candidate
+};
+
+UENUM(BlueprintType)
+enum class EDynamicEQSTestPurpose : uint8
+{
+    FilterOnly,            // Discards items outside thresholds
+    ScoreOnly,             // Weighs and ranks valid items
+    FilterAndScore         // Filters items outside bounds and weighs remaining candidates
+};
+
+UENUM(BlueprintType)
+enum class EDynamicEQSSelectMode : uint8
+{
+    BestScore,             // Picks the highest-scoring candidate item
+    RandomFromTopPercent,  // Selects randomly from the top 25% highest-scoring candidates
+    NearestPassing         // Selects candidate passing filters nearest to context
+};
+
+// ============================================================================
+// DYNAMIC STATE TREE DEFINITIONS & LLM FALLBACK PIPELINE
+// ============================================================================
+
+UENUM(BlueprintType)
+enum class EDynamicStateSelectionMode : uint8
+{
+    SelectFirstValidChild,
+    SelectBestChildByPriority,
+    SelectRandomChild
+};
+
+UENUM(BlueprintType)
+enum class EDynamicStateTransitionTrigger : uint8
+{
+    OnStateCompleted,
+    OnStateFailed,
+    OnConditionMet,
+    OnSensoryEvent,
+    OnLLMTimeout,          // Triggers immediate state transition when Cloud AI directive times out
+    OnTick
+};
+
+UENUM(BlueprintType)
+enum class EDynamicStateTreeRunStatus : uint8
+{
+    Running,
+    Succeeded,
+    Failed
+};
+
+// ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
 
@@ -805,6 +878,185 @@ template<>
 struct TStructOpsTypeTraits<FFastNetworkConnectionArray> : public TStructOpsTypeTraitsBase2<FFastNetworkConnectionArray>
 {
     enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEQSTestDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    EDynamicEQSTestType TestType = EDynamicEQSTestType::Distance;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    EDynamicEQSTestPurpose TestPurpose = EDynamicEQSTestPurpose::FilterAndScore;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    float Weight = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    float MinThreshold = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    float MaxThreshold = 5000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    bool bInvertScore = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    FGameplayTag RoleTagToMatch;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    FName ConditionTreeName = NAME_None;
+};
+
+USTRUCT(BlueprintType)
+struct FDynamicEQSDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    FGameplayTag QueryTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    EDynamicEQSGeneratorType GeneratorType = EDynamicEQSGeneratorType::ActorsWithRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    EDynamicEQSSelectMode SelectMode = EDynamicEQSSelectMode::BestScore;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    float BaseSearchRadius = 3000.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    float GridDensityOrItemSpacing = 250.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    FGameplayTag ContextRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic EQS")
+    TArray<FDynamicEQSTestDef> Tests;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStateTreeTaskDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Task")
+    FGameplayTag TaskTypeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Task")
+    FGameplayTag BehaviorTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Task")
+    FGameplayTag TargetEQSTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Task")
+    FGameplayTag TargetPlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Task")
+    FName CustomConditionTreeName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Task")
+    FDynamicTagFloatMapWrapper TaskParameters;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStateTreeTransitionDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    EDynamicStateTransitionTrigger Trigger = EDynamicStateTransitionTrigger::OnStateCompleted;
+
+    // Fixed: Added EventTagTrigger definition
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    FGameplayTag EventTagTrigger;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    FGameplayTag TargetStateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    int32 TargetNodeIndex = INDEX_NONE;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    FName ConditionTreeName = NAME_None;
+
+    // Fixed: Added bPushCurrentStateToStack and bPopStateFromStack definitions
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    bool bPushCurrentStateToStack = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    bool bPopStateFromStack = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Transition")
+    float DelaySeconds = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStateTreeNodeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    int32 NodeIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    FName NodeName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    FGameplayTag StateTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    int32 ParentNodeIndex = INDEX_NONE;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    TArray<int32> ChildNodeIndices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    EDynamicStateSelectionMode SelectionMode = EDynamicStateSelectionMode::SelectFirstValidChild;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    TArray<FDynamicStateTreeTaskDef> Tasks;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    TArray<FDynamicStateTreeTransitionDef> Transitions;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    FName EnterConditionTreeName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    float NodeBasePriority = 10.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Node")
+    float NodeCooldownSeconds = 0.0f; 
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStateTreeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree")
+    FGameplayTag TreeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree")
+    FDynamicLocalizationProfile Localization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree")
+    int32 RootNodeIndex = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree")
+    TArray<FDynamicStateTreeNodeDef> Nodes;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree")
+    bool bIsLLMFallbackTree = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree")
+    float FallbackTimeoutSeconds = 4.0f;
 };
 
 // ============================================================================
@@ -2234,7 +2486,28 @@ struct FDynamicAIAgentDef
 // PROFESSION DEFINITION
 // ============================================================================
 USTRUCT(BlueprintType)
-struct FDynamicProfessionDef
+struct FDynamicScheduleBlockDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    float StartHour24 = 8.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    float EndHour24 = 17.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    FGameplayTag ScheduledActivityTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    FGameplayTag PreferredPlaceRoleTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
+    float ScheduleAdherenceWeight = 1.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicProfessionDef
 {
     GENERATED_BODY()
 
@@ -2247,13 +2520,14 @@ struct FDynamicProfessionDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession")
     FDynamicTagFloatMapWrapper PrioritizedItemWeights;
 
-    // Additional behaviors granted specifically by having this profession
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession|AI")
     TArray<FGameplayTag> GrantedBehaviors;
 
-    // Profession-specific sensory reactions (e.g., guards investigate instead of fleeing)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession|AI")
     TArray<FSensoryResponseRule> SensoryResponses;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Profession|Schedule")
+    TArray<FDynamicScheduleBlockDef> DailySchedule; 
 };
 
 // ============================================================================
@@ -4871,27 +5145,6 @@ struct TStructOpsTypeTraits<FFastKnownPlaceArray> : public TStructOpsTypeTraitsB
 };
 
 USTRUCT(BlueprintType)
-struct FDynamicScheduleBlockDef
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
-    float StartHour24 = 8.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
-    float EndHour24 = 17.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
-    FGameplayTag ScheduledActivityTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
-    FGameplayTag PreferredPlaceRoleTag;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Schedule")
-    float ScheduleAdherenceWeight = 1.0f;
-};
-
-USTRUCT(BlueprintType)
 struct FDynamicStatPriorityRule
 {
     GENERATED_BODY()
@@ -6214,83 +6467,12 @@ struct GDB_API FDynamicAIBehaviorDef
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
     FDynamicEQSConfig TargetEQSConfig;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic AI|EQS")
+    FGameplayTag TargetEQSTag;
 };
 
-// ============================================================================
-// ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
-// ============================================================================
-USTRUCT(BlueprintType)
-struct FMasterRegistryStagingData
-{
-    GENERATED_BODY()
 
-    TMap<FGameplayTag, FDynamicAttributeDef> AttributeMasterRegistry;
-    TMap<FGameplayTag, FDynamicDeliveryArchetype> DeliveryArchetypes;
-    TMap<FGameplayTag, FDynamicAbilityDef> AbilityMasterRegistry;
-    TMap<FName, FDynamicConditionTreeContainer> SharedConditionTrees;
-    TMap<FGameplayTag, FDynamicMilestoneContainer> MasterMilestoneRegistry;
-    TMap<FGameplayTag, FDynamicThresholdContainer> MasterThresholdRegistry;
-    TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
-    TMap<FGameplayTag, FDynamicPhysicsActorDef> MasterPhysicsActorRegistry;
-    TMap<FGameplayTag, FCharacterTemplateDef> CharacterTemplatesRegistry;
-    TMap<FGameplayTag, FDynamicSkeletonDef> SkeletonMasterRegistry;
-    TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
-    TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
-    TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
-    TMap<FGameplayTag, FDynamicStimulusDef> MasterStimulusRegistry;
-    TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
-    TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
-    TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
-    TMap<FGameplayTag, FDynamicBiomeDef> BiomeMasterRegistry;
-    TMap<FGameplayTag, FDynamicWeatherPatternDef> WeatherMasterRegistry;
-    TMap<FGameplayTag, FEvolutionProfileDef> EvolutionProfilesRegistry;
-    TMap<FGameplayTag, FQuestDef> QuestMasterRegistry;
-    TMap<FGameplayTag, FDynamicQuestGeneratorRule> QuestGeneratorRules;
-    TMap<FGameplayTag, FDynamicLanguageDef> LanguageMasterRegistry;
-    TMap<FGameplayTag, FNameGenerationRuleConfig> NameGenerationRulesRegistry;
-    TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
-    TMap<FGameplayTag, FFastPathDialogueDef> FastPathDialogueRegistry;
-    TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
-    TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
-    TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
-    TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
-    TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
-    TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
-    TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
-    TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
-    TMap<FGameplayTag, TArray<FWitnessReactionRule>> WitnessReactionRegistry;
-    TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
-    TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
-    TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
-    TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
-    TMap<FGameplayTag, FDynamicFactionDef> FactionMasterRegistry;
-    TMap<FGameplayTag, FDynamicMaterialDef> MaterialMasterRegistry;
-    TMap<FGameplayTag, FDynamicDamageTypeDef> DamageTypeMasterRegistry;
-
-    bool bHasVoxelGenerationConfig = false;
-    FDynamicVoxelGenerationConfig VoxelGenerationConfig;
-
-    bool bHasCalendarConfig = false;
-    FDynamicCalendarDef CalendarConfig;
-
-    bool bHasEnvironmentConfig = false;
-    FDynamicEnvironmentSystemConfig EnvironmentConfig;
-
-    bool bHasPhysicsConfig = false;
-    FPhysicsDamageConfigData PhysicsConfig;
-
-    bool bHasCalcSettings = false;
-    FPhysicsCalculationSettings CalcSettings;
-
-    bool bHasAbilityScoreConfig = false;
-    FAbilityScoreConfigData AbilityScoreConfig;
-
-    bool bHasLawAndOrderConfig = false;
-    FLawAndOrderSystemConfig LawAndOrderConfig;
-
-    bool bHasCloudAIConfig = false;
-    FCloudAISystemConfig CloudAIConfig;
-};
 
 USTRUCT()
 struct FEnvironmentManaModificationRecord
@@ -6362,4 +6544,120 @@ struct GDB_API FMinerNodeStats
     UPROPERTY() float TrustScore = 1.0f; // Drops on consensus mismatch
     UPROPERTY() int32 TasksCompleted = 0;
     UPROPERTY() bool bIsCurrentlyProcessing = false;
+};
+
+// ============================================================================
+// STATE TREE REACTIVE EVENT & STATE CONTEXT PAYLOADS
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStateTreeEvent
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Event")
+    FGameplayTag EventTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Event")
+    TObjectPtr<AActor> EventInstigator = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Event")
+    FVector EventLocation = FVector::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Event")
+    float EventMagnitude = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicStateContextData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Context")
+    TMap<FGameplayTag, FVector> NamedLocations;
+
+    // Fixed: UHT fully supports TObjectPtr<AActor> as a TMap value in Blueprints
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Context")
+    TMap<FGameplayTag, TObjectPtr<AActor>> NamedActors;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic StateTree|Context")
+    TMap<FGameplayTag, float> NamedParameters;
+};
+
+// ============================================================================
+// ASYNC REGISTRY STAGING DATA (Zero GameThread Lock Contention)
+// ============================================================================
+USTRUCT(BlueprintType)
+struct FMasterRegistryStagingData
+{
+    GENERATED_BODY()
+
+    TMap<FGameplayTag, FDynamicAttributeDef> AttributeMasterRegistry;
+    TMap<FGameplayTag, FDynamicDeliveryArchetype> DeliveryArchetypes;
+    TMap<FGameplayTag, FDynamicAbilityDef> AbilityMasterRegistry;
+    TMap<FName, FDynamicConditionTreeContainer> SharedConditionTrees;
+    TMap<FGameplayTag, FDynamicMilestoneContainer> MasterMilestoneRegistry;
+    TMap<FGameplayTag, FDynamicThresholdContainer> MasterThresholdRegistry;
+    TMap<FGameplayTag, FDynamicEffectDef> MasterEffectRegistry;
+    TMap<FGameplayTag, FDynamicPhysicsActorDef> MasterPhysicsActorRegistry;
+    TMap<FGameplayTag, FCharacterTemplateDef> CharacterTemplatesRegistry;
+    TMap<FGameplayTag, FDynamicSkeletonDef> SkeletonMasterRegistry;
+    TMap<FGameplayTag, FDynamicRelationshipTypeDef> RelationshipTypeRegistry;
+    TMap<FGameplayTag, FDynamicProfessionDef> ProfessionMasterRegistry;
+    TMap<FGameplayTag, FDynamicAIAgentDef> MasterAIAgentRegistry;
+    TMap<FGameplayTag, FDynamicStimulusDef> MasterStimulusRegistry;
+    TMap<FGameplayTag, FDynamicTransformationRule> ConversionRegistry;
+    TMap<FGameplayTag, FDynamicEvolutionContainer> EvolutionMasterRegistry;
+    TMap<FGameplayTag, FDynamicGeneLocusDef> GeneticsMasterRegistry;
+    TMap<FGameplayTag, FDynamicBiomeDef> BiomeMasterRegistry;
+    TMap<FGameplayTag, FDynamicWeatherPatternDef> WeatherMasterRegistry;
+    TMap<FGameplayTag, FEvolutionProfileDef> EvolutionProfilesRegistry;
+    TMap<FGameplayTag, FQuestDef> QuestMasterRegistry;
+    TMap<FGameplayTag, FDynamicQuestGeneratorRule> QuestGeneratorRules;
+    TMap<FGameplayTag, FDynamicLanguageDef> LanguageMasterRegistry;
+    TMap<FGameplayTag, FNameGenerationRuleConfig> NameGenerationRulesRegistry;
+    TMap<FGameplayTag, FDynamicRecipeList> RecipeMasterRegistry;
+    TMap<FGameplayTag, FFastPathDialogueDef> FastPathDialogueRegistry;
+    TMap<FGameplayTag, FDynamicMovementStateDef> MovementStateRegistry;
+    TMap<FGameplayTag, FDynamicNetworkNodeDef> NetworkMasterRegistry;
+    TMap<FGameplayTag, FDynamicAIBehaviorDef> AIBehaviorMasterRegistry;
+    TMap<FGameplayTag, FDynamicStructurePieceDef> StructurePieceRegistry;
+    TMap<FGameplayTag, FDynamicStructurePrefabDef> StructurePrefabRegistry;
+    TMap<FGameplayTag, FDynamicRoomTypeDef> RoomTypeRegistry;
+    TMap<FGameplayTag, FDynamicCrimeDef> CrimeMasterRegistry;
+    TMap<FGameplayTag, FDynamicJurisdictionDef> JurisdictionMasterRegistry;
+    TMap<FGameplayTag, TArray<FWitnessReactionRule>> WitnessReactionRegistry;
+    TMap<FGameplayTag, FVoiceProfileDef> VoiceProfileMasterRegistry;
+    TMap<FGameplayTag, FPhonemeVisemeRegistryDef> PhonemeVisemeRegistry;
+    TMap<FGameplayTag, FDynamicDialectDef> DialectMasterRegistry;
+    TMap<FGameplayTag, FDynamicMarketRegionDef> MarketMasterRegistry;
+    TMap<FGameplayTag, FDynamicFactionDef> FactionMasterRegistry;
+    TMap<FGameplayTag, FDynamicMaterialDef> MaterialMasterRegistry;
+    TMap<FGameplayTag, FDynamicDamageTypeDef> DamageTypeMasterRegistry;
+    TMap<FGameplayTag, FDynamicEQSDef> EQSMasterRegistry;
+    TMap<FGameplayTag, FDynamicStateTreeDef> StateTreeMasterRegistry;
+
+    bool bHasVoxelGenerationConfig = false;
+    FDynamicVoxelGenerationConfig VoxelGenerationConfig;
+
+    bool bHasCalendarConfig = false;
+    FDynamicCalendarDef CalendarConfig;
+
+    bool bHasEnvironmentConfig = false;
+    FDynamicEnvironmentSystemConfig EnvironmentConfig;
+
+    bool bHasPhysicsConfig = false;
+    FPhysicsDamageConfigData PhysicsConfig;
+
+    bool bHasCalcSettings = false;
+    FPhysicsCalculationSettings CalcSettings;
+
+    bool bHasAbilityScoreConfig = false;
+    FAbilityScoreConfigData AbilityScoreConfig;
+
+    bool bHasLawAndOrderConfig = false;
+    FLawAndOrderSystemConfig LawAndOrderConfig;
+
+    bool bHasCloudAIConfig = false;
+    FCloudAISystemConfig CloudAIConfig;
 };

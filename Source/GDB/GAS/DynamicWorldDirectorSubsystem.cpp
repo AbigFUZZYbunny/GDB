@@ -32,23 +32,38 @@ TStatId UDynamicWorldDirectorSubsystem::GetStatId() const
 
 void UDynamicWorldDirectorSubsystem::Tick(float DeltaTime)
 {
-    // Fix: UWorld uses GetNetMode() instead of IsServer()
     if (!GetWorld() || GetWorld()->GetNetMode() == NM_Client) return;
 
     ProximityCheckAccumulator += DeltaTime;
     MacroSimulationAccumulator += DeltaTime;
 
-    // Run spatial boundary checks every 1 second
     if (ProximityCheckAccumulator >= 1.0f)
     {
         PerformProximityChecks();
         ProximityCheckAccumulator = 0.0f;
     }
 
-    // Run Macro Virtual Simulation every 10 seconds (Background Travel, Daily Needs)
     if (MacroSimulationAccumulator >= 10.0f)
     {
         SimulateVirtualNPCs(MacroSimulationAccumulator);
+
+        if (ADynamicGameState* GS = GetWorld()->GetGameState<ADynamicGameState>())
+        {
+            const float CurrentGameSecs = GetWorld()->GetTimeSeconds() * GS->CalendarConfig.TimeScalar;
+            const float CurrentHours24 = FMath::Fmod(CurrentGameSecs / 3600.0f, 24.0f);
+
+            for (int32 i = ActiveNPCs.Num() - 1; i >= 0; --i)
+            {
+                if (ActiveNPCs[i].IsValid())
+                {
+                    if (UDynamicSocialComponent* Social = ActiveNPCs[i]->FindComponentByClass<UDynamicSocialComponent>())
+                    {
+                        Social->ServerEvaluateDailySchedule(CurrentHours24);
+                    }
+                }
+            }
+        }
+
         MacroSimulationAccumulator = 0.0f;
     }
 }

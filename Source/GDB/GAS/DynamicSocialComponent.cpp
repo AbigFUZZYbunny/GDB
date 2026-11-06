@@ -13,6 +13,7 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
 #include "DynamicCloudAISubsystem.h"
+#include "DynamicStateTreeComponent.h"
 #include "Async/Async.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -1959,22 +1960,26 @@ void UDynamicSocialComponent::HandleHeardDialogueFromSpeaker(AActor* Speaker, co
     APawn* PawnOwner = Cast<APawn>(OwnerActor);
     if (!PawnOwner || PawnOwner->IsPlayerControlled()) return;
 
-    AAIController* AICon = Cast<AAIController>(PawnOwner->GetController());
-    if (!AICon) return;
+    // 1. Update native conversational and attention memory on the Social Component directly
+    ActiveInterlocutor = Speaker;
+    ActiveTurnState = EConversationalTurnState::Engaged;
 
-    UBlackboardComponent* BB = AICon->GetBlackboardComponent();
-    if (!BB) return;
+    // 2. Optional backwards compatibility: update Blackboard only if one exists
+    if (AAIController* AICon = Cast<AAIController>(PawnOwner->GetController()))
+    {
+        if (UBlackboardComponent* BB = AICon->GetBlackboardComponent())
+        {
+            static const FName InterlocutorKeyName = TEXT("InterlocutorActor");
+            static const FName TargetActorKeyName = TEXT("TargetActor");
+            static const FName HeardTextKeyName = TEXT("LastHeardUtterance");
 
-    // 1. Assign Target Interlocutor & Heard Text to Blackboard
-    static const FName InterlocutorKeyName = TEXT("InterlocutorActor");
-    static const FName TargetActorKeyName = TEXT("TargetActor");
-    static const FName HeardTextKeyName = TEXT("LastHeardUtterance");
+            BB->SetValueAsObject(InterlocutorKeyName, Speaker);
+            BB->SetValueAsObject(TargetActorKeyName, Speaker);
+            BB->SetValueAsString(HeardTextKeyName, UtteranceText);
+        }
+    }
 
-    BB->SetValueAsObject(InterlocutorKeyName, Speaker);
-    BB->SetValueAsObject(TargetActorKeyName, Speaker);
-    BB->SetValueAsString(HeardTextKeyName, UtteranceText);
-
-    // 2. Clear Idle / Wander locks and trigger AI conversation behavior
+    // 3. Trigger conversational response behavior in State Tree / GAS
     if (UAbilitySystemComponent* ASC = OwnerActor->FindComponentByClass<UAbilitySystemComponent>())
     {
         static const FGameplayTag ChatActionTag = FGameplayTag::RequestGameplayTag(TEXT("Action.Interact.Chat"), false);
@@ -2045,7 +2050,7 @@ void UDynamicSocialComponent::ApplySocialReactionConsequences(const FDynamicDial
     AActor* OwnerActor = GetOwner();
     if (!OwnerActor || !OwnerActor->HasAuthority()) return;
 
-    // 1. Apply Self Attribute/Need changes (e.g. Mood gets Angry, Sad, Frustrated)
+    // 1. Apply Self Attribute/Need changes
     for (const auto& Pair : Rule.SelfAttributeDeltas.LocalLookupMap)
     {
         if (!Pair.Key.IsValid()) continue;
@@ -2065,7 +2070,7 @@ void UDynamicSocialComponent::ApplySocialReactionConsequences(const FDynamicDial
         }
     }
 
-    // 2. Apply Relational Metric changes towards the offender (e.g. Affinity decreases, Hostility increases)
+    // 2. Apply Relational Metric changes towards offender
     if (TargetOffender && TargetOffender != OwnerActor && Rule.RelationalMetricDeltas.ReplicatedEntries.Num() > 0)
     {
         const UDynamicSocialComponent* OffenderSocial = TargetOffender->FindComponentByClass<UDynamicSocialComponent>();
@@ -2082,7 +2087,7 @@ void UDynamicSocialComponent::ApplySocialReactionConsequences(const FDynamicDial
         }
     }
 
-    // 3. Optional Reaction Dialogue (e.g. Scold, Grumble, Complain)
+    // 3. Optional Reaction Dialogue
     if (Rule.ReactionDialogueCategoryTag.IsValid())
     {
         FString OutUtterance;
@@ -2091,7 +2096,7 @@ void UDynamicSocialComponent::ApplySocialReactionConsequences(const FDynamicDial
         TryResolveFastPathDialogue(Rule.ReactionDialogueCategoryTag, TargetOffender, OutUtterance, OutMontage, OutVoice);
     }
 
-    // 4. Optional Reaction Behavior (e.g. Turn hostile, flee, confront)
+    // 4. Optional Reaction Behavior: Engage state tree or GAS tag
     if (Rule.ReactionBehaviorTag.IsValid())
     {
         if (UAbilitySystemComponent* ASC = OwnerActor->FindComponentByClass<UAbilitySystemComponent>())
@@ -2343,4 +2348,52 @@ void UDynamicSocialComponent::ServerRecordOverheardTopic(
     }
 
     RebuildTopicCache();
+}
+
+void UDynamicSocialComponent::ServerEvaluateDailySchedule(float CurrentGameTimeHours)
+{
+    if (!GetOwner()->HasAuthority()) return;
+    
+    ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr;
+    if (!GS) return;
+
+    FGameplayTag HighestPriorityScheduleTag = FGameplayTag::EmptyTag;
+    float BestAdherenceWeight = -MAX_flt;
+
+    for (const FDynamicAssignedProfessionItem& ProfItem : ReplicatedProfessions.Items)
+    {
+        if (const FDynamicProfessionDef* ProfDef = GS->ProfessionMasterRegistry.Find(ProfItem.ProfessionTag))
+        {
+            for (const FDynamicScheduleBlockDef& Block : ProfDef->DailySchedule)
+            {
+                const bool bWrapsMidnight = Block.StartHour24 > Block.EndHour24;
+                const bool bIsActiveTime = bWrapsMidnight 
+                    ? (CurrentGameTimeHours >= Block.StartHour24 || CurrentGameTimeHours <= Block.EndHour24)
+                    : (CurrentGameTimeHours >= Block.StartHour24 && CurrentGameTimeHours <= Block.EndHour24);
+
+                if (bIsActiveTime)
+                {
+                    const float TotalWeight = Block.ScheduleAdherenceWeight * ProfItem.ProfessionPriorityWeight;
+                    if (TotalWeight > BestAdherenceWeight)
+                    {
+                        BestAdherenceWeight = TotalWeight;
+                        HighestPriorityScheduleTag = Block.ScheduledActivityTag;
+                    }
+                }
+            }
+        }
+    }
+
+    if (HighestPriorityScheduleTag.IsValid() && HighestPriorityScheduleTag != ActiveScheduleStateTag)
+    {
+        ActiveScheduleStateTag = HighestPriorityScheduleTag;
+        
+        if (UDynamicStateTreeComponent* StateTreeComp = GetOwner()->FindComponentByClass<UDynamicStateTreeComponent>())
+        {
+            FDynamicStateTreeEvent ScheduleEvent;
+            ScheduleEvent.EventTag = HighestPriorityScheduleTag;
+            ScheduleEvent.EventInstigator = GetOwner();
+            StateTreeComp->SendStateTreeEvent(ScheduleEvent);
+        }
+    }
 }

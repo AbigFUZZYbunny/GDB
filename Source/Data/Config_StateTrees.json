@@ -1,0 +1,82 @@
+﻿{
+  "_comment": "Master Dynamic State Tree Registry: Demonstrates state stacking for interrupt-and-resume workflows, event-driven transitions, and automatic LLM fallback transitions.",
+  "StateTreeMasterRegistry": {
+    "StateTree.Humanoid.Guard": {
+      "RootNodeIndex": 0,
+      "bIsLLMFallbackTree": false,
+      "FallbackTimeoutSeconds": 4.0,
+      "Nodes": [
+        {
+          "NodeIndex": 0,
+          "NodeName": "Root",
+          "StateTag": "State.AI.Root",
+          "ParentNodeIndex": -1,
+          "ChildNodeIndices": [ 1, 2 ],
+          "SelectionMode": "SelectFirstValidChild",
+          "NodeBasePriority": 100.0,
+          "NodeCooldownSeconds": 0.0,
+          "Tasks": [],
+          "Transitions": [
+            {
+              "Trigger": "OnSensoryEvent",
+              "EventTagTrigger": "StateTree.Event.Work",
+              "TargetNodeIndex": 1,
+              "bPopStateFromStack": true
+            },
+            {
+              "Trigger": "OnSensoryEvent",
+              "EventTagTrigger": "StateTree.Event.Sleep",
+              "TargetNodeIndex": 2,
+              "bPopStateFromStack": true
+            }
+          ]
+        },
+        {
+          "NodeIndex": 1,
+          "NodeName": "Work Routine",
+          "StateTag": "State.AI.Working",
+          "ParentNodeIndex": 0,
+          "ChildNodeIndices": [],
+          "SelectionMode": "SelectFirstValidChild",
+          "NodeBasePriority": 50.0,
+          "NodeCooldownSeconds": 2.0,
+          "Tasks": [
+            {
+              "TaskTypeTag": "Task.AI.ExecuteBehavior",
+              "BehaviorTag": "Behavior.Work.FellTimber",
+              "TargetEQSTag": "EQS.Query.FindNearestMatureTree"
+            }
+          ],
+          "Transitions": [
+            {
+              "Trigger": "OnStateCompleted",
+              "TargetNodeIndex": 1
+            }
+          ]
+        },
+        {
+          "NodeIndex": 2,
+          "NodeName": "Sleep Routine",
+          "StateTag": "State.AI.Sleeping",
+          "ParentNodeIndex": 0,
+          "ChildNodeIndices": [],
+          "SelectionMode": "SelectFirstValidChild",
+          "NodeBasePriority": 50.0,
+          "NodeCooldownSeconds": 0.0,
+          "Tasks": [
+            {
+              "TaskTypeTag": "Task.AI.ExecuteBehavior",
+              "BehaviorTag": "Behavior.Idle.SleepOnBed"
+            }
+          ],
+          "Transitions": [
+            {
+              "Trigger": "OnStateCompleted",
+              "TargetNodeIndex": 2
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

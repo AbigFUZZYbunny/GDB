@@ -6,13 +6,49 @@
       "ExecutionType": "Movement",
       "MovementStateTagToSet": "Movement.Mode.Walk",
       "BasePriority": 50.0,
-      "CooldownDuration": 0.0,
+      "CooldownDuration": 10.0,
       "bInterruptible": true,
       "TargetEQSConfig": {
         "QueryAsset": "/Game/AI/EQS/EQS_FindTownWaypoints.EQS_FindTownWaypoints",
         "QueryParams": [
-          { "ParamName": "SearchRadius", "Value": 5000.0 },
+          { "ParamName": "SearchRadius", "Value": 4500.0 },
           { "ParamName": "GridDensity", "Value": 250.0 }
+        ]
+      },
+      "DialogueCategoryTag": "Dialogue.Category.Idle",
+      "ExecutionMetrics": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Metric.AcceptanceRadius", "Value": 150.0 }
+        ]
+      }
+    },
+    "Behavior.Combat.FlankAndStrike": {
+      "BehaviorTag": "Behavior.Combat.FlankAndStrike",
+      "ActionTag": "Action.Combat.Attack",
+      "ExecutionType": "Ability",
+      "AbilityTagToTrigger": "Ability.Combat.Melee.AimedStrike",
+      "BasePriority": 90.0,
+      "CooldownDuration": 3.0,
+      "bInterruptible": false,
+      "PrerequisiteConditionTreeName": "Condition.Force.SelfDefense",
+      "TargetEQSConfig": {
+        "QueryAsset": "/Game/AI/EQS/EQS_FindCombatTargetFlank.EQS_FindCombatTargetFlank",
+        "QueryParams": [
+          { "ParamName": "SearchRadius", "Value": 800.0 }
+        ]
+      }
+    },
+    "Behavior.Work.FellNearestTree": {
+      "BehaviorTag": "Behavior.Work.FellNearestTree",
+      "ActionTag": "Interaction.Action.Construct",
+      "ExecutionType": "Interaction",
+      "BasePriority": 60.0,
+      "CooldownDuration": 5.0,
+      "bInterruptible": true,
+      "TargetEQSConfig": {
+        "QueryAsset": "/Game/AI/EQS/EQS_FindNearestHarvestableFlora.EQS_FindNearestHarvestableFlora",
+        "QueryParams": [
+          { "ParamName": "SearchRadius", "Value": 3500.0 }
         ]
       }
     },
@@ -42,7 +78,7 @@
     },
     "Behavior.Work.FellTimber": {
       "BehaviorTag": "Behavior.Work.FellTimber",
-      "ActionTag": "Action.Interact.Mine",
+      "ActionTag": "Action.Interact.Chop",
       "ExecutionType": "Interaction",
       "MovementStateTagToSet": "None",
       "BasePriority": 60.0,

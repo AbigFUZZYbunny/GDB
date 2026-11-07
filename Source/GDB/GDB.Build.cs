@@ -34,7 +34,8 @@ public class GDB : ModuleRules
 			"GameplayStateTreeModule", 
 			"EnhancedInput",
 			"MetasoundFrontend",
-			"AudioExtensions"
+			"AudioExtensions", 
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

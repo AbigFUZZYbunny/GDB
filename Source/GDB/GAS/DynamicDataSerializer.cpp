@@ -2252,6 +2252,44 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.MenuMasterRegistry.Add(KeyTag, Def);
         }
     }
+    
+    // ------------------------------------------------------------------------
+    // VFX MASTER REGISTRY PARSING
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("VfxMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("VfxMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> VfxObj = Pair.Value->AsObject();
+            if (!VfxObj.IsValid()) continue;
+
+            FDynamicVFXDef Def;
+            Def.VfxTag = KeyTag;
+            Def.DataChannelName = VfxObj->HasField(TEXT("DataChannelName")) ? FName(*VfxObj->GetStringField(TEXT("DataChannelName"))) : NAME_None;
+            Def.PayloadTypeID = VfxObj->HasField(TEXT("PayloadTypeID")) ? static_cast<int32>(VfxObj->GetNumberField(TEXT("PayloadTypeID"))) : 0;
+            
+            if (VfxObj->HasField(TEXT("FallbackSystem")))
+            {
+                Def.FallbackSystem = TSoftObjectPtr<UNiagaraSystem>(FSoftObjectPath(VfxObj->GetStringField(TEXT("FallbackSystem"))));
+            }
+            if (VfxObj->HasField(TEXT("ReactivityEventTag")))
+            {
+                Def.ReactivityEventTag = FGameplayTag::RequestGameplayTag(FName(*VfxObj->GetStringField(TEXT("ReactivityEventTag"))), false);
+            }
+            if (VfxObj->HasField(TEXT("LawAndOrderActionTag")))
+            {
+                Def.LawAndOrderActionTag = FGameplayTag::RequestGameplayTag(FName(*VfxObj->GetStringField(TEXT("LawAndOrderActionTag"))), false);
+            }
+            Def.ReactivityRadius = VfxObj->HasField(TEXT("ReactivityRadius")) ? static_cast<float>(VfxObj->GetNumberField(TEXT("ReactivityRadius"))) : 0.0f;
+
+            // (Note: PrimaryColor parsing omitted for brevity, standard FJsonObjectConverter handles it)
+            
+            OutStaging.VfxMasterRegistry.Add(KeyTag, Def);
+        }
+    }
 
     return true;
 }

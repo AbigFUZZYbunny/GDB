@@ -1,0 +1,41 @@
+﻿{
+  "VfxMasterRegistry": {
+    "VFX.Magic.Fire.Spawn": {
+      "VfxTag": "VFX.Magic.Fire.Spawn",
+      "DataChannelName": "NDC_Spells",
+      "PayloadTypeID": 1,
+      "bUseAttributeColor": true,
+      "ColorAttributeTag": "Attribute.Mastery.Element.Fire",
+      "BaseRadius": 50.0,
+      "MagnitudeToScaleRatio": 0.5,
+      "DurationPolicy": "Instant"
+    },
+    "VFX.Magic.Aura.Heal": {
+      "VfxTag": "VFX.Magic.Aura.Heal",
+      "DataChannelName": "NDC_Auras",
+      "PayloadTypeID": 5,
+      "bUseRelationshipColor": true,
+      "PrimaryColor": { "R": 0.1, "G": 0.8, "B": 0.2, "A": 1.0 },
+      "BaseRadius": 400.0,
+      "DurationPolicy": "HasDuration"
+    }
+  },
+  "AbilityMasterRegistry": {
+    "Ability.Magic.Restoration.HealingRain": {
+      "ExecutionType": "SpatialDelivery",
+      "SpatialDelivery": {
+        "MotionType": "StationaryGround",
+        "ShapeBehavior": "ExpandOut",
+        "ApplicationType": "PassiveWhileIn",
+        "Duration": 15.0,
+        "VfxEventMap": {
+          "EventMap": {
+            "Event.Delivery.Spawn": {
+              "VfxTags": [ "VFX.Magic.Aura.Heal" ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

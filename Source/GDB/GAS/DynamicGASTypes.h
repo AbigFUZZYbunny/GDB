@@ -678,7 +678,81 @@ struct FDynamicTagToTagMapWrapper
 };
 
 // ============================================================================
-// ATTRIBUTE FAST ARRAY (1-BYTE LIMB ID)
+// NIAGARA DATA CHANNEL & DYNAMIC VFX
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicVFXDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
+    FGameplayTag VfxTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
+    FName DataChannelName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
+    int32 PayloadTypeID = 0;
+
+    // --- Dynamic Color Resolution ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Color")
+    FLinearColor PrimaryColor = FLinearColor::White;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Color")
+    bool bUseAttributeColor = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Color")
+    FGameplayTag ColorAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Color")
+    bool bUseRelationshipColor = false; // Green/Blue for Ally, Red/Orange for Enemy
+
+    // --- Sizing and Duration ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
+    float BaseRadius = 100.0f;
+        
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
+    float MagnitudeToScaleRatio = 0.01f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
+    EEffectDurationPolicy DurationPolicy = EEffectDurationPolicy::Instant;
+
+    // --- Presentation ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
+    TSoftObjectPtr<class UNiagaraSystem> FallbackSystem;
+
+    // --- Reactivity & Cross-System Polling ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Reactivity")
+    FGameplayTag ReactivityEventTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Reactivity")
+    FGameplayTag LawAndOrderActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Reactivity")
+    float ReactivityRadius = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicVFXLayer
+{
+    GENERATED_BODY()
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
+    TArray<FGameplayTag> VfxTags;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicTagToVFXLayerMapWrapper
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
+    TMap<FGameplayTag, FDynamicVFXLayer> EventMap;
+};
+
+// ============================================================================
+// ATTRIBUTE FAST ARRAY
 // ============================================================================
 
 USTRUCT(BlueprintType)
@@ -692,6 +766,8 @@ struct FDynamicAttributeItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     FGameplayTag AttributeTag;
 
+    // Retained as full float. We DO NOT quantize core physical attributes 
+    // as it would shatter cooldown timers, economy, and precise physics mass calculations.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     float Value = 0.0f;
 
@@ -1897,6 +1973,9 @@ struct FAbilityStagePresentation
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
     FGameplayTag StageAudioTag;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
+    FGameplayTag StageVfxTag; // Replacing StageVfxCueTag to route through NDC
 };
 
 USTRUCT(BlueprintType)
@@ -2091,7 +2170,10 @@ struct FDynamicSpatialDeliveryDef
     FGameplayTagContainer BlockedTargetTags;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Delivery|Validation")
-    FName TargetValidationConditionTree = NAME_None;
+    FName TargetValidationConditionTree = NAME_None;    
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 };
 
 USTRUCT(BlueprintType)
@@ -2337,6 +2419,9 @@ struct FDynamicInteractionProfile
     // Fallback Impact/Stress type if no tool is equipped (e.g. Damage.Type.Physical.Crushing)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Interaction")
     FGameplayTag DefaultImpactTypeTag;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 };
 
 // ============================================================================
@@ -2423,6 +2508,9 @@ struct FDynamicAttributeDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     bool bDoesReplicate = true;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+    FLinearColor BaseColorTint = FLinearColor::White;
 };
 
 USTRUCT(BlueprintType)
@@ -2510,6 +2598,9 @@ struct FDynamicEffectDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Effect|PassBack")
     TArray<FSourcePassBackRule> SourcePassBackRules;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 };
 
 // ============================================================================
@@ -4001,6 +4092,9 @@ struct FDynamicAbilityDef
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Combo")
     TArray<FStageInputSequencePair> StageInputSequences;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 
     // Helper lookup method to replace TMap::Find()
     const FAbilityStageInputSequence* FindStageSequence(EValidationPhase Phase) const
@@ -4531,6 +4625,9 @@ struct FDynamicOverpowerRule
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Overpower")
     TArray<FGameplayTag> StatusEffectsToApply;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 };
 
 USTRUCT(BlueprintType)
@@ -4576,6 +4673,9 @@ struct FDynamicImpactReactionRule
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Impact")
     TArray<FDynamicOverpowerRule> OverpowerRules;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 };
 
 // ----------------------------------------------------------------------------
@@ -5790,9 +5890,9 @@ struct FDynamicRelationshipMetricEntry
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     FGameplayTag MetricTag;
 
-    // 1-byte quantized value [0..255] mapped according to [MinValue, MaxValue] in FRelationshipMetricRule
+    // Upgraded from uint8 to uint16 for fractional precision on important thresholds
     UPROPERTY()
-    uint8 PackedValue = 128;
+    uint16 PackedValue = 32768;
 
     // Exact unquantized value for authoritative calculations
     UPROPERTY(NotReplicated)
@@ -6010,8 +6110,9 @@ struct FDynamicNeedStateItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float LocalExactValue = 100.0f;
 
+    // Upgraded to uint16 to prevent desyncs on slowly shifting decay curves
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    uint8 PackedCurrentValue = 100;
+    uint16 PackedCurrentValue = 65535;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float ShiftRatePerHour = 0.0f;
@@ -7437,6 +7538,7 @@ struct GDB_API FMasterRegistryStagingData
     TMap<FGameplayTag, FAcousticMaterialMatrixRow> AudioMaterialMatrix;
     TMap<FGameplayTag, FSkillTreeDef> SkillTreeMasterRegistry;
     TMap<FGameplayTag, FDynamicMenuDef> MenuMasterRegistry;
+    TMap<FGameplayTag, FDynamicVFXDef> VfxMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

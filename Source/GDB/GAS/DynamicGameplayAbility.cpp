@@ -1084,17 +1084,26 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
     AActor* Avatar = GetAvatarActorFromActorInfo();
     UWorld* World = GetWorld();
     ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    UDynamicVFXSubsystem* VfxSub = World ? World->GetSubsystem<UDynamicVFXSubsystem>() : nullptr;
     if (!Avatar || !GS) return;
 
     const FDynamicSpatialDeliveryDef& Delivery = AbilityConfig.SpatialDelivery;
     UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
 
-    if (Delivery.MotionType == ESpatialDeliveryMotion::AttachedToCaster &&
-        Delivery.ApplicationType == EAuraEffectApplicationType::SingleHit &&
-        Delivery.Duration <= 0.25f)
+    // --- AURA / IMMEDIATE AoE (StationaryGround or AttachedToCaster) ---
+    if ((Delivery.MotionType == ESpatialDeliveryMotion::AttachedToCaster || Delivery.MotionType == ESpatialDeliveryMotion::StationaryGround) &&
+        (Delivery.ApplicationType == EAuraEffectApplicationType::SingleHit || Delivery.ApplicationType == EAuraEffectApplicationType::TickInterval) &&
+        Delivery.Duration <= 0.25f) // Immediate burst
     {
+        // VFX: Spawn Burst Aura
+        if (VfxSub)
+        {
+            static const FGameplayTag DeliverySpawnEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Delivery.Spawn"), false);
+            VfxSub->PlayVFXLayer(DeliverySpawnEventTag, Delivery.VfxEventMap, Avatar->GetActorLocation(), FVector::UpVector, Delivery.MaxRadius * ChargeAlpha, Avatar, nullptr);
+        }
+
         TArray<FHitResult> HitResults;
-        FCollisionShape SphereShape = FCollisionShape::MakeSphere(Delivery.MaxRadius);
+        FCollisionShape SphereShape = FCollisionShape::MakeSphere(Delivery.MaxRadius * ChargeAlpha);
         FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(InstantSpatialNovaSweep), false, Avatar);
 
         if (World->SweepMultiByChannel(HitResults, Avatar->GetActorLocation(), Avatar->GetActorLocation() + FVector(0, 0, 1.0f), FQuat::Identity, ECC_Pawn, SphereShape, QueryParams))
@@ -1113,18 +1122,17 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                 const FVector OutwardNormal = (Avatar->GetActorLocation() - HitActor->GetActorLocation()).GetSafeNormal();
                 const float ScaledImpulse = Delivery.KineticImpulseOnHit * ChargeAlpha;
 
-                // Send the full tag container to the limb hit function
+                // VFX: Aura Impact on Target
+                if (VfxSub)
+                {
+                    static const FGameplayTag DeliveryImpactEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Delivery.Impact"), false);
+                    VfxSub->PlayVFXLayer(DeliveryImpactEventTag, Delivery.VfxEventMap, HitActor->GetActorLocation(), OutwardNormal, ScaledImpulse, Avatar, HitActor);
+                }
+
                 if (HitChar)
                 {
                     HitChar->ServerProcessAuthoritativeLimbHit(
-                        HitChar, 
-                        BoneName, 
-                        ScaledImpulse, 
-                        ChargeAlpha, 
-                        HitChar->GetActorLocation(), 
-                        OutwardNormal, 
-                        Avatar, 
-                        Delivery.ImpactTypeTags
+                        HitChar, BoneName, ScaledImpulse, ChargeAlpha, HitActor->GetActorLocation(), OutwardNormal, Avatar, Delivery.ImpactTypeTags
                     );
                 }
 
@@ -1152,7 +1160,7 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
         return;
     }
 
-    // Continuous Projectile / Spatial Spawn Delivery
+    // --- CONTINUOUS PROJECTILE / PERSISTENT SPATIAL SPAWN ---
     UDynamicGASManagerComponent* Registry = Avatar->FindComponentByClass<UDynamicGASManagerComponent>();
     float BaseSpeed = Delivery.SpeedOrExpansionRate;
     if (Registry && Delivery.ArchetypeLinkTag.IsValid() && Delivery.SpeedMetricTag.IsValid())
@@ -1169,7 +1177,6 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
     const FVector BaseLoc = bIsAttached ? Avatar->GetActorLocation() : (Avatar->GetActorLocation() + Avatar->GetActorForwardVector() * 80.0f);
     const FRotator BaseRot = Avatar->GetActorRotation();
 
-    // NEW: Resolve Homing Target from Social / AI Brain
     AActor* HomingTarget = nullptr;
     if (Delivery.MotionType == ESpatialDeliveryMotion::Homing)
     {
@@ -1196,8 +1203,12 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                 SpatialActor->AttachToComponent(Avatar->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
             }
             
-            // Pass the derived forward vector as the direction
-            const FVector Direction = SpawnTM.GetRotation().GetForwardVector();
+            // VFX: Projectile or Aura Deployed
+            if (VfxSub)
+            {
+                static const FGameplayTag DeliverySpawnEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Delivery.Spawn"), false);
+                VfxSub->PlayVFXLayer(DeliverySpawnEventTag, Delivery.VfxEventMap, SpawnTM.GetLocation(), SpawnTM.GetRotation().GetForwardVector(), Delivery.MaxRadius * ChargeAlpha, Avatar, HomingTarget);
+            }
 
             SpatialActor->ActivateSpatialDelivery(
                 SourceASC,
@@ -1205,7 +1216,7 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                 AbilityConfig.SourcePassBackRules,
                 FinalSpeed,
                 PowerMultiplierPerInstance,
-                Direction,
+                SpawnTM.GetRotation().GetForwardVector(),
                 HomingTarget
             );
         }

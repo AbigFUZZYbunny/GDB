@@ -64,7 +64,11 @@ static void BroadcastLanguageExposureAcoustic(
     if (!Speaker || !Speaker->HasAuthority() || !LanguageTag.IsValid() || Utterance.IsEmpty()) return;
 
     UWorld* World = Speaker->GetWorld();
-    if (!World) return;
+    ADynamicGameState* GS = World ? World->GetGameState<ADynamicGameState>() : nullptr;
+    if (!World || !GS) return;
+
+    UDynamicWorldDirectorSubsystem* Director = World->GetSubsystem<UDynamicWorldDirectorSubsystem>();
+    if (!Director) return;
 
     if (!VoiceProfileTag.IsValid())
     {
@@ -75,58 +79,96 @@ static void BroadcastLanguageExposureAcoustic(
     }
 
     const float MaxQueryRadius = FMath::Clamp(BaseAudibleRadius * 4.5f, 300.0f, 15000.0f);
-    TArray<FOverlapResult> Overlaps;
-    FCollisionShape Sphere = FCollisionShape::MakeSphere(MaxQueryRadius);
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(LanguageAcousticSweep), false, Speaker);
-
+    const float MaxQueryRadiusSq = FMath::Square(MaxQueryRadius);
     const FVector SpeakerLoc = Speaker->GetActorLocation();
 
-    if (World->OverlapMultiByChannel(Overlaps, SpeakerLoc, FQuat::Identity, ECC_Pawn, Sphere, Params))
+    // OPTIMIZATION: Query the existing O(1) 2D Spatial Hash Grid to eliminate massive physics sweeps
+    const float GridSize = Director->VirtualSpatialGridSize;
+    const FIntPoint CenterCell(
+        FMath::FloorToInt(SpeakerLoc.X / GridSize),
+        FMath::FloorToInt(SpeakerLoc.Y / GridSize)
+    );
+
+    // If MaxQueryRadius spills into adjacent spatial buckets, calculate expansion
+    const int32 SearchRange = FMath::CeilToInt(MaxQueryRadius / GridSize);
+    
+    TSet<FGuid> CandidateGuids;
+    for (int32 X = -SearchRange; X <= SearchRange; ++X)
     {
-        for (const FOverlapResult& Overlap : Overlaps)
+        for (int32 Y = -SearchRange; Y <= SearchRange; ++Y)
         {
-            AActor* Listener = Overlap.GetActor();
-            if (Listener && Listener != Speaker)
+            if (const TSet<FGuid>* Bucket = Director->VirtualNPCSpatialHash.Find(CenterCell + FIntPoint(X, Y)))
             {
-                if (UDynamicLanguageComponent* ListenerLang = Listener->FindComponentByClass<UDynamicLanguageComponent>())
+                CandidateGuids.Append(*Bucket);
+            }
+        }
+    }
+
+    // Include localized players who might not be inside the VirtualNPC hash
+    TArray<AActor*> LocalListeners;
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APawn* P = It->Get()->GetPawn())
+        {
+            LocalListeners.Add(P);
+        }
+    }
+
+    // Convert GUIDs back to active physical actors (virtualized actors cannot hear acoustics)
+    for (const FGuid& NpcGuid : CandidateGuids)
+    {
+        if (ADynamicCharacter* NpcActor = GS->FindCharacterByGuid(NpcGuid))
+        {
+            LocalListeners.Add(NpcActor);
+        }
+    }
+
+    for (AActor* Listener : LocalListeners)
+    {
+        if (!Listener || Listener == Speaker) continue;
+
+        const float DistSq = FVector::DistSquared(SpeakerLoc, Listener->GetActorLocation());
+        if (DistSq <= MaxQueryRadiusSq)
+        {
+            if (UDynamicLanguageComponent* ListenerLang = Listener->FindComponentByClass<UDynamicLanguageComponent>())
+            {
+                const float DistUnits = FMath::Sqrt(DistSq);
+
+                // Evaluates perception attributes, buffs, and physical wall occlusion
+                if (ListenerLang->CanHearUtteranceAtDistance(DistUnits, BaseAudibleRadius, VolumeTag, SpeakerLoc))
                 {
-                    const float DistUnits = FVector::Dist(SpeakerLoc, Listener->GetActorLocation());
+                    // A. Linguistic Exposure
+                    ListenerLang->ServerRegisterLanguageExposure(LanguageTag, Utterance);
 
-                    // Evaluates perception attributes, buffs, and wall occlusion
-                    if (ListenerLang->CanHearUtteranceAtDistance(DistUnits, BaseAudibleRadius, VolumeTag, SpeakerLoc))
+                    // B. Client Subtitle RPC for Player Listeners (7 arguments passed)
+                    APawn* ListenerPawn = Cast<APawn>(Listener);
+                    if (ListenerPawn && ListenerPawn->IsPlayerControlled())
                     {
-                        // A. Linguistic Exposure
-                        ListenerLang->ServerRegisterLanguageExposure(LanguageTag, Utterance);
+                        ListenerLang->ClientReceiveHeardDialogue(
+                            Speaker, 
+                            Utterance, 
+                            LanguageTag, 
+                            BaseAudibleRadius, 
+                            VolumeTag, 
+                            EmotionTag, 
+                            VoiceProfileTag
+                        );
+                    }
 
-                        // B. Client Subtitle RPC for Player Listeners (7 arguments passed)
-                        APawn* ListenerPawn = Cast<APawn>(Listener);
-                        if (ListenerPawn && ListenerPawn->IsPlayerControlled())
+                    // C. AI Agent Ingestion & Conversational Reaction
+                    if (UDynamicSocialComponent* ListenerSocial = Listener->FindComponentByClass<UDynamicSocialComponent>())
+                    {
+                        UDynamicSocialComponent* SpeakerSocial = Speaker->FindComponentByClass<UDynamicSocialComponent>();
+                        ListenerSocial->RecordDialogueTurn(
+                            SpeakerSocial ? SpeakerSocial->CharacterPersistentGuid : FGuid(),
+                            SpeakerSocial ? SpeakerSocial->CharacterDisplayName : Speaker->GetName(),
+                            LanguageTag,
+                            Utterance
+                        );
+
+                        if (!ListenerPawn || !ListenerPawn->IsPlayerControlled())
                         {
-                            ListenerLang->ClientReceiveHeardDialogue(
-                                Speaker, 
-                                Utterance, 
-                                LanguageTag, 
-                                BaseAudibleRadius, 
-                                VolumeTag, 
-                                EmotionTag, 
-                                VoiceProfileTag
-                            );
-                        }
-
-                        // C. AI Agent Ingestion & Conversational Reaction
-                        if (UDynamicSocialComponent* ListenerSocial = Listener->FindComponentByClass<UDynamicSocialComponent>())
-                        {
-                            ListenerSocial->RecordDialogueTurn(
-                                Speaker->FindComponentByClass<UDynamicSocialComponent>() ? Speaker->FindComponentByClass<UDynamicSocialComponent>()->CharacterPersistentGuid : FGuid(),
-                                Speaker->FindComponentByClass<UDynamicSocialComponent>() ? Speaker->FindComponentByClass<UDynamicSocialComponent>()->CharacterDisplayName : Speaker->GetName(),
-                                LanguageTag,
-                                Utterance
-                            );
-
-                            if (!ListenerPawn || !ListenerPawn->IsPlayerControlled())
-                            {
-                                ListenerSocial->HandleHeardDialogueFromSpeaker(Speaker, Utterance, LanguageTag, VolumeTag);
-                            }
+                            ListenerSocial->HandleHeardDialogueFromSpeaker(Speaker, Utterance, LanguageTag, VolumeTag);
                         }
                     }
                 }

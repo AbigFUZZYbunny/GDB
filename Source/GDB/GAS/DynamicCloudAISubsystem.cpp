@@ -257,6 +257,10 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
             Task->bStartedStreamingUtterance = true;
             Task->UtteranceStartIndex = UtteranceIdx + 17;
             Task->LastBroadcastedLength = Task->UtteranceStartIndex;
+            
+            // OPTIMIZATION: Pre-allocate string builder to prevent heap fragmentation during rapid token assembly
+            Task->StreamingWordBuffer.Reserve(512); 
+            Task->StreamingClauseBuffer.Reserve(512);
         }
     }
 
@@ -273,11 +277,12 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
             Task->StreamingWordBuffer += NewUtteranceChunk;
             Task->StreamingClauseBuffer += NewUtteranceChunk;
             
-            // 1. Process Word Boundary Token Stream
+            // 1. Process Word Boundary Token Stream (Using direct TCHAR array iteration for O(1) checks)
             int32 LastBoundaryIdx = -1;
-            for (int32 i = Task->StreamingWordBuffer.Len() - 1; i >= 0; --i)
+            const TArray<TCHAR>& WordCharArray = Task->StreamingWordBuffer.GetCharArray();
+            for (int32 i = WordCharArray.Num() - 2; i >= 0; --i) // -2 to skip null terminator
             {
-                if (!FChar::IsAlnum(Task->StreamingWordBuffer[i]) && Task->StreamingWordBuffer[i] != '\'')
+                if (!FChar::IsAlnum(WordCharArray[i]) && WordCharArray[i] != '\'')
                 {
                     LastBoundaryIdx = i;
                     break;
@@ -303,9 +308,10 @@ void UDynamicCloudAISubsystem::HandleMinerTokenChunk(UDynamicAILinkComponent* Mi
 
             // 2. Low-Latency Clause / Sentence Boundary Detection for Streaming TTS
             int32 ClauseBoundaryIdx = -1;
-            for (int32 i = 0; i < Task->StreamingClauseBuffer.Len(); ++i)
+            const TArray<TCHAR>& ClauseCharArray = Task->StreamingClauseBuffer.GetCharArray();
+            for (int32 i = 0; i < ClauseCharArray.Num() - 1; ++i)
             {
-                const TCHAR C = Task->StreamingClauseBuffer[i];
+                const TCHAR C = ClauseCharArray[i];
                 if (C == '.' || C == '!' || C == '?' || C == ';' || C == '\n')
                 {
                     ClauseBoundaryIdx = i;

@@ -453,8 +453,20 @@ void UDynamicStateTreeComponent::TickActiveTasks(float DeltaTime)
 {
     bool bAnyTaskFinished = false;
 
-    for (int32 i = ActiveTaskStates.Num() - 1; i >= 0; --i)
+    // 1. Localized copy of currently executing task indices
+    // This prevents iteration invalidation if EvaluateTransitionsForCurrentNode adds/removes tasks mid-tick
+    TArray<int32> EvaluatedTaskIndices;
+    EvaluatedTaskIndices.Reserve(ActiveTaskStates.Num());
+    for (int32 i = 0; i < ActiveTaskStates.Num(); ++i)
     {
+        EvaluatedTaskIndices.Add(i);
+    }
+
+    for (int32 i : EvaluatedTaskIndices)
+    {
+        // Safe check in case a prior loop evaluation already cleared the array
+        if (!ActiveTaskStates.IsValidIndex(i)) continue;
+        
         FActiveStateTreeTaskState& TaskState = ActiveTaskStates[i];
         if (!TaskState.bIsRunning || TaskState.bWaitingForEQS) continue;
 
@@ -489,6 +501,7 @@ void UDynamicStateTreeComponent::TickActiveTasks(float DeltaTime)
         }
     }
 
+    // 2. Perform transitions only after all active tasks have ticked cleanly
     if (bAnyTaskFinished)
     {
         EvaluateTransitionsForCurrentNode(EDynamicStateTransitionTrigger::OnStateCompleted);

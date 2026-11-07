@@ -140,17 +140,21 @@ void UDynamicForceComponent::ApplyHitReactionLocal(uint8 LimbId, const FName& Bo
         }
     }
 
-    // Trigger Material-based Acoustic Sound locally
     if (UWorld* World = GetWorld())
     {
         if (UDynamicAudioSubsystem* AudioSub = World->GetSubsystem<UDynamicAudioSubsystem>())
         {
             AActor* AcousticInstigator = Owner->HasAuthority() ? Owner : nullptr;
             const FGameplayTag SelfAcoustic = AudioSub->ResolveActorAcousticMaterial(Owner);
-            static const FGameplayTag DefaultImpactAcoustic = FGameplayTag::RequestGameplayTag(TEXT("AcousticMaterial.Metal"), false);
+            static const FGameplayTag DefaultImpactAcoustic = FGameplayTag::RequestGameplayTag(TEXT("Material.Metal.Iron"), false);
 
-            // Calls the clean 5-parameter overload
-            AudioSub->PlayMaterialImpactAudio(SelfAcoustic, DefaultImpactAcoustic, HitLocation, AcousticInstigator, ImpulseMagnitude);
+            AudioSub->PlayProceduralMaterialImpact(
+                SelfAcoustic, 
+                DefaultImpactAcoustic, 
+                HitLocation, 
+                AcousticInstigator, 
+                ImpulseMagnitude
+            );
         }
     }
 }

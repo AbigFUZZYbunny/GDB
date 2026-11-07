@@ -196,6 +196,9 @@ public:
 
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "DynamicGAS|Movement")
     float TargetStanceScale = 1.0f; // 1.0 = Stand, 0.5= Crouch, 0.0 = Prone
+    
+    UPROPERTY(Transient)
+    TWeakObjectPtr<AActor> CurrentTetheredActor;
 
 protected:
     virtual void BeginPlay() override;

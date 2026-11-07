@@ -75,6 +75,8 @@ public:
     UPROPERTY() TMap<FGameplayTag, FDynamicCameraProfileDef> CameraMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FDynamicAudioDef> AudioMasterRegistry;
     UPROPERTY() TMap<FGameplayTag, FAcousticMaterialMatrixRow> AudioMaterialMatrix;
+    UPROPERTY() TMap<FGameplayTag, FSkillTreeDef> SkillTreeMasterRegistry;
+    UPROPERTY() TMap<FGameplayTag, FDynamicMenuDef> MenuMasterRegistry;
 
     // Asynchronous Native Evaluation for Dynamic JSON EQS Queries
     void ExecuteDynamicEQSAsync(

@@ -4,7 +4,15 @@
     "MasterAcousticMetaSounds": {
       "PhysicsImpact": "/Game/Audio/MetaSounds/MS_PhysicsImpact.MS_PhysicsImpact",
       "EquipmentRustle": "/Game/Audio/MetaSounds/MS_EquipmentRustle.MS_EquipmentRustle",
-      "FoliageWind": "/Game/Audio/MetaSounds/MS_FoliageWind.MS_FoliageWind"
+      "FoliageWind": "/Game/Audio/MetaSounds/MS_FoliageWind.MS_FoliageWind",
+      "AmbientEnvironmentLoop": "/Game/Audio/MetaSounds/MS_AmbientEnvironment.MS_AmbientEnvironment",
+      "MaterialScrape": "/Game/Audio/MetaSounds/MS_MaterialScrape.MS_MaterialScrape"
+    },
+    "AudioVirtualizationConfig": {
+      "MaxActiveProceduralComponents": 32,
+      "MaxAudibleDistance": 12000.0,
+      "SignificanceCullRadius": 6000.0,
+      "EnvironmentalAmbientUpdateRate": 0.2
     }
   }
 }

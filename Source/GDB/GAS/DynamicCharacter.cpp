@@ -7,6 +7,7 @@
 #include "DynamicCustomizationComponent.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicAttributeSet.h"
+#include "DynamicAudioSubsystem.h"
 #include "DynamicSocialComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicForceComponent.h"
@@ -18,7 +19,6 @@
 #include "DefaultMovementSet/Modes/FallingMode.h"
 #include "DefaultMovementSet/Modes/FlyingMode.h"
 #include "DefaultMovementSet/Modes/SwimmingMode.h"
-#include "EngineUtils.h"
 #include "DynamicLogicEvaluator.h"
 #include "Engine/OverlapResult.h"
 #include "DynamicPhysicsActor.h"
@@ -238,6 +238,53 @@ void ADynamicCharacter::Tick(float DeltaSeconds)
         UpdateRagdollHyperextension(DeltaSeconds);
     }
     ApplyEnvironmentalForces(DeltaSeconds);
+    
+    if (UWorld* World = GetWorld())
+    {
+        if (World->GetNetMode() != NM_DedicatedServer)
+        {
+            if (UDynamicAudioSubsystem* AudioSub = World->GetSubsystem<UDynamicAudioSubsystem>())
+            {
+                FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(ScrapeTrace), false, this);
+
+                // 1. Evaluate Ragdoll Sliding
+                if (bIsRagdolling && MeshComponent)
+                {
+                    const float SlideSpeed = MeshComponent->GetComponentVelocity().Size();
+                    if (SlideSpeed > 15.0f)
+                    {
+                        FHitResult FloorHit;
+                        if (World->LineTraceSingleByChannel(FloorHit, GetActorLocation(), GetActorLocation() - FVector(0, 0, 75.0f), ECC_Visibility, TraceParams))
+                        {
+                            // Pressure = Mass * Gravity
+                            const float NormalPressure = MeshComponent->GetMass() * FMath::Abs(World->GetGravityZ() * 0.01f);
+                            AudioSub->UpdateMaterialScrapeAudio(this, FloorHit.GetActor(), FloorHit.ImpactPoint, SlideSpeed, NormalPressure);
+                        }
+                    }
+                }
+
+                // 2. Evaluate Tethered / Dragged Objects (Carts, Dead Bodies)
+                if (AActor* DraggedActor = CurrentTetheredActor.Get())
+                {
+                    if (UPrimitiveComponent* DraggedPrim = Cast<UPrimitiveComponent>(DraggedActor->GetRootComponent()))
+                    {
+                        const float DragSpeed = DraggedPrim->GetComponentVelocity().Size();
+                        if (DragSpeed > 15.0f)
+                        {
+                            TraceParams.AddIgnoredActor(DraggedActor);
+                            FHitResult FloorHit;
+                            if (World->LineTraceSingleByChannel(FloorHit, DraggedActor->GetActorLocation(), DraggedActor->GetActorLocation() - FVector(0, 0, 100.0f), ECC_Visibility, TraceParams))
+                            {
+                                // Pressure = Mass * Gravity
+                                const float NormalPressure = DraggedPrim->GetMass() * FMath::Abs(World->GetGravityZ() * 0.01f);
+                                AudioSub->UpdateMaterialScrapeAudio(DraggedActor, FloorHit.GetActor(), FloorHit.ImpactPoint, DragSpeed, NormalPressure);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -1948,6 +1995,7 @@ void ADynamicCharacter::ServerDismount()
     }
 
     CurrentMount.Reset();
+    CurrentTetheredActor.Reset(); // Clear the tracked tether
     
     if (ActivePhysicsConstraint)
     {
@@ -1995,6 +2043,7 @@ void ADynamicCharacter::ServerEstablishTether(AActor* TargetActor, FName Effecto
     }
     
     ActivePhysicsConstraint->SetConstrainedComponents(MeshComponent, EffectorBone, Cast<UPrimitiveComponent>(AnchorComp), NAME_None);
+    CurrentTetheredActor = TargetActor; // Track for scraping audio
 }
 
 void ADynamicCharacter::ApplyEnvironmentalForces(float DeltaSeconds)

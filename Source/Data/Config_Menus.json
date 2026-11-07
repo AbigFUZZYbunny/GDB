@@ -1,0 +1,107 @@
+﻿{
+  "_comment": "Data-driven radial menu configurations with input mappings, preset capacities, and dynamic acquisition pipelines.",
+  "MenuMasterRegistry": {
+    "UI.Radial.Abilities": {
+      "MenuTag": "UI.Radial.Abilities",
+      "OpenInputActionTag": "Input.Action.RadialMenu.Abilities",
+      "CycleNextInputActionTag": "Input.Action.Radial.CycleNext",
+      "CyclePrevInputActionTag": "Input.Action.Radial.CyclePrev",
+      "PresetCount": 4,
+      "SlotCount": 8,
+      "bIsDynamicRuntimeGathered": false,
+      "AllowedPayloadTagPrefix": "Ability.",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Ability Quick Bar" }
+        ]
+      }
+    },
+    "UI.Radial.Items": {
+      "MenuTag": "UI.Radial.Items",
+      "MenuStyle": "Radial",
+      "OpenInputActionTag": "Input.Action.RadialMenu.Items",
+      "CycleNextInputActionTag": "Input.Action.Radial.CycleNext",
+      "CyclePrevInputActionTag": "Input.Action.Radial.CyclePrev",
+      "PresetCount": 4,
+      "SlotCount": 8,
+      "bIsDynamicRuntimeGathered": true,
+      "AllowedPayloadTagPrefix": "Item.",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Quick Slot Items" }
+        ]
+      }
+    },
+    "UI.Radial.Containers": {
+      "MenuTag": "UI.Radial.Containers",
+      "MenuStyle": "Radial",
+      "OpenInputActionTag": "Input.Action.RadialMenu.Containers",
+      "CycleNextInputActionTag": "Input.Action.Radial.CycleNext",
+      "CyclePrevInputActionTag": "Input.Action.Radial.CyclePrev",
+      "PresetCount": 1,
+      "SlotCount": 8,
+      "bIsDynamicRuntimeGathered": true,
+      "DynamicSearchRadius": 350.0,
+      "AllowedPayloadTagPrefix": "Container.",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Accessible Containers" }
+        ]
+      }
+    },
+    "UI.List.Stats": {
+      "MenuTag": "UI.List.Stats",
+      "MenuStyle": "List",
+      "OpenInputActionTag": "Input.Action.ListMenu.Stats",
+      "ButtonActionTag": "Attribute.%MenuTag%.%ItemName%",
+      "bIsDynamicRuntimeGathered": true,
+      "AllowedPayloadTagPrefix": "Stat.",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Stat List Menu" }
+        ]
+      }
+    },
+    "UI.Tree.Masteries": {
+      "MenuTag": "UI.Tree.Masteries",
+      "MenuStyle": "Tree",
+      "OpenInputActionTag": "Input.Action.TreeMenu.Masteries",
+      "ButtonActionTag": "Attribute.%MenuTag%.%ItemName%",
+      "bIsDynamicRuntimeGathered": true,
+      "AllowedPayloadTagPrefix": "Masteries.",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Mastery Tree Menu" }
+        ]
+      }
+    },
+    "UI.SkillTree.Galaxy": {
+      "MenuTag": "UI.SkillTree.Galaxy",
+      "MenuStyle": "Galaxy",
+      "OpenInputActionTag": "",
+      "bIsDynamicRuntimeGathered": true,
+      "fWidth": 100.0,
+      "fHeight": 100.0,
+      "bCanZoom": true,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "%ItemName% Skill Tree" }
+        ]
+      }
+    },
+    "UI.SkillTree.Grid": {
+      "MenuTag": "UI.SkillTree.Grid",
+      "MenuStyle": "Grid",
+      "OpenInputActionTag": "",
+      "bIsDynamicRuntimeGathered": true,
+      "fWidth": 10.0,
+      "fHeight": 15.0,
+      "bCanZoom": false,
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "%ItemName% Skill Tree" }
+        ]
+      }
+    }
+  }
+}

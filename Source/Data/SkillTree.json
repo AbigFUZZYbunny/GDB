@@ -1,0 +1,55 @@
+﻿{
+  "_comment": "Dynamic Skill Tree Definitions: All attribute modifications route through MasterEffectRegistry.",
+  "SkillTreeMasterRegistry": {
+    "SkillTree.Magic.Pyromancy": {
+      "TreeTag": "SkillTree.Magic.Pyromancy",
+      "ParentAttributeTag": "Attribute.Mastery.Element.Fire",
+      "TreeLocalization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Pyromancy Discipline" },
+          { "KeyTag": "Localization.Description", "Value": "Mastery of thermal destruction, flame shaping, and ignite catalysts." }
+        ]
+      },
+      "Nodes": [
+        {
+          "NodeTag": "SkillNode.Pyromancy.IgniteCore",
+          "ParentAttributeTag": "Attribute.Mastery.Element.Fire",
+          "CurrencyAttributeTag": "Attribute.Mastery.Element.Fire.Points",
+          "PointCostPerTier": 1.0,
+          "MaxInvestableTiers": 5,
+          "UnlockType": "GrantAbility",
+          "GrantedAbilityTag": "Ability.Magic.Destruction.Firebolt_1",
+          "PrerequisiteNodeTags": [],
+          "PrerequisiteConditionTreeName": "None",
+          "GridPosition": { "X": 0.0, "Y": 0.0 },
+          "IconTextures": {
+            "LockedIcon": "/Game/UI/Icons/Skills/T_Skill_Locked_Generic.T_Skill_Locked_Generic",
+            "UnselectedIcon": "/Game/UI/Icons/Skills/Pyromancy/T_Firebolt_Available.T_Firebolt_Available",
+            "SelectedIcon": "/Game/UI/Icons/Skills/Pyromancy/T_Firebolt_Focused.T_Firebolt_Focused",
+            "ObtainedIcon": "/Game/UI/Icons/Skills/Pyromancy/T_Firebolt_Active.T_Firebolt_Active"
+          },
+          "GrantedEffectTags": []
+        },
+        {
+          "NodeTag": "SkillNode.Pyromancy.FlameResonance",
+          "ParentAttributeTag": "Attribute.Mastery.Element.Fire",
+          "CurrencyAttributeTag": "Attribute.Mastery.Element.Fire.Points",
+          "PointCostPerTier": 2.0,
+          "MaxInvestableTiers": 5,
+          "UnlockType": "ApplyEffect",
+          "GrantedAbilityTag": "None",
+          "PrerequisiteNodeTags": [ "SkillNode.Pyromancy.IgniteCore" ],
+          "PrerequisiteConditionTreeName": "None",
+          "GridPosition": { "X": 150.0, "Y": -100.0 },
+          "IconTextures": {
+            "LockedIcon": "/Game/UI/Icons/Skills/T_Skill_Locked_Generic.T_Skill_Locked_Generic",
+            "UnselectedIcon": "/Game/UI/Icons/Skills/Pyromancy/T_Resonance_Available.T_Resonance_Available",
+            "SelectedIcon": "/Game/UI/Icons/Skills/Pyromancy/T_Resonance_Focused.T_Resonance_Focused",
+            "ObtainedIcon": "/Game/UI/Icons/Skills/Pyromancy/T_Resonance_Active.T_Resonance_Active"
+          },
+          "GrantedEffectTags": [ "Effect.Buff.MilestoneVitalityBoost" ]
+        }
+      ]
+    }
+  }
+}

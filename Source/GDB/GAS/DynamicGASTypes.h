@@ -498,6 +498,34 @@ enum class EDynamicInputSwizzleOrder : uint8
     XAxis
 };
 
+UENUM(BlueprintType)
+enum class EAcousticHarmonicProfile : uint8
+{
+    Metal = 0,   // Inharmonic ratios, high Q, sharp excitation
+    Wood = 1,    // Dense fundamental, fast high-freq damping
+    Stone = 2,   // Very high mass, low resonance, dull excitation
+    Fabric = 3,  // Extreme damping, noise-dominant excitation
+    Flesh = 4,   // Soft impact, fluid damping
+    Flora = 5    // Leaves/branches, chaotic noise dispersion
+};
+
+UENUM(BlueprintType)
+enum class ESkillNodeUnlockType : uint8
+{
+    GrantAbility,       // Unlocks and grants a UDynamicGameplayAbility
+    ApplyEffect        // Applies an ongoing buff or passive GameplayEffect or instant change (attribute +)
+};
+
+UENUM(BlueprintType)
+enum class EDynamicMenuStyle : uint8
+{
+    Radial,     // Quick access 8-slice pie (Abilities, Consumables, Accessible Containers)
+    List,       // Vertical/Horizontal scrollable card list (Stats, Quests, Backstories)
+    Tree,       // Hierarchical branching tree nodes (Mastery disciplines, Dialogues)
+    Galaxy,     // Infinite 2D pan/zoom node canvas with constellations (Path of Exile 2 style)
+    Grid        // Snapped grid matrix canvas (Skyrim perks, CK3 dynasty legacies)
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -714,6 +742,347 @@ public:
      * materials, containers, interactables) before returning an actor from the pool.
      */
     virtual void ResetToDefaultPoolState() = 0;
+};
+
+// ============================================================================
+// ============================================================================
+// ============================================================================
+
+// ============================================================================
+// DYNAMIC RADIAL MENU SYSTEM (DATA-DRIVEN)
+// ============================================================================
+
+USTRUCT(BlueprintType)
+struct GDB_API FRadialSlotData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    FGameplayTag AssignedTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    FGuid ContextID;
+
+    FRadialSlotData() : AssignedTag(FGameplayTag::EmptyTag), ContextID(FGuid()) {}
+    FRadialSlotData(FGameplayTag InTag, FGuid InContextID = FGuid()) : AssignedTag(InTag), ContextID(InContextID) {}
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FRadialPreset
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    FGameplayTag PresetThemeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    TArray<FRadialSlotData> Slots;
+
+    FRadialPreset()
+    {
+        Slots.SetNum(8);
+    }
+
+    FRadialPreset(int32 SlotCount)
+    {
+        Slots.SetNum(FMath::Max(1, SlotCount));
+    }
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicRadialConfig
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    FGameplayTag MenuTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    TArray<FRadialPreset> Presets;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Radial")
+    int32 ActivePresetIndex = 0;
+
+    void Initialize(int32 NumPresets, int32 SlotsPerPreset)
+    {
+        Presets.Empty(NumPresets);
+        for (int32 i = 0; i < NumPresets; ++i)
+        {
+            Presets.Add(FRadialPreset(SlotsPerPreset));
+        }
+        ActivePresetIndex = 0;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FDynamicMenuDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu")
+    FGameplayTag MenuTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu")
+    EDynamicMenuStyle MenuStyle = EDynamicMenuStyle::Radial;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Input")
+    FGameplayTag OpenInputActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Input")
+    FGameplayTag CycleNextInputActionTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Input")
+    FGameplayTag CyclePrevInputActionTag;
+
+    // Pattern supporting %MenuTag% and %ItemName%
+    // Example: "UI.SkillTree.Galaxy.%ItemName%" or "Attribute.%MenuTag%.%ItemName%"
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Navigation")
+    FString ButtonActionTagPattern;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Radial/List")
+    int32 PresetCount = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Radial/List")
+    int32 SlotCount = 8;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Canvas")
+    float fWidth = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Canvas")
+    float fHeight = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Canvas")
+    bool bCanZoom = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Gathering")
+    bool bIsDynamicRuntimeGathered = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Gathering")
+    float DynamicSearchRadius = 350.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Gathering")
+    FString AllowedPayloadTagPrefix;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Menu|Localization")
+    FDynamicLocalizationProfile Localization;
+
+    // Unified Token Resolution: Replaces %MenuTag% and %ItemName%
+    FGameplayTag ResolveTokenizedActionTag(const FString& MenuTagLeaf, const FString& ItemName) const
+    {
+        if (ButtonActionTagPattern.IsEmpty()) return FGameplayTag::EmptyTag;
+
+        FString ResolvedStr = ButtonActionTagPattern;
+        ResolvedStr = ResolvedStr.Replace(TEXT("%MenuTag%"), *MenuTagLeaf);
+        ResolvedStr = ResolvedStr.Replace(TEXT("%ItemName%"), *ItemName);
+
+        return FGameplayTag::RequestGameplayTag(FName(*ResolvedStr), false);
+    }
+
+    FString ResolveLocalizedTitle(const FGameplayTag& KeyTag, const FString& MenuTagLeaf, const FString& ItemName) const
+    {
+        FString BaseTitle = Localization.GetLocalizedText(KeyTag);
+        BaseTitle = BaseTitle.Replace(TEXT("%MenuTag%"), *MenuTagLeaf);
+        BaseTitle = BaseTitle.Replace(TEXT("%ItemName%"), *ItemName);
+        return BaseTitle;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FSkillNodeIconSet
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree|UI")
+    TSoftObjectPtr<UTexture2D> LockedIcon;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree|UI")
+    TSoftObjectPtr<UTexture2D> UnselectedIcon;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree|UI")
+    TSoftObjectPtr<UTexture2D> SelectedIcon;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree|UI")
+    TSoftObjectPtr<UTexture2D> ObtainedIcon;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FSkillTreeNodeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag NodeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag ParentAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag CurrencyAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    float PointCostPerTier = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    int32 MaxInvestableTiers = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    ESkillNodeUnlockType UnlockType = ESkillNodeUnlockType::GrantAbility;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag GrantedAbilityTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    TArray<FGameplayTag> PrerequisiteNodeTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FName PrerequisiteConditionTreeName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree|UI")
+    FVector2D GridPosition = FVector2D::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree|UI")
+    FSkillNodeIconSet IconTextures;
+
+    // Effects applied to character (Stat boosts, passives, stacking buffs)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    TArray<FGameplayTag> GrantedEffectTags;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FSkillTreeDef
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag TreeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag ParentAttributeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FDynamicLocalizationProfile TreeLocalization;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    TArray<FSkillTreeNodeDef> Nodes;
+
+    const FSkillTreeNodeDef* FindNode(FGameplayTag NodeTag) const
+    {
+        for (const FSkillTreeNodeDef& Node : Nodes)
+        {
+            if (Node.NodeTag == NodeTag) return &Node;
+        }
+        return nullptr;
+    }
+};
+
+// --- Fast Array for Player Skill Tree Progression (Replicated O(1) Bandwidth) ---
+
+USTRUCT(BlueprintType)
+struct GDB_API FSkillProgressionItem : public FFastArraySerializerItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    FGameplayTag NodeTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic SkillTree")
+    int32 UnlockedTiers = 0;
+
+    void PreReplicatedRemove(const struct FFastSkillProgressionArray& InArrayOwner) {}
+    void PostReplicatedAdd(const struct FFastSkillProgressionArray& InArrayOwner);
+    void PostReplicatedChange(const struct FFastSkillProgressionArray& InArrayOwner);
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FFastSkillProgressionArray : public FFastArraySerializer
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FSkillProgressionItem> Items;
+
+    UPROPERTY(NotReplicated)
+    class UDynamicGASManagerComponent* OwningManagerComp = nullptr;
+
+    bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+    {
+        return FFastArraySerializer::FastArrayDeltaSerialize<FSkillProgressionItem, FFastSkillProgressionArray>(Items, DeltaParms, *this);
+    }
+};
+
+template<>
+struct TStructOpsTypeTraits<FFastSkillProgressionArray> : public TStructOpsTypeTraitsBase2<FFastSkillProgressionArray>
+{
+    enum { WithNetDeltaSerializer = true };
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FAcousticVirtualizationConfig
+{
+    GENERATED_BODY()
+
+    // Maximum pooled UAudioComponents dedicated to modal synthesis to prevent audio render thread starvation
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|MMO Optimization")
+    int32 MaxActiveProceduralComponents = 32;
+
+    // Hard cutoff distance beyond which client spatial sounds are culled immediately
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|MMO Optimization")
+    float MaxAudibleDistance = 12000.0f;
+
+    // Radius within which high-frequency friction and equipment rattles are synthesized
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|MMO Optimization")
+    float SignificanceCullRadius = 6000.0f;
+
+    // Tick interval in seconds for sampling environmental cell weather and foliage wind
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|MMO Optimization")
+    float EnvironmentalAmbientUpdateRate = 0.2f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FAcousticMaterialProperties
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Material")
+    EAcousticHarmonicProfile HarmonicProfile = EAcousticHarmonicProfile::Wood;
+
+    // f0: Base resonant frequency (Hz)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Material")
+    float FundamentalFrequency = 200.0f;
+
+    // Resonance tightness (higher = more metallic/bell-like)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Material")
+    float QFactor = 50.0f;
+
+    // Base decay time multiplier
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Material")
+    float DecayMultiplier = 1.0f;
+
+    // How rapidly high-frequency harmonic modes decay relative to the fundamental
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Material")
+    float HighFreqDamping = 0.5f;
+};
+
+USTRUCT(BlueprintType)
+struct GDB_API FMasterAcousticMetaSounds
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Master")
+    TSoftObjectPtr<USoundBase> PhysicsImpact;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Master")
+    TSoftObjectPtr<USoundBase> EquipmentRustle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Master")
+    TSoftObjectPtr<USoundBase> FoliageWind;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Master")
+    TSoftObjectPtr<USoundBase> AmbientEnvironmentLoop;
+
+    // NEW: Continuous friction / sliding / dragging procedural audio generator
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Audio|Master")
+    TSoftObjectPtr<USoundBase> MaterialScrape;
 };
 
 // ============================================================================
@@ -1837,6 +2206,9 @@ struct FDynamicMaterialDef
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material")
     FGameplayTag AcousticMaterialTag;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Material|Acoustics")
+    FAcousticMaterialProperties AcousticProperties;
 
     // --- Fully Data-Driven Mechanical Calculation ---
     inline float CalculateMechanicalDamage(const FGameplayTagContainer& ImpactOrDamageTags, float RawForceMagnitude, FGameplayTag& OutDominantYield) const
@@ -3498,6 +3870,12 @@ struct GDB_API FGameSettingsConfig
     GENERATED_BODY()
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Settings")
     FDynamicGameSettingBool ShowAbilityCombosInUI;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Settings|Audio")
+    FMasterAcousticMetaSounds MasterAcousticMetaSounds;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Settings|Audio")
+    FAcousticVirtualizationConfig AudioVirtualizationConfig;
 };
 
 USTRUCT(BlueprintType)
@@ -4613,6 +4991,9 @@ struct GDB_API FDynamicPhysicsActorDef
     // Data-driven action and movement audio layers for this physical item
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Acoustics")
     TArray<FAcousticActionLayer> ActionAudioLayers;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Physics|Acoustics")
+    bool bIsAcousticPortal = false;
 };
 
 USTRUCT(BlueprintType)
@@ -7054,6 +7435,8 @@ struct GDB_API FMasterRegistryStagingData
     TMap<FGameplayTag, FDynamicCameraProfileDef> CameraMasterRegistry;
     TMap<FGameplayTag, FDynamicAudioDef> AudioMasterRegistry;
     TMap<FGameplayTag, FAcousticMaterialMatrixRow> AudioMaterialMatrix;
+    TMap<FGameplayTag, FSkillTreeDef> SkillTreeMasterRegistry;
+    TMap<FGameplayTag, FDynamicMenuDef> MenuMasterRegistry;
 
     bool bHasVoxelGenerationConfig = false;
     FDynamicVoxelGenerationConfig VoxelGenerationConfig;

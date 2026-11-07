@@ -455,6 +455,7 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             {
                 ActorDef.AcousticMaterialTag = FGameplayTag::RequestGameplayTag(FName(*ActorObj->GetStringField(TEXT("AcousticMaterialTag"))), false);
             }
+            ActorDef.bIsAcousticPortal = ActorObj->HasField(TEXT("bIsAcousticPortal")) ? ActorObj->GetBoolField(TEXT("bIsAcousticPortal")) : false;
             OutStaging.MasterPhysicsActorRegistry.Add(KeyTag, ActorDef);
             if (ActorDef.CraftingRecipes.Num() > 0)
             {
@@ -1298,6 +1299,43 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             OutStaging.VoxelGenerationConfig = Config;
         }
     }
+    // 1. Parsing GameSettingsConfig
+    if (RootObject->HasField(TEXT("GameSettingsConfig")))
+    {
+        TSharedPtr<FJsonObject> SettingsObj = RootObject->GetObjectField(TEXT("GameSettingsConfig"));
+        
+        if (SettingsObj->HasField(TEXT("ShowAbilityCombosInUI")))
+        {
+            TSharedPtr<FJsonObject> BoolObj = SettingsObj->GetObjectField(TEXT("ShowAbilityCombosInUI"));
+            OutStaging.GameSettingsConfig.ShowAbilityCombosInUI.bIsOptionalSetting = BoolObj->HasField(TEXT("bIsOptionalSetting")) ? BoolObj->GetBoolField(TEXT("bIsOptionalSetting")) : false;
+            OutStaging.GameSettingsConfig.ShowAbilityCombosInUI.bDefaultValue = BoolObj->HasField(TEXT("bDefaultValue")) ? BoolObj->GetBoolField(TEXT("bDefaultValue")) : false;
+        }
+
+        if (SettingsObj->HasField(TEXT("MasterAcousticMetaSounds")))
+        {
+            TSharedPtr<FJsonObject> MsObj = SettingsObj->GetObjectField(TEXT("MasterAcousticMetaSounds"));
+            OutStaging.GameSettingsConfig.MasterAcousticMetaSounds.PhysicsImpact = TSoftObjectPtr<USoundBase>(FSoftObjectPath(MsObj->GetStringField(TEXT("PhysicsImpact"))));
+            OutStaging.GameSettingsConfig.MasterAcousticMetaSounds.EquipmentRustle = TSoftObjectPtr<USoundBase>(FSoftObjectPath(MsObj->GetStringField(TEXT("EquipmentRustle"))));
+            OutStaging.GameSettingsConfig.MasterAcousticMetaSounds.FoliageWind = TSoftObjectPtr<USoundBase>(FSoftObjectPath(MsObj->GetStringField(TEXT("FoliageWind"))));
+            if (MsObj->HasField(TEXT("AmbientEnvironmentLoop")))
+            {
+                OutStaging.GameSettingsConfig.MasterAcousticMetaSounds.AmbientEnvironmentLoop = TSoftObjectPtr<USoundBase>(FSoftObjectPath(MsObj->GetStringField(TEXT("AmbientEnvironmentLoop"))));
+            }
+            if (MsObj->HasField(TEXT("MaterialScrape")))
+            {
+                OutStaging.GameSettingsConfig.MasterAcousticMetaSounds.MaterialScrape = TSoftObjectPtr<USoundBase>(FSoftObjectPath(MsObj->GetStringField(TEXT("MaterialScrape"))));
+            }
+        }
+
+        if (SettingsObj->HasField(TEXT("AudioVirtualizationConfig")))
+        {
+            TSharedPtr<FJsonObject> VirtObj = SettingsObj->GetObjectField(TEXT("AudioVirtualizationConfig"));
+            FJsonObjectConverter::JsonObjectToUStruct(VirtObj.ToSharedRef(), &OutStaging.GameSettingsConfig.AudioVirtualizationConfig, 0, 0);
+        }
+        
+        OutStaging.bHasGameSettingsConfig = true;
+    }
+    // 2. Parsing MaterialMasterRegistry
     if (RootObject->HasField(TEXT("MaterialMasterRegistry")))
     {
         for (auto& Pair : RootObject->GetObjectField(TEXT("MaterialMasterRegistry"))->Values)
@@ -1309,6 +1347,17 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
 
             FDynamicMaterialDef MatDef;
             FJsonObjectConverter::JsonObjectToUStruct(MatObj.ToSharedRef(), &MatDef, 0, 0);
+
+            // Parse New Acoustic Properties
+            if (MatObj->HasField(TEXT("AcousticProperties")))
+            {
+                TSharedPtr<FJsonObject> AcObj = MatObj->GetObjectField(TEXT("AcousticProperties"));
+                MatDef.AcousticProperties.HarmonicProfile = UDynamicDataSerializer::StringToEnum<EAcousticHarmonicProfile>(FString(AcObj->GetStringField(TEXT("HarmonicProfile"))));
+                MatDef.AcousticProperties.FundamentalFrequency = static_cast<float>(AcObj->GetNumberField(TEXT("FundamentalFrequency")));
+                MatDef.AcousticProperties.QFactor = static_cast<float>(AcObj->GetNumberField(TEXT("QFactor")));
+                MatDef.AcousticProperties.DecayMultiplier = static_cast<float>(AcObj->GetNumberField(TEXT("DecayMultiplier")));
+                MatDef.AcousticProperties.HighFreqDamping = static_cast<float>(AcObj->GetNumberField(TEXT("HighFreqDamping")));
+            }
 
             // Phase / Adhesion
             MatDef.bIsGravityAffected = MatObj->HasField(TEXT("bIsGravityAffected")) ? MatObj->GetBoolField(TEXT("bIsGravityAffected")) : true;
@@ -2059,6 +2108,148 @@ bool UDynamicDataSerializer::DeserializeMasterRegistryToStaging(const FString& I
             }
 
             OutStaging.AudioMaterialMatrix.Add(OuterTag, MatrixRow);
+        }
+    }
+    
+    // ------------------------------------------------------------------------
+    // SKILL TREE MASTER REGISTRY PARSING
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("SkillTreeMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("SkillTreeMasterRegistry"))->Values)
+        {
+            FGameplayTag TreeTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!TreeTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> TreeObj = Pair.Value->AsObject();
+            if (!TreeObj.IsValid()) continue;
+
+            FSkillTreeDef TreeDef;
+            TreeDef.TreeTag = TreeTag;
+            TreeDef.ParentAttributeTag = FGameplayTag::RequestGameplayTag(FName(*TreeObj->GetStringField(TEXT("ParentAttributeTag"))), false);
+            DeserializeLocalizationMap(TreeObj, TEXT("TreeLocalization"), TreeDef.TreeLocalization);
+
+            if (TreeObj->HasField(TEXT("Nodes")))
+            {
+                for (const auto& NodeVal : TreeObj->GetArrayField(TEXT("Nodes")))
+                {
+                    TSharedPtr<FJsonObject> NObj = NodeVal->AsObject();
+                    if (!NObj.IsValid()) continue;
+
+                    FSkillTreeNodeDef NodeDef;
+                    NodeDef.NodeTag = FGameplayTag::RequestGameplayTag(FName(*NObj->GetStringField(TEXT("NodeTag"))), false);
+                    NodeDef.ParentAttributeTag = FGameplayTag::RequestGameplayTag(FName(*NObj->GetStringField(TEXT("ParentAttributeTag"))), false);
+                    NodeDef.CurrencyAttributeTag = FGameplayTag::RequestGameplayTag(FName(*NObj->GetStringField(TEXT("CurrencyAttributeTag"))), false);
+                    NodeDef.PointCostPerTier = NObj->HasField(TEXT("PointCostPerTier")) ? static_cast<float>(NObj->GetNumberField(TEXT("PointCostPerTier"))) : 1.0f;
+                    NodeDef.MaxInvestableTiers = NObj->HasField(TEXT("MaxInvestableTiers")) ? static_cast<int32>(NObj->GetNumberField(TEXT("MaxInvestableTiers"))) : 1;
+                    NodeDef.UnlockType = StringToEnum<ESkillNodeUnlockType>(NObj->GetStringField(TEXT("UnlockType")));
+
+                    if (NObj->HasField(TEXT("GrantedAbilityTag")))
+                    {
+                        NodeDef.GrantedAbilityTag = FGameplayTag::RequestGameplayTag(FName(*NObj->GetStringField(TEXT("GrantedAbilityTag"))), false);
+                    }
+                    if (NObj->HasField(TEXT("PrerequisiteConditionTreeName")))
+                    {
+                        NodeDef.PrerequisiteConditionTreeName = FName(*NObj->GetStringField(TEXT("PrerequisiteConditionTreeName")));
+                    }
+
+                    if (NObj->HasField(TEXT("PrerequisiteNodeTags")))
+                    {
+                        for (const auto& PreVal : NObj->GetArrayField(TEXT("PrerequisiteNodeTags")))
+                        {
+                            FGameplayTag PreTag = FGameplayTag::RequestGameplayTag(FName(*PreVal->AsString()), false);
+                            if (PreTag.IsValid()) NodeDef.PrerequisiteNodeTags.Add(PreTag);
+                        }
+                    }
+
+                    if (NObj->HasField(TEXT("GridPosition")))
+                    {
+                        TSharedPtr<FJsonObject> PosObj = NObj->GetObjectField(TEXT("GridPosition"));
+                        NodeDef.GridPosition.X = static_cast<float>(PosObj->GetNumberField(TEXT("X")));
+                        NodeDef.GridPosition.Y = static_cast<float>(PosObj->GetNumberField(TEXT("Y")));
+                    }
+
+                    if (NObj->HasField(TEXT("IconTextures")))
+                    {
+                        TSharedPtr<FJsonObject> IconObj = NObj->GetObjectField(TEXT("IconTextures"));
+                        NodeDef.IconTextures.LockedIcon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(IconObj->GetStringField(TEXT("LockedIcon"))));
+                        NodeDef.IconTextures.UnselectedIcon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(IconObj->GetStringField(TEXT("UnselectedIcon"))));
+                        NodeDef.IconTextures.SelectedIcon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(IconObj->GetStringField(TEXT("SelectedIcon"))));
+                        NodeDef.IconTextures.ObtainedIcon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(IconObj->GetStringField(TEXT("ObtainedIcon"))));
+                    }
+
+                    if (NObj->HasField(TEXT("GrantedEffectTags")))
+                    {
+                        for (const auto& EffVal : NObj->GetArrayField(TEXT("GrantedEffectTags")))
+                        {
+                            FGameplayTag EffTag = FGameplayTag::RequestGameplayTag(FName(*EffVal->AsString()), false);
+                            if (EffTag.IsValid()) NodeDef.GrantedEffectTags.Add(EffTag);
+                        }
+                    }
+
+                    TreeDef.Nodes.Add(NodeDef);
+                }
+            }
+
+            OutStaging.SkillTreeMasterRegistry.Add(TreeTag, TreeDef);
+        }
+    }    
+    // ------------------------------------------------------------------------
+    // UNIFIED MENU MASTER REGISTRY PARSING
+    // ------------------------------------------------------------------------
+    if (RootObject->HasField(TEXT("MenuMasterRegistry")))
+    {
+        for (auto& Pair : RootObject->GetObjectField(TEXT("MenuMasterRegistry"))->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> MenuObj = Pair.Value->AsObject();
+            if (!MenuObj.IsValid()) continue;
+
+            FDynamicMenuDef Def;
+            Def.MenuTag = KeyTag;
+
+            if (MenuObj->HasField(TEXT("MenuStyle")))
+            {
+                Def.MenuStyle = StringToEnum<EDynamicMenuStyle>(MenuObj->GetStringField(TEXT("MenuStyle")));
+            }
+
+            if (MenuObj->HasField(TEXT("OpenInputActionTag")))
+            {
+                const FString ActionStr = MenuObj->GetStringField(TEXT("OpenInputActionTag"));
+                if (!ActionStr.IsEmpty())
+                {
+                    Def.OpenInputActionTag = FGameplayTag::RequestGameplayTag(FName(*ActionStr), false);
+                }
+            }
+            if (MenuObj->HasField(TEXT("CycleNextInputActionTag")))
+            {
+                Def.CycleNextInputActionTag = FGameplayTag::RequestGameplayTag(FName(*MenuObj->GetStringField(TEXT("CycleNextInputActionTag"))), false);
+            }
+            if (MenuObj->HasField(TEXT("CyclePrevInputActionTag")))
+            {
+                Def.CyclePrevInputActionTag = FGameplayTag::RequestGameplayTag(FName(*MenuObj->GetStringField(TEXT("CyclePrevInputActionTag"))), false);
+            }
+
+            if (MenuObj->HasField(TEXT("ButtonActionTag")))
+            {
+                Def.ButtonActionTagPattern = MenuObj->GetStringField(TEXT("ButtonActionTag"));
+            }
+
+            Def.PresetCount = MenuObj->HasField(TEXT("PresetCount")) ? static_cast<int32>(MenuObj->GetNumberField(TEXT("PresetCount"))) : 1;
+            Def.SlotCount = MenuObj->HasField(TEXT("SlotCount")) ? static_cast<int32>(MenuObj->GetNumberField(TEXT("SlotCount"))) : 8;
+            Def.bIsDynamicRuntimeGathered = MenuObj->HasField(TEXT("bIsDynamicRuntimeGathered")) ? MenuObj->GetBoolField(TEXT("bIsDynamicRuntimeGathered")) : false;
+            Def.DynamicSearchRadius = MenuObj->HasField(TEXT("DynamicSearchRadius")) ? static_cast<float>(MenuObj->GetNumberField(TEXT("DynamicSearchRadius"))) : 350.0f;
+            Def.AllowedPayloadTagPrefix = MenuObj->HasField(TEXT("AllowedPayloadTagPrefix")) ? MenuObj->GetStringField(TEXT("AllowedPayloadTagPrefix")) : TEXT("");
+
+            Def.fWidth = MenuObj->HasField(TEXT("fWidth")) ? static_cast<float>(MenuObj->GetNumberField(TEXT("fWidth"))) : 100.0f;
+            Def.fHeight = MenuObj->HasField(TEXT("fHeight")) ? static_cast<float>(MenuObj->GetNumberField(TEXT("fHeight"))) : 100.0f;
+            Def.bCanZoom = MenuObj->HasField(TEXT("bCanZoom")) ? MenuObj->GetBoolField(TEXT("bCanZoom")) : true;
+
+            DeserializeLocalizationMap(MenuObj, TEXT("Localization"), Def.Localization);
+
+            OutStaging.MenuMasterRegistry.Add(KeyTag, Def);
         }
     }
 

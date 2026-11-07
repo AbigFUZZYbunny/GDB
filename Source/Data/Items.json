@@ -1,14 +1,19 @@
 ﻿{
   "_comment": "Dynamic Non-Character Physics Actors & Container Definitions Schema",
   "MasterPhysicsActorRegistry": {
-    "Actor.Environment.Door.HeavyOak": {
+    "Actor.Structure.Door.Heavy": {
       "Localization": {
-        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Heavy Oak Door" } ]
+        "ReplicatedEntries": [ { "KeyTag": "Localization.Name", "Value": "Heavy %MaterialName% Door" } ]
       },
-      "SkeletalMeshAsset": "/Game/Environment/Doors/SK_OakDoor.SK_OakDoor",
+      "SkeletalMeshAsset": "/Game/Structure/Doors/SK_HeavyDoor.SK_HeavyDoor",
       "CollisionProfileName": "PhysicsActor",
       "bSimulatePhysicsByDefault": true,
       "MassOverride": 65.0,
+      "AcousticMaterialTag": "AcousticMaterial.Wood",
+      "bIsAcousticPortal": true,
+      "InitialInteractableStateTags": [
+        "State.Interactable.Closed"
+      ],      
       "CustomLimbs": [
         {
           "LimbId": 1,

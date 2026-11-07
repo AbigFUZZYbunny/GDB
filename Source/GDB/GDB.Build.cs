@@ -32,7 +32,9 @@ public class GDB : ModuleRules
 			"CustomizableObject",
 			"StateTreeModule", 
 			"GameplayStateTreeModule", 
-			"EnhancedInput"
+			"EnhancedInput",
+			"MetasoundFrontend",
+			"AudioExtensions"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

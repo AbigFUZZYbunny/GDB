@@ -8,6 +8,7 @@
 #include "DynamicForceComponent.h"
 #include "DynamicAttributeSet.h"
 #include "DynamicGameState.h"
+#include "DynamicVFXSubsystem.h"
 #include "DynamicCustomizationComponent.h"
 
 UDynamicEffectExecution::UDynamicEffectExecution() {}
@@ -26,6 +27,7 @@ void UDynamicEffectExecution::Execute_Implementation(
 
     AActor* TargetActor = TargetASC->GetOwner();
     if (!TargetActor) return;
+
     AActor* InstigatorActor = DynContext->GetInstigator();
 
     UWorld* World = TargetASC->GetWorld();
@@ -79,13 +81,14 @@ void UDynamicEffectExecution::Execute_Implementation(
         {
             if (const FDynamicImpactReactionRule* ImpactRule = CalcSettings.ImpactReactionRules.Find(ImpactTag))
             {
-                // Velocity Mitigations
+                // Velocity Mitigations (Armor, Agility, Resistance)
                 float TotalVelocityDamping = 0.0f;
                 for (const auto& Pair : ImpactRule->VelocityMitigationScalars.LocalLookupMap)
                 {
                     if (Pair.Key.IsValid())
                     {
                         TotalVelocityDamping += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                        if (HitLimbId > 0) TotalVelocityDamping += TargetAttributes->GetDynamicAttributeValue(Pair.Key, HitLimbId) * Pair.Value;
                     }
                 }
 
@@ -98,7 +101,11 @@ void UDynamicEffectExecution::Execute_Implementation(
                     float TotalDamageAbsorption = 0.0f;
                     for (const auto& Pair : ImpactRule->DamageMitigationScalars.LocalLookupMap)
                     {
-                        if (Pair.Key.IsValid()) TotalDamageAbsorption += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                        if (Pair.Key.IsValid())
+                        {
+                            TotalDamageAbsorption += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                            if (HitLimbId > 0) TotalDamageAbsorption += TargetAttributes->GetDynamicAttributeValue(Pair.Key, HitLimbId) * Pair.Value;
+                        }
                     }
 
                     const float RawUnmitigatedDamage = ExcessVelocity * DynContext->GetMassRatioFactor();
@@ -112,29 +119,57 @@ void UDynamicEffectExecution::Execute_Implementation(
                         static const FGameplayTag ImpactHeavyTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Physics.Impact.Heavy"), false);
                         
                         FGameplayTag SelectedImpactEvent = (MitigatedDamage > 25.0f) ? ImpactHeavyTag : ImpactLightTag;
-                        VfxSub->PlayVFXLayer(SelectedImpactEvent, ImpactRule->VfxEventMap, DynContext->QuantizedImpactLocation, DynContext->QuantizedImpactNormal, MitigatedDamage, InstigatorActor, TargetActor);
+                        
+                        // We must find the DamageType definition to acquire the VfxEventMap for this impact!
+                        if (const FDynamicDamageTypeDef* DmgDef = DynamicGS->DamageTypeMasterRegistry.Find(ImpactTag))
+                        {
+                            VfxSub->PlayVFXLayer(SelectedImpactEvent, DmgDef->VfxEventMap, DynContext->QuantizedImpactLocation, DynContext->QuantizedImpactNormal, MitigatedDamage, InstigatorActor, TargetActor);
+                        }
+                    }
+
+                    // Apply Data-Driven Status Consequences
+                    for (const FDynamicImpactConsequence& Conseq : ImpactRule->Consequences)
+                    {
+                        if (!Conseq.TargetAttributeTag.IsValid()) continue;
+                        
+                        const float AppliedDamage = MitigatedDamage * Conseq.DamageScalar;
+                        if (AppliedDamage >= Conseq.StatusEffectThreshold)
+                        {
+                            for (const FGameplayTag& EffectTag : Conseq.StatusEffectsToApply)
+                            {
+                                TargetASC->AddLooseGameplayTags(FGameplayTagContainer(EffectTag));
+                            }
+                        }
                     }
 
                     // Stability Evaluation
                     float StabilityBonus = 0.0f;
                     for (const auto& Pair : ImpactRule->StabilityRetentionScalars.LocalLookupMap)
                     {
-                        if (Pair.Key.IsValid()) StabilityBonus += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                        if (Pair.Key.IsValid())
+                        {
+                            StabilityBonus += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                            if (HitLimbId > 0) StabilityBonus += TargetAttributes->GetDynamicAttributeValue(Pair.Key, HitLimbId) * Pair.Value;
+                        }
                     }
 
                     const float StaggerThreshold = (ImpactRule->BaseStabilityLossThreshold + StabilityBonus) / FMath::Max(0.01f, DynContext->GetMassRatioFactor());
                     
+                    // Stagger / Stumble / Ragdoll Resolution (Data-driven, no redundant threshold floats)
                     if (MitigatedDamage > StaggerThreshold)
                     {
                         bool bOverpoweredToRagdoll = false;
 
-                        // Check Overpower Rules
+                        // Check Overpower Rules first
                         for (const FDynamicOverpowerRule& OverpowerRule : ImpactRule->OverpowerRules)
                         {
                             float ResistanceAccum = OverpowerRule.BasePenetrationThreshold;
                             for (const auto& Pair : OverpowerRule.ResistanceAttributeScalars.LocalLookupMap)
                             {
-                                if (Pair.Key.IsValid()) ResistanceAccum += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                                if (Pair.Key.IsValid())
+                                {
+                                    ResistanceAccum += TargetAttributes->GetDynamicAttributeValue(Pair.Key, 0) * Pair.Value;
+                                }
                             }
 
                             if (WeaponMomentum > ResistanceAccum)
@@ -143,7 +178,10 @@ void UDynamicEffectExecution::Execute_Implementation(
                                 if (VfxSub)
                                 {
                                     static const FGameplayTag OverpowerEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Physics.Overpower"), false);
-                                    VfxSub->PlayVFXLayer(OverpowerEventTag, OverpowerRule.VfxEventMap, DynContext->QuantizedImpactLocation, DynContext->QuantizedImpactNormal, WeaponMomentum, InstigatorActor, TargetActor);
+                                    if (const FDynamicDamageTypeDef* DmgDef = DynamicGS->DamageTypeMasterRegistry.Find(ImpactTag))
+                                    {
+                                        VfxSub->PlayVFXLayer(OverpowerEventTag, DmgDef->VfxEventMap, DynContext->QuantizedImpactLocation, DynContext->QuantizedImpactNormal, WeaponMomentum, InstigatorActor, TargetActor);
+                                    }
                                 }
 
                                 if (OverpowerRule.bForceRagdollOnOverpower)
@@ -174,11 +212,18 @@ void UDynamicEffectExecution::Execute_Implementation(
                                 if (VfxSub)
                                 {
                                     static const FGameplayTag StaggerEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Physics.Stagger"), false);
-                                    VfxSub->PlayVFXLayer(StaggerEventTag, ImpactRule->VfxEventMap, DynContext->QuantizedImpactLocation, DynContext->QuantizedImpactNormal, MitigatedDamage, InstigatorActor, TargetActor);
+                                    if (const FDynamicDamageTypeDef* DmgDef = DynamicGS->DamageTypeMasterRegistry.Find(ImpactTag))
+                                    {
+                                        VfxSub->PlayVFXLayer(StaggerEventTag, DmgDef->VfxEventMap, DynContext->QuantizedImpactLocation, DynContext->QuantizedImpactNormal, MitigatedDamage, InstigatorActor, TargetActor);
+                                    }
                                 }
 
+                                // Directional Stumble: Destabilized without full overpower
                                 static const FGameplayTag StumbleTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving.Stumble"), false);
-                                if (StumbleTag.IsValid()) TargetASC->AddLooseGameplayTags(FGameplayTagContainer(StumbleTag));
+                                if (StumbleTag.IsValid())
+                                {
+                                    TargetASC->AddLooseGameplayTags(FGameplayTagContainer(StumbleTag));
+                                }
 
                                 if (UDynamicForceComponent* ForceComp = DynChar->FindComponentByClass<UDynamicForceComponent>())
                                 {
@@ -188,7 +233,7 @@ void UDynamicEffectExecution::Execute_Implementation(
                         }
                     }
 
-                    // Newton Exchange Recoil
+                    // Newton Exchange Recoil Calculation
                     const float DefenderStaggerResist = TargetAttributes->GetDynamicAttributeValue(FGameplayTag::RequestGameplayTag(TEXT("Attribute.Stat.Strength"), false), 0) * 10.0f;
                     const float SafeTotalPower = FMath::Max(1.0f, WeaponMomentum + DefenderStaggerResist);
                     const float TargetRatio = FMath::Clamp(WeaponMomentum / SafeTotalPower, 0.0f, 1.0f);
@@ -211,14 +256,33 @@ void UDynamicEffectExecution::Execute_Implementation(
             TargetAttributes->SetDynamicAttributeValue(DamageTargetTag, FMath::Max(0.0f, CurGlobalVal - EvaluatedDamage), 0);
         }
     }
+    else if (DynContext->GetKineticImpulse() > 0.0f && DamageTargetTag.IsValid())
+    {
+        const float LimbDamageMult = LimbData ? LimbData->DamageMultiplier : 1.0f;
+        const float BaseKineticDamage = DynContext->GetKineticImpulse() * CalcSettings.ImpulseToDamageScalar * DynContext->GetMassRatioFactor();
+        EvaluatedDamage = BaseKineticDamage * LimbDamageMult;
 
-    // 3. Dynamic Modifiers Evaluation & Effect-Driven VFX
+        if (EvaluatedDamage > 0.0f)
+        {
+            if (HitLimbId > 0)
+            {
+                const float CurLimbVal = TargetAttributes->GetDynamicAttributeValue(DamageTargetTag, HitLimbId);
+                TargetAttributes->SetDynamicAttributeValue(DamageTargetTag, FMath::Max(0.0f, CurLimbVal - EvaluatedDamage), HitLimbId);
+            }
+            const float CurGlobalVal = TargetAttributes->GetDynamicAttributeValue(DamageTargetTag, 0);
+            TargetAttributes->SetDynamicAttributeValue(DamageTargetTag, FMath::Max(0.0f, CurGlobalVal - EvaluatedDamage), 0);
+        }
+    }
+
+    // 3. Dynamic Modifiers Evaluation across all payload tags
     for (const FGameplayTag& PayloadTag : DynContext->ContextPayloadTags)
     {
+        if (!PayloadTag.IsValid()) continue;
+
         if (const FDynamicEffectDef* EffectDef = DynamicGS->MasterEffectRegistry.Find(PayloadTag))
         {
             // --- VFX: Effect Applied / Ticked ---
-            if (VfxSub)
+            if (VfxSub && EffectDef->VfxEventMap.LocalLookupMap.Num() > 0)
             {
                 static const FGameplayTag AppliedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Effect.Applied"), false);
                 VfxSub->PlayVFXLayer(AppliedEventTag, EffectDef->VfxEventMap, TargetActor->GetActorLocation(), FVector::UpVector, EvaluatedDamage, InstigatorActor, TargetActor);
@@ -227,9 +291,11 @@ void UDynamicEffectExecution::Execute_Implementation(
             for (const FDynamicModifierDef& ModDef : EffectDef->Modifiers)
             {
                 if (!ModDef.TargetAttributeTag.IsValid()) continue;
+
                 float EffectiveBaseMag = ModDef.BaseMagnitude;
                 
-                if (bInvertHealing && DamageTargetTag.IsValid() && ModDef.TargetAttributeTag == DamageTargetTag && ModDef.ModifierOp == EEffectModifierOp::Additive && EffectiveBaseMag > 0.0f)
+                if (bInvertHealing && DamageTargetTag.IsValid() && ModDef.TargetAttributeTag == DamageTargetTag && 
+                    ModDef.ModifierOp == EEffectModifierOp::Additive && EffectiveBaseMag > 0.0f)
                 {
                     EffectiveBaseMag = -EffectiveBaseMag;
                 }
@@ -239,9 +305,27 @@ void UDynamicEffectExecution::Execute_Implementation(
 
                 switch (ModDef.ModifierOp)
                 {
-                    case EEffectModifierOp::Additive: CalculatedVal = CurrentVal + EffectiveBaseMag; break;
-                    case EEffectModifierOp::Multiplicative: CalculatedVal = CurrentVal * (1.0f + EffectiveBaseMag); break;
-                    case EEffectModifierOp::Override: CalculatedVal = EffectiveBaseMag; break;
+                    case EEffectModifierOp::Additive:
+                        CalculatedVal = CurrentVal + EffectiveBaseMag;
+                        break;
+                    case EEffectModifierOp::Multiplicative:
+                        CalculatedVal = CurrentVal * (1.0f + EffectiveBaseMag);
+                        break;
+                    case EEffectModifierOp::Override:
+                        CalculatedVal = EffectiveBaseMag;
+                        break;
+                }
+
+                if (DamageTargetTag.IsValid() && ModDef.TargetAttributeTag == DamageTargetTag && ModDef.ModifierOp == EEffectModifierOp::Additive && EffectiveBaseMag < 0.0f)
+                {
+                    const float ModDamage = FMath::Abs(EffectiveBaseMag);
+                    EvaluatedDamage += ModDamage;
+                    
+                    if (HitLimbId > 0)
+                    {
+                        const float CurLimbVal = TargetAttributes->GetDynamicAttributeValue(DamageTargetTag, HitLimbId);
+                        TargetAttributes->SetDynamicAttributeValue(DamageTargetTag, FMath::Max(0.0f, CurLimbVal - ModDamage), HitLimbId);
+                    }
                 }
 
                 TargetAttributes->SetDynamicAttributeValue(ModDef.TargetAttributeTag, CalculatedVal, 0);
@@ -249,7 +333,25 @@ void UDynamicEffectExecution::Execute_Implementation(
         }
     }
 
-    // 4. Physical Recoil on Attacker
+    // 4. Source Pass-Back Execution
+    if (EvaluatedDamage > 0.0f && SourceASC && DynContext->SourcePassBackRules.Num() > 0)
+    {
+        if (UDynamicAttributeSet* SourceAttributes = const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(SourceASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))))
+        {
+            for (const FSourcePassBackRule& Rule : DynContext->SourcePassBackRules)
+            {
+                if (Rule.TriggerEvent == EPassBackTriggerEvent::OnDamageDealt && Rule.SourceAttributeTag.IsValid())
+                {
+                    const float GrantAmount = Rule.BaseGrantAmount + (Rule.bScaleWithDamageDealt ? (EvaluatedDamage * Rule.DamageRatioScalar) : 0.0f);
+                    const float OldSourceVal = SourceAttributes->GetDynamicAttributeValue(Rule.SourceAttributeTag, 0);
+                    SourceAttributes->SetDynamicAttributeValue(Rule.SourceAttributeTag, OldSourceVal + GrantAmount, 0);
+                }
+            }
+        }
+    }
+
+    // 5. Dynamic Attacking Bone Physical Recoil
+    HighestRecoilImpulse = FMath::Min(HighestRecoilImpulse, CalcSettings.MaxImpulseCap);
     if (HighestRecoilImpulse > CalcSettings.MinImpulseThreshold && InstigatorActor && InstigatorActor != TargetActor)
     {
         if (ADynamicCharacter* AttackerChar = Cast<ADynamicCharacter>(InstigatorActor))
@@ -257,9 +359,30 @@ void UDynamicEffectExecution::Execute_Implementation(
             if (UDynamicForceComponent* AttackerForceComp = AttackerChar->FindComponentByClass<UDynamicForceComponent>())
             {
                 FName AttackingBone = DynContext->SourceEffectorBone;
+
+                // Fallback to Character Template Handedness / Dominance profile if none specified
+                if (AttackingBone.IsNone())
+                {
+                    if (const UDynamicCustomizationComponent* Cust = AttackerChar->GetCustomizationComponent())
+                    {
+                        FCharacterTemplateDef TempDef;
+                        if (DynamicGS->GetCharacterTemplate(Cust->ActiveCharacterTemplateTag, TempDef))
+                        {
+                            AttackingBone = TempDef.DominanceProfile.MainHandBone;
+                        }
+                    }
+                }
+
                 if (AttackingBone.IsNone()) AttackingBone = FName("hand_r");
+
                 const uint8 AttackerLimbId = DynamicGS->GetLimbIdForBone(AttackingBone);
-                AttackerForceComp->ServerApplyLimbForce(AttackerLimbId, AttackingBone, HighestRecoilImpulse, AttackerChar->GetActorLocation(), DynContext->QuantizedImpactNormal);
+                AttackerForceComp->ServerApplyLimbForce(
+                    AttackerLimbId, 
+                    AttackingBone, 
+                    HighestRecoilImpulse, 
+                    AttackerChar->GetActorLocation(), 
+                    DynContext->QuantizedImpactNormal
+                );
             }
         }
     }

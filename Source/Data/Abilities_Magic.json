@@ -58,7 +58,23 @@
         "KineticImpulseOnHit": 750.0,
         "EffectsToApply": [ "Effect.Magic.Fire.IgniteDOT" ],
         "RuntimeMetricModifiers": { "ReplicatedEntries": [] },
-        "PropagatedTriggerTags": [ "Element.Fire", "School.Destruction" ]
+        "PropagatedTriggerTags": [ "Element.Fire", "School.Destruction" ],
+        "VfxEventMap": {
+          "ReplicatedEntries": [
+            {
+              "KeyTag": "Event.Spawn",
+              "ValueLayer": {
+                "VfxTags": [ "VFX.Magic.Fire.Spawn" ]
+              }
+            },
+            {
+              "KeyTag": "Event.Impact",
+              "ValueLayer": {
+                "VfxTags": [ "VFX.Magic.Fire.Explosion" ]
+              }
+            }
+          ]
+        }
       },
       "InteractionConfig": {
         "Localization": { "ReplicatedEntries": [] },
@@ -86,11 +102,63 @@
         "GaspMotorSettings": { "RequiredAttributeThresholds": { "ReplicatedEntries": [] }, "NewtonReflectiveForceFactor": 0.5, "PhysicsBlendWeightMultiplier": 1.0 }
       },
       "StageVisuals": {
-        "AttemptStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", "MontageSectionName": "Ignite", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Fire.HandSpark" },
-        "ChargingStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", "MontageSectionName": "ChargeLoop", "PlayRate": 1.0, "GaspPhysicsControlProfile": "UpperBodyCast", "GaspKinematicBlendWeight": 0.85, "StageVfxCueTag": "GameplayCue.Magic.Fire.ChargeSwirl" },
-        "ReleaseStage": { "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", "MontageSectionName": "Throw", "PlayRate": 1.15, "GaspPhysicsControlProfile": "FullBodyRecoil", "GaspKinematicBlendWeight": 0.75, "StageVfxCueTag": "GameplayCue.Magic.Fire.CastRelease" },
+        "AttemptStage": { 
+          "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand",
+          "MontageSectionName": "Ignite", 
+          "PlayRate": 1.0, 
+          "GaspPhysicsControlProfile": "UpperBodyCast", 
+          "GaspKinematicBlendWeight": 0.85
+        },
+        "ChargingStage": { 
+          "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", 
+          "MontageSectionName": "ChargeLoop", 
+          "PlayRate": 1.0, 
+          "GaspPhysicsControlProfile": "UpperBodyCast", 
+          "GaspKinematicBlendWeight": 0.85, 
+          "VfxEventMap": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Event.Stage.Entry",
+                "ValueLayer": {
+                  "VfxTags": [ "VFX.Magic.Fire.Spawn" ]
+                }
+              }
+            ]
+          }
+        },
+        "ReleaseStage": { 
+          "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand", 
+          "MontageSectionName": "Throw", 
+          "PlayRate": 1.15, 
+          "GaspPhysicsControlProfile": "FullBodyRecoil", 
+          "GaspKinematicBlendWeight": 0.75, 
+          "StageVfxCueTag": "GameplayCue.Magic.Fire.CastRelease",
+          "VfxEventMap": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Event.Stage.QTE.Success",
+                "ValueLayer": {
+                  "VfxTags": [ "VFX.Magic.Fire.Surge" ]
+                }
+              },
+              {
+                "KeyTag": "Event.Stage.QTE.Failure",
+                "ValueLayer": {
+                  "VfxTags": [ "VFX.Magic.Fire.Fizzle" ]
+                }
+              }
+            ]
+          }
+        },
         "RecoveryStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "None" },
-        "ImpactStage": { "StageMontage": "None", "MontageSectionName": "None", "PlayRate": 1.0, "GaspPhysicsControlProfile": "Default", "GaspKinematicBlendWeight": 0.5, "StageVfxCueTag": "GameplayCue.Magic.Fire.BoltImpact" }
+        "ImpactStage": { 
+          "StageMontage": "None", 
+          "MontageSectionName": "None", 
+          "PlayRate": 1.0, 
+          "GaspPhysicsControlProfile": "Default", 
+          "GaspKinematicBlendWeight": 0.5, 
+          "StageVfxCueTag": "GameplayCue.Magic.Fire.BoltImpact"
+        }
       },
       "StageInputSequences": {
         "ChargingStage": {
@@ -123,10 +191,12 @@
         }
       },
       "SourcePassBackRules": [
-        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 3.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnCast", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 1.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnQTESuccess", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": 1.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
+        { "TriggerEvent": "OnQTEFailure", "SourceAttributeTag": "Attribute.Mastery.School.Destruction", "BaseGrantAmount": -1.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
         { "TriggerEvent": "OnCollision", "SourceAttributeTag": "Attribute.Mastery.Element.Fire", "BaseGrantAmount": 5.0, "bScaleWithDamageDealt": false, "DamageRatioScalar": 0.0 },
-        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 8.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.4 },
-        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Skill.Firebolt.Experience", "BaseGrantAmount": 10.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.5 }
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Resource.Experience", "BaseGrantAmount": 1.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.1 },
+        { "TriggerEvent": "OnDamageDealt", "SourceAttributeTag": "Attribute.Skill.Firebolt.Experience", "BaseGrantAmount": 1.0, "bScaleWithDamageDealt": true, "DamageRatioScalar": 0.1 }
       ],
       "ComboWindows": [
         {
@@ -143,6 +213,44 @@
         "ValidPrerequisiteAbilityTags": [],
         "BypassGateMasteryAttributeTag": "Attribute.Mastery.Element.Fire",
         "BypassGateMasteryThreshold": 0.0
+      }
+    },
+    "Ability.Magic.Destruction.LightningBeam": {
+      "ExecutionType": "Channeled",
+      "RequiredMasteryAttributeTag": "Attribute.Mastery.Element.Air",
+      "Localization": {
+        "ReplicatedEntries": [
+          { "KeyTag": "Localization.Name", "Value": "Lightning Beam" },
+          { "KeyTag": "Localization.Description", "Value": "Channels a continuous arc of electricity." }
+        ]
+      },
+      "ChargeProfile": {
+        "MaxChargeTime": 5.0,
+        "bHoldAtMaxCharge": false
+      },
+      "SpatialDelivery": {
+        "MotionType": "AttachedToCaster",
+        "SpeedOrExpansionRate": 2500.0,
+        "TickInterval": 0.2,
+        "KineticImpulseOnHit": 150.0,
+        "ImpactTypeTags": [ "Impact.Type.Magic.Lightning" ],
+        "EffectsToApply": [ "Effect.Damage.InstantStrike" ]
+      },
+      "StageVisuals": {
+        "ChargingStage": {
+          "StageMontage": "/Game/Animations/GASP/Magic/AM_Cast_RightHand.AM_Cast_RightHand",
+          "MontageSectionName": "ChannelLoop",
+          "VfxEventMap": {
+            "ReplicatedEntries": [
+              {
+                "KeyTag": "Event.Stage.Tick",
+                "ValueLayer": {
+                  "VfxTags": [ "VFX.Magic.Air.LightningBeam" ]
+                }
+              }
+            ]
+          }
+        }
       }
     },
     "Ability.Magic.Destruction.Fireball_2": {

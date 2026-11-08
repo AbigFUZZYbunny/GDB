@@ -87,6 +87,7 @@ public:
     static TSharedPtr<FJsonObject> SerializeMapWrapper(const FDynamicTagFloatMapWrapper& InWrapper);
 
     static void DeserializeTagToTagMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagToTagMapWrapper& OutWrapper);
+    static void DeserializeVfxEventMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagToVFXLayerMapWrapper& OutWrapper);
 
     static void DeserializeLocalizationMap(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicLocalizationProfile& OutProfile);
     static TSharedPtr<FJsonObject> SerializeLocalizationMap(const FDynamicLocalizationProfile& InProfile);

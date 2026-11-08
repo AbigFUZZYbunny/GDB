@@ -68,6 +68,13 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Dynamic GAS|World Director")
     ADynamicCharacter* InstantiateNPC(const FGuid& NPCGuid);
 
+    // Fast-path spatial query that returns all virtual NPC GUIDs within a given radius using the internal 2D hash grid
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|World Director")
+    TArray<FGuid> GetNPCGuidsInRadius(const FVector& SearchOrigin, float SearchRadius) const;
+
+    UFUNCTION(BlueprintPure, Category = "Dynamic GAS|World Director")
+    float GetVirtualSpatialGridSize() const { return VirtualSpatialGridSize; }
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|World Director")
     float InstantiationRadius = 10000.0f; // Distance to wake up (100m)
 

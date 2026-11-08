@@ -2,11 +2,13 @@
 #include "DynamicGameplayAbility.h"
 #include "Net/UnrealNetwork.h"
 #include "AbilitySystemComponent.h"
+#include "AT_ChannelSpatialDelivery.h"
 #include "AT_WaitChargeTime.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
 #include "DynamicCharacter.h"
 #include "DynamicAudioSubsystem.h"
+#include "DynamicVFXSubsystem.h"
 #include "DynamicForceComponent.h"
 #include "DynamicGameState.h"
 #include "DynamicAttributeSet.h"
@@ -237,15 +239,26 @@ bool UDynamicGameplayAbility::EvaluateDynamicRule(const FGameplayTag& RuleTag, c
 
 void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentation& StageConfig)
 {
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+
     if (StageConfig.StageAudioTag.IsValid())
     {
         if (UWorld* World = GetWorld())
         {
             if (UDynamicAudioSubsystem* AudioSub = World->GetSubsystem<UDynamicAudioSubsystem>())
             {
-                AActor* Avatar = GetAvatarActorFromActorInfo();
                 AudioSub->PlayDynamicAudioAtLocation(StageConfig.StageAudioTag, Avatar ? Avatar->GetActorLocation() : FVector::ZeroVector, Avatar);
             }
+        }
+    }
+
+    // --- VFX: Trigger Stage Entry Event ---
+    if (Avatar && StageConfig.VfxEventMap.LocalLookupMap.Num() > 0)
+    {
+        if (UDynamicVFXSubsystem* VfxSub = Avatar->GetWorld()->GetSubsystem<UDynamicVFXSubsystem>())
+        {
+            static const FGameplayTag StageEntryTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Stage.Entry"), false);
+            VfxSub->PlayVFXLayer(StageEntryTag, StageConfig.VfxEventMap, Avatar->GetActorLocation(), Avatar->GetActorForwardVector(), 1.0f, Avatar, nullptr);
         }
     }
 
@@ -260,9 +273,9 @@ void UDynamicGameplayAbility::PlayStagePresentation(const FAbilityStagePresentat
         {
             if (UAnimMontage* Montage = Cast<UAnimMontage>(MontagePath.ResolveObject()))
             {
-                if (ADynamicCharacter* Avatar = Cast<ADynamicCharacter>(StrongThis->GetAvatarActorFromActorInfo()))
+                if (ADynamicCharacter* StrongAvatar = Cast<ADynamicCharacter>(StrongThis->GetAvatarActorFromActorInfo()))
                 {
-                    if (USkeletalMeshComponent* MeshComp = Avatar->GetMeshComponent())
+                    if (USkeletalMeshComponent* MeshComp = StrongAvatar->GetMeshComponent())
                     {
                         if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
                         {
@@ -509,12 +522,15 @@ void UDynamicGameplayAbility::ProceedWithStage(EValidationPhase Phase)
             GrantSourcePassBack(EPassBackTriggerEvent::OnCast, 1.0f);
             RefreshOpenComboWindows(0.0f, 0.0f);
             
-            if (AbilityConfig.ExecutionType == EAbilityExecutionType::Charging)
+            // If the ability has any charge time configured, go to charging.
+            if (AbilityConfig.ChargeProfile.MaxChargeTime > 0.0f || 
+                AbilityConfig.ExecutionType == EAbilityExecutionType::Charging)
             {
                 EvaluateStageEntry(EValidationPhase::Charging);
             }
             else
             {
+                // Immediate release for instant abilities
                 FinalizeRelease(1.0f);
             }
             break;
@@ -525,43 +541,83 @@ void UDynamicGameplayAbility::ProceedWithStage(EValidationPhase Phase)
             PlayStagePresentation(AbilityConfig.StageVisuals.ChargingStage);
             RefreshOpenComboWindows(0.0f, 0.0f);
 
-            ActiveChargeTask = UAT_WaitChargeTime::WaitChargeTime(this, AbilityConfig.ChargeProfile.MaxChargeTime);
-            if (ActiveChargeTask)
+            // Charging is strictly pre-release power accumulation
+            UAT_WaitChargeTime* ChargeTask = UAT_WaitChargeTime::WaitChargeTime(this, AbilityConfig.ChargeProfile.MaxChargeTime);
+            if (ChargeTask)
             {
-                ActiveChargeTask->OnChargeTick.AddDynamic(this, &UDynamicGameplayAbility::HandleTickDrain);
-                ActiveChargeTask->OnMaxChargeReached.AddDynamic(this, &UDynamicGameplayAbility::HandleMaxChargeReached);
-                ActiveChargeTask->ReadyForActivation();
+                ActiveChargeTask = ChargeTask;
+                ChargeTask->OnChargeTick.AddDynamic(this, &UDynamicGameplayAbility::HandleTickDrain);
+                ChargeTask->OnMaxChargeReached.AddDynamic(this, &UDynamicGameplayAbility::HandleMaxChargeReached);
+                ChargeTask->ReadyForActivation();
             }
             break;
         }
         case EValidationPhase::Release:
         {
             PhaseStartWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-            RefreshOpenComboWindows(0.0f, 1.0f); // FinalChargeAlpha normally injected here
+            RefreshOpenComboWindows(0.0f, 1.0f); 
             PlayStagePresentation(AbilityConfig.StageVisuals.ReleaseStage);
 
-            if (AbilityConfig.ExecutionType == EAbilityExecutionType::Interaction || AbilityConfig.InteractionConfig.InteractionActionTag.IsValid())
+            // Channeling occurs during the Release phase
+            if (AbilityConfig.ExecutionType == EAbilityExecutionType::Channeled)
             {
-                ExecuteInteractionBehavior(1.0f);
+                FName EffectorBone = AbilityConfig.InteractionConfig.CasterEffectorBone;
+
+                // Dynamic Dominance Fallback: If no bone is specified, use the template's primary weapon hand
+                if (EffectorBone.IsNone())
+                {
+                    if (ADynamicGameState* GS = GetWorld() ? GetWorld()->GetGameState<ADynamicGameState>() : nullptr)
+                    {
+                        if (ADynamicCharacter* Char = Cast<ADynamicCharacter>(GetAvatarActorFromActorInfo()))
+                        {
+                            if (UDynamicCustomizationComponent* Cust = Char->GetCustomizationComponent())
+                            {
+                                FCharacterTemplateDef TempDef;
+                                if (GS->GetCharacterTemplate(Cust->ActiveCharacterTemplateTag, TempDef))
+                                {
+                                    EffectorBone = TempDef.DominanceProfile.MainHandBone;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Final fallback
+                if (EffectorBone.IsNone()) EffectorBone = FName("hand_r");
+
+                UAT_ChannelSpatialDelivery* ChannelTask = UAT_ChannelSpatialDelivery::ChannelSpatialDelivery(this, EffectorBone);
+                if (ChannelTask)
+                {
+                    ActiveChannelTask = ChannelTask;
+                    ChannelTask->OnChannelFinished.AddDynamic(this, &UDynamicGameplayAbility::HandleChannelFinished);
+                    ChannelTask->ReadyForActivation();
+                }
             }
-            else if (AbilityConfig.ExecutionType == EAbilityExecutionType::SpatialDelivery)
+            else
             {
-                ExecuteSpatialDelivery(1.0f);
+                // Standard instantaneous releases
+                if (AbilityConfig.ExecutionType == EAbilityExecutionType::Interaction || AbilityConfig.InteractionConfig.InteractionActionTag.IsValid())
+                {
+                    ExecuteInteractionBehavior(1.0f);
+                }
+                else if (AbilityConfig.ExecutionType == EAbilityExecutionType::SpatialDelivery)
+                {
+                    ExecuteSpatialDelivery(1.0f);
+                }
+                else if (AbilityConfig.ExecutionType == EAbilityExecutionType::Chain)
+                {
+                    ExecuteChainBehavior(nullptr);
+                }
+                else if (AbilityConfig.ExecutionType == EAbilityExecutionType::Movement)
+                {
+                    ExecuteMovementBehavior();
+                }
+                
+                EnterRecoveryPhase();
             }
-            else if (AbilityConfig.ExecutionType == EAbilityExecutionType::Chain)
-            {
-                ExecuteChainBehavior(nullptr);
-            }
-            else if (AbilityConfig.ExecutionType == EAbilityExecutionType::Movement)
-            {
-                ExecuteMovementBehavior();
-            }
-            EnterRecoveryPhase();
             break;
         }
         case EValidationPhase::Recovery:
         {
-            // Triggered automatically in EnterRecoveryPhase()
             break;
         }
     }
@@ -592,6 +648,28 @@ void UDynamicGameplayAbility::HandleInputStep(FGameplayTag ActionTag, bool bIsPr
         return; 
     }
 
+    // --- VFX: QTE Step Success ---
+    if (AActor* Avatar = GetAvatarActorFromActorInfo())
+    {
+        const FAbilityStagePresentation* Pres = nullptr;
+        switch(CurrentPhase)
+        {
+            case EValidationPhase::Attempt: Pres = &AbilityConfig.StageVisuals.AttemptStage; break;
+            case EValidationPhase::Charging: Pres = &AbilityConfig.StageVisuals.ChargingStage; break;
+            case EValidationPhase::Release: Pres = &AbilityConfig.StageVisuals.ReleaseStage; break;
+            case EValidationPhase::Recovery: Pres = &AbilityConfig.StageVisuals.RecoveryStage; break;
+        }
+
+        if (Pres && Pres->VfxEventMap.LocalLookupMap.Num() > 0)
+        {
+            if (UDynamicVFXSubsystem* VfxSub = Avatar->GetWorld()->GetSubsystem<UDynamicVFXSubsystem>())
+            {
+                static const FGameplayTag SuccessTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Stage.QTE.Success"), false);
+                VfxSub->PlayVFXLayer(SuccessTag, Pres->VfxEventMap, Avatar->GetActorLocation(), Avatar->GetActorForwardVector(), 1.0f, Avatar, nullptr);
+            }
+        }
+    }
+
     CurrentInputStepIndex++;
     if (UWorld* World = GetWorld()) World->GetTimerManager().ClearTimer(TimerHandle_QTEWindow);
 
@@ -618,9 +696,31 @@ void UDynamicGameplayAbility::OnQTEWindowFailed()
     if (const FAbilityStageInputSequence* Seq = AbilityConfig.FindStageSequence(CurrentPhase))
     {
         UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+        
+        // --- VFX: QTE Stage Failure ---
+        if (AActor* Avatar = GetAvatarActorFromActorInfo())
+        {
+            const FAbilityStagePresentation* Pres = nullptr;
+            switch(CurrentPhase)
+            {
+                case EValidationPhase::Attempt: Pres = &AbilityConfig.StageVisuals.AttemptStage; break;
+                case EValidationPhase::Charging: Pres = &AbilityConfig.StageVisuals.ChargingStage; break;
+                case EValidationPhase::Release: Pres = &AbilityConfig.StageVisuals.ReleaseStage; break;
+                case EValidationPhase::Recovery: Pres = &AbilityConfig.StageVisuals.RecoveryStage; break;
+            }
+
+            if (Pres && Pres->VfxEventMap.LocalLookupMap.Num() > 0)
+            {
+                if (UDynamicVFXSubsystem* VfxSub = Avatar->GetWorld()->GetSubsystem<UDynamicVFXSubsystem>())
+                {
+                    static const FGameplayTag FailTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Stage.QTE.Failure"), false);
+                    VfxSub->PlayVFXLayer(FailTag, Pres->VfxEventMap, Avatar->GetActorLocation(), Avatar->GetActorForwardVector(), 1.0f, Avatar, nullptr);
+                }
+            }
+        }
+
         if (ASC)
         {
-            // 1. Apply Penalty Modifiers (Reciprocal Cost / Backlash)
             if (UDynamicAttributeSet* AttrSet = const_cast<UDynamicAttributeSet*>(Cast<UDynamicAttributeSet>(ASC->GetAttributeSet(UDynamicAttributeSet::StaticClass()))))
             {
                 for (const FDynamicModifierDef& Mod : Seq->PenaltyModifiers)
@@ -630,7 +730,6 @@ void UDynamicGameplayAbility::OnQTEWindowFailed()
                     AttrSet->SetDynamicAttributeValue(Mod.TargetAttributeTag, CurVal + Mod.BaseMagnitude, 0);
                 }
             }
-            // 2. Apply Penalty Effects (Debuffs, Stuns)
             for (const FGameplayTag& EffTag : Seq->PenaltyEffects)
             {
                 FGameplayEffectSpecHandle SpecHandle = UDynamicEffectFactory::CreateDynamicEffectSpec(ASC, EffTag, 1);
@@ -641,20 +740,13 @@ void UDynamicGameplayAbility::OnQTEWindowFailed()
             }
         }
 
-        // 3. Stash Parameter Penalties for downstream execution (less range, damage)
         for (const auto& ParamPair : Seq->ParameterAdjustmentsOnFailure.LocalLookupMap)
         {
             QTEParameterAdjustments.LocalLookupMap.Add(ParamPair.Key, ParamPair.Value);
         }
 
-        if (Seq->bProceedOnFailure)
-        {
-            ProceedWithStage(CurrentPhase);
-        }
-        else if (Seq->bCancelAbilityOnFailure)
-        {
-            CancelAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true);
-        }
+        if (Seq->bProceedOnFailure) ProceedWithStage(CurrentPhase);
+        else if (Seq->bCancelAbilityOnFailure) CancelAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true);
     }
 }
 
@@ -665,7 +757,7 @@ void UDynamicGameplayAbility::FinalizeRelease(float FinalChargeAlpha)
         ActiveChargeTask->EndTask();
         ActiveChargeTask = nullptr;
     }
-    EvaluateStageEntry(EValidationPhase::Release); // Will chain to ProceedWithStage(Release)
+    EvaluateStageEntry(EValidationPhase::Release); 
 }
 
 void UDynamicGameplayAbility::HandleTickDrain(float TotalElapsedTime, float DeltaTime)
@@ -703,11 +795,24 @@ void UDynamicGameplayAbility::HandleMaxChargeReached()
 
 void UDynamicGameplayAbility::InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    if (bServerApprovedActivation && CurrentPhase == EValidationPhase::Charging)
+    if (bServerApprovedActivation)
     {
-        bServerApprovedActivation = false;
-        const float MaxTime = FMath::Max(0.01f, AbilityConfig.ChargeProfile.MaxChargeTime);
-        FinalizeRelease(FMath::Clamp(RuntimeTrackedChargeTime / MaxTime, 0.1f, 1.0f));
+        if (CurrentPhase == EValidationPhase::Charging)
+        {
+            bServerApprovedActivation = false;
+            const float MaxTime = FMath::Max(0.01f, AbilityConfig.ChargeProfile.MaxChargeTime);
+            FinalizeRelease(FMath::Clamp(RuntimeTrackedChargeTime / MaxTime, 0.1f, 1.0f));
+        }
+        else if (CurrentPhase == EValidationPhase::Release && AbilityConfig.ExecutionType == EAbilityExecutionType::Channeled)
+        {
+            // If the player releases the button while channeling, cut the channel short and enter recovery
+            if (ActiveChannelTask)
+            {
+                ActiveChannelTask->EndTask();
+                ActiveChannelTask = nullptr;
+            }
+            EnterRecoveryPhase();
+        }
     }
 }
 
@@ -741,7 +846,12 @@ void UDynamicGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(TimerHandle_RecoveryWindow);
+        World->GetTimerManager().ClearTimer(TimerHandle_QTEWindow);
     }
+    
+    if (ActiveChargeTask) { ActiveChargeTask->EndTask(); ActiveChargeTask = nullptr; }
+    if (ActiveChannelTask) { ActiveChannelTask->EndTask(); ActiveChannelTask = nullptr; }
+
     bActivatedViaComboTransition = false;
     CurrentlyOpenComboTags.Reset();
     
@@ -1096,10 +1206,10 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
         Delivery.Duration <= 0.25f) // Immediate burst
     {
         // VFX: Spawn Burst Aura
-        if (VfxSub)
+        if (VfxSub && AbilityConfig.StageVisuals.ReleaseStage.VfxEventMap.LocalLookupMap.Num() > 0)
         {
             static const FGameplayTag DeliverySpawnEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Delivery.Spawn"), false);
-            VfxSub->PlayVFXLayer(DeliverySpawnEventTag, Delivery.VfxEventMap, Avatar->GetActorLocation(), FVector::UpVector, Delivery.MaxRadius * ChargeAlpha, Avatar, nullptr);
+            VfxSub->PlayVFXLayer(DeliverySpawnEventTag, AbilityConfig.StageVisuals.ReleaseStage.VfxEventMap, Avatar->GetActorLocation(), FVector::UpVector, Delivery.MaxRadius * ChargeAlpha, Avatar, nullptr);
         }
 
         TArray<FHitResult> HitResults;
@@ -1123,10 +1233,10 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
                 const float ScaledImpulse = Delivery.KineticImpulseOnHit * ChargeAlpha;
 
                 // VFX: Aura Impact on Target
-                if (VfxSub)
+                if (VfxSub && AbilityConfig.StageVisuals.ImpactStage.VfxEventMap.LocalLookupMap.Num() > 0)
                 {
                     static const FGameplayTag DeliveryImpactEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Delivery.Impact"), false);
-                    VfxSub->PlayVFXLayer(DeliveryImpactEventTag, Delivery.VfxEventMap, HitActor->GetActorLocation(), OutwardNormal, ScaledImpulse, Avatar, HitActor);
+                    VfxSub->PlayVFXLayer(DeliveryImpactEventTag, AbilityConfig.StageVisuals.ImpactStage.VfxEventMap, HitActor->GetActorLocation(), OutwardNormal, ScaledImpulse, Avatar, HitActor);
                 }
 
                 if (HitChar)
@@ -1204,10 +1314,10 @@ void UDynamicGameplayAbility::ExecuteSpatialDelivery(float ChargeAlpha)
             }
             
             // VFX: Projectile or Aura Deployed
-            if (VfxSub)
+            if (VfxSub && AbilityConfig.StageVisuals.ReleaseStage.VfxEventMap.LocalLookupMap.Num() > 0)
             {
                 static const FGameplayTag DeliverySpawnEventTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Delivery.Spawn"), false);
-                VfxSub->PlayVFXLayer(DeliverySpawnEventTag, Delivery.VfxEventMap, SpawnTM.GetLocation(), SpawnTM.GetRotation().GetForwardVector(), Delivery.MaxRadius * ChargeAlpha, Avatar, HomingTarget);
+                VfxSub->PlayVFXLayer(DeliverySpawnEventTag, AbilityConfig.StageVisuals.ReleaseStage.VfxEventMap, SpawnTM.GetLocation(), SpawnTM.GetRotation().GetForwardVector(), Delivery.MaxRadius * ChargeAlpha, Avatar, HomingTarget);
             }
 
             SpatialActor->ActivateSpatialDelivery(
@@ -1300,4 +1410,14 @@ void UDynamicGameplayAbility::UpdateConfigAtRuntime_Implementation(FDynamicAbili
 {
     AbilityConfig = NewConfigLayout;
     OnAbilityConfigChanged.Broadcast(AbilityConfig);
+}
+
+void UDynamicGameplayAbility::HandleChannelFinished(bool bCompletedSuccessfully)
+{
+    if (ActiveChannelTask)
+    {
+        ActiveChannelTask = nullptr; // Task automatically ends itself
+    }
+    // Once the channel is complete, move to recovery
+    EnterRecoveryPhase();
 }

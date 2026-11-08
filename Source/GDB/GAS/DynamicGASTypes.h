@@ -526,6 +526,16 @@ enum class EDynamicMenuStyle : uint8
     Grid        // Snapped grid matrix canvas (Skyrim perks, CK3 dynasty legacies)
 };
 
+UENUM(BlueprintType)
+enum class EVfxShapeType : uint8
+{
+    Point,      // Standard impacts, sparkles, localized explosions
+    Cone,       // Sprays, breath attacks (Fire breath, acid spray)
+    Beam,       // Laser beams, lightning chains, holy rays
+    Trail,      // Weapon trails, projectile wakes
+    Area        // Flat ground decals, magic circles, consecrated ground
+};
+
 // ============================================================================
 // LOCALIZATION & DICTIONARY MAP WRAPPERS
 // ============================================================================
@@ -680,7 +690,6 @@ struct FDynamicTagToTagMapWrapper
 // ============================================================================
 // NIAGARA DATA CHANNEL & DYNAMIC VFX
 // ============================================================================
-
 USTRUCT(BlueprintType)
 struct GDB_API FDynamicVFXDef
 {
@@ -708,12 +717,24 @@ struct GDB_API FDynamicVFXDef
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Color")
     bool bUseRelationshipColor = false; // Green/Blue for Ally, Red/Orange for Enemy
 
-    // --- Sizing and Duration ---
+    // --- Sizing, Duration, and Shape ---
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Shape")
+    EVfxShapeType ShapeType = EVfxShapeType::Point;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
     float BaseRadius = 100.0f;
         
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
     float MagnitudeToScaleRatio = 0.01f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Shape")
+    float BeamLength = 1000.0f; // Specifically for Ray/Beam rendering
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Shape")
+    float ConeAngle = 45.0f; // Specifically for Sprays
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
+    float SpawnRate = 100.0f; // Particle density
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX|Scale")
     EEffectDurationPolicy DurationPolicy = EEffectDurationPolicy::Instant;
@@ -742,13 +763,38 @@ struct GDB_API FDynamicVFXLayer
     TArray<FGameplayTag> VfxTags;
 };
 
+// Fixed for RPC Replication: Wrapped Map Array
+USTRUCT(BlueprintType)
+struct GDB_API FTagVFXLayerPair
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGameplayTag KeyTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDynamicVFXLayer ValueLayer;
+};
+
 USTRUCT(BlueprintType)
 struct GDB_API FDynamicTagToVFXLayerMapWrapper
 {
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic VFX")
-    TMap<FGameplayTag, FDynamicVFXLayer> EventMap;
+    TArray<FTagVFXLayerPair> ReplicatedEntries;
+
+    UPROPERTY(NotReplicated)
+    TMap<FGameplayTag, FDynamicVFXLayer> LocalLookupMap;
+
+    void SyncMapFromChangesArray()
+    {
+        LocalLookupMap.Empty(ReplicatedEntries.Num());
+        for (const FTagVFXLayerPair& Pair : ReplicatedEntries)
+        {
+            LocalLookupMap.Add(Pair.KeyTag, Pair.ValueLayer);
+        }
+    }
 };
 
 // ============================================================================
@@ -1967,15 +2013,12 @@ struct FAbilityStagePresentation
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
     float GaspKinematicBlendWeight = 0.85f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
-    FGameplayTag StageVfxCueTag;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
     FGameplayTag StageAudioTag;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
-    FGameplayTag StageVfxTag; // Replacing StageVfxCueTag to route through NDC
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
 };
 
 USTRUCT(BlueprintType)
@@ -2508,8 +2551,9 @@ struct FDynamicAttributeDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
     bool bDoesReplicate = true;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS")
+
+    // Base color representation for spells, glows, UI, and Niagara emitters associated with this attribute
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Presentation")
     FLinearColor BaseColorTint = FLinearColor::White;
 };
 
@@ -3273,7 +3317,11 @@ struct FDynamicDamageTypeDef
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage")
     FString DevComment = TEXT("");
-};
+
+    // Event-driven VFX layer map for light impacts, heavy impacts, staggers, and overpowers
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic Damage|VFX")
+    FDynamicTagToVFXLayerMapWrapper VfxEventMap;
+};  
 
 USTRUCT(BlueprintType)
 struct FStructureMaterialRequirement
@@ -5890,11 +5938,10 @@ struct FDynamicRelationshipMetricEntry
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Social")
     FGameplayTag MetricTag;
 
-    // Upgraded from uint8 to uint16 for fractional precision on important thresholds
+    // Upgraded from uint16 to int32 for Blueprint compatibility while retaining packed precision
     UPROPERTY()
-    uint16 PackedValue = 32768;
+    int32 PackedValue = 32768;
 
-    // Exact unquantized value for authoritative calculations
     UPROPERTY(NotReplicated)
     float ExactValue = 0.0f;
 };
@@ -6110,9 +6157,9 @@ struct FDynamicNeedStateItem : public FFastArraySerializerItem
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float LocalExactValue = 100.0f;
 
-    // Upgraded to uint16 to prevent desyncs on slowly shifting decay curves
+    // Upgraded to int32
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
-    uint16 PackedCurrentValue = 65535;
+    int32 PackedCurrentValue = 65535;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dynamic GAS|Needs")
     float ShiftRatePerHour = 0.0f;

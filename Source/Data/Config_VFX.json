@@ -18,24 +18,56 @@
       "PrimaryColor": { "R": 0.1, "G": 0.8, "B": 0.2, "A": 1.0 },
       "BaseRadius": 400.0,
       "DurationPolicy": "HasDuration"
-    }
-  },
-  "AbilityMasterRegistry": {
-    "Ability.Magic.Restoration.HealingRain": {
-      "ExecutionType": "SpatialDelivery",
-      "SpatialDelivery": {
-        "MotionType": "StationaryGround",
-        "ShapeBehavior": "ExpandOut",
-        "ApplicationType": "PassiveWhileIn",
-        "Duration": 15.0,
-        "VfxEventMap": {
-          "EventMap": {
-            "Event.Delivery.Spawn": {
-              "VfxTags": [ "VFX.Magic.Aura.Heal" ]
-            }
-          }
-        }
-      }
+    },
+    "VFX.Magic.Fire.Explosion": {
+      "VfxTag": "VFX.Magic.Fire.Explosion",
+      "DataChannelName": "NDC_Spells",
+      "PayloadTypeID": 1,
+      "bUseAttributeColor": true,
+      "ColorAttributeTag": "Attribute.Mastery.Element.Fire",
+      "ShapeType": "Point",
+      "BaseRadius": 200.0,
+      "MagnitudeToScaleRatio": 0.75,
+      "DurationPolicy": "Instant",
+      "ReactivityEventTag": "Event.Magic.Ignite",
+      "LawAndOrderActionTag": "Action.Combat.MagicAttack",
+      "ReactivityRadius": 350.0
+    },
+    "VFX.Magic.Holy.Beam": {
+      "VfxTag": "VFX.Magic.Holy.Beam",
+      "DataChannelName": "NDC_Beams",
+      "PayloadTypeID": 2,
+      "bUseRelationshipColor": true,
+      "PrimaryColor": { "R": 1.0, "G": 0.9, "B": 0.2, "A": 1.0 },
+      "ShapeType": "Beam",
+      "BeamLength": 2500.0,
+      "BaseRadius": 50.0,
+      "MagnitudeToScaleRatio": 0.1,
+      "DurationPolicy": "HasDuration"
+    },
+    "VFX.Magic.Frost.Blizzard": {
+      "VfxTag": "VFX.Magic.Frost.Blizzard",
+      "DataChannelName": "NDC_AreaEffects",
+      "PayloadTypeID": 3,
+      "PrimaryColor": { "R": 0.6, "G": 0.8, "B": 1.0, "A": 1.0 },
+      "ShapeType": "Area",
+      "BaseRadius": 1500.0,
+      "SpawnRate": 300.0,
+      "DurationPolicy": "HasDuration",
+      "ReactivityEventTag": "Event.Magic.Freeze",
+      "ReactivityRadius": 1500.0
+    },
+    "VFX.Magic.Air.LightningBeam": {
+      "VfxTag": "VFX.Magic.Air.LightningBeam",
+      "DataChannelName": "NDC_Beams",
+      "PayloadTypeID": 3,
+      "bUseAttributeColor": true,
+      "ColorAttributeTag": "Attribute.Mastery.Element.Air",
+      "ShapeType": "Beam",
+      "BeamLength": 2500.0,
+      "DurationPolicy": "HasDuration",
+      "ReactivityEventTag": "Event.Magic.Shock",
+      "LawAndOrderActionTag": "Action.Combat.MagicAttack"
     }
   }
 }

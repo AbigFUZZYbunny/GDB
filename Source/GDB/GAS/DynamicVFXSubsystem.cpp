@@ -6,9 +6,17 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
-void UDynamicVFXSubsystem::Initialize(FSubsystemCollectionBase& Collection) { Super::Initialize(Collection); }
-void UDynamicVFXSubsystem::Deinitialize() { Super::Deinitialize(); }
+void UDynamicVFXSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+    Super::Initialize(Collection);
+}
+
+void UDynamicVFXSubsystem::Deinitialize()
+{
+    Super::Deinitialize();
+}
 
 void UDynamicVFXSubsystem::PlayVFXLayer(
     FGameplayTag EventTag,
@@ -19,13 +27,27 @@ void UDynamicVFXSubsystem::PlayVFXLayer(
     AActor* InstigatorActor,
     AActor* HitTargetActor)
 {
+    UpdateChanneledVFXLayer(FGuid(), EventTag, VfxEventMap, Location, Location, Normal, Magnitude, InstigatorActor, HitTargetActor);
+}
+
+void UDynamicVFXSubsystem::UpdateChanneledVFXLayer(
+    FGuid ChannelID,
+    FGameplayTag EventTag,
+    const FDynamicTagToVFXLayerMapWrapper& VfxEventMap,
+    const FVector& StartLocation,
+    const FVector& EndLocation,
+    const FVector& Normal,
+    float Magnitude,
+    AActor* InstigatorActor,
+    AActor* HitTargetActor)
+{
     if (!EventTag.IsValid()) return;
 
-    if (const FDynamicVFXLayer* Layer = VfxEventMap.EventMap.Find(EventTag))
+    if (const FDynamicVFXLayer* Layer = VfxEventMap.LocalLookupMap.Find(EventTag))
     {
         for (const FGameplayTag& VfxTag : Layer->VfxTags)
         {
-            PlayDynamicVFX(VfxTag, Location, Normal, Magnitude, InstigatorActor, HitTargetActor);
+            PlayDynamicVFX(VfxTag, ChannelID, StartLocation, EndLocation, Normal, Magnitude, InstigatorActor, HitTargetActor);
         }
     }
 }
@@ -64,7 +86,9 @@ FLinearColor UDynamicVFXSubsystem::ResolveDynamicColor(const FDynamicVFXDef& Vfx
 
 void UDynamicVFXSubsystem::PlayDynamicVFX(
     FGameplayTag VfxTag, 
-    const FVector& Location, 
+    FGuid ChannelID,
+    const FVector& StartLocation, 
+    const FVector& EndLocation,
     const FVector& Normal, 
     float Magnitude, 
     AActor* InstigatorActor,
@@ -82,8 +106,8 @@ void UDynamicVFXSubsystem::PlayDynamicVFX(
     const FLinearColor ResolvedColor = ResolveDynamicColor(*VfxDef, InstigatorActor, HitTargetActor);
     const float ScaledRadius = VfxDef->BaseRadius + (Magnitude * VfxDef->MagnitudeToScaleRatio);
 
-    // 1. GAMEPLAY & LAW REACTIVITY (Server Authority Only)
-    if (InstigatorActor && InstigatorActor->HasAuthority())
+    // Reactivity is only evaluated on discrete impacts (ChannelID is empty) or first frames to prevent tick spam
+    if (!ChannelID.IsValid() && InstigatorActor && InstigatorActor->HasAuthority())
     {
         if (VfxDef->LawAndOrderActionTag.IsValid())
         {
@@ -115,7 +139,8 @@ void UDynamicVFXSubsystem::PlayDynamicVFX(
                 FCollisionShape Sphere = FCollisionShape::MakeSphere(VfxDef->ReactivityRadius * ScaledRadius);
                 FCollisionQueryParams Params(SCENE_QUERY_STAT(VfxReactivitySweep), false, InstigatorActor);
 
-                if (World->OverlapMultiByChannel(Overlaps, Location, FQuat::Identity, ECC_Pawn, Sphere, Params))
+                // Use the EndLocation for AoE blasts at the end of a beam
+                if (World->OverlapMultiByChannel(Overlaps, EndLocation, FQuat::Identity, ECC_Pawn, Sphere, Params))
                 {
                     for (const FOverlapResult& Overlap : Overlaps) ApplyEventToActor(Overlap.GetActor());
                 }
@@ -127,16 +152,17 @@ void UDynamicVFXSubsystem::PlayDynamicVFX(
         }
     }
 
-    // 2. VISUAL PRESENTATION (Client / Multicast)
     if (World->GetNetMode() != NM_DedicatedServer)
     {
         UNiagaraSystem* LoadedFallback = VfxDef->FallbackSystem.LoadSynchronous();
-        float VfxDuration = (VfxDef->DurationPolicy == EEffectDurationPolicy::Instant) ? 0.0f : 5.0f; // Could pull from active effect duration if needed
+        const float VfxDuration = (VfxDef->DurationPolicy == EEffectDurationPolicy::Instant) ? 0.0f : 5.0f;
         
         PushToNiagaraDataChannel(
             VfxDef->DataChannelName,
             VfxDef->PayloadTypeID,
-            Location,
+            ChannelID,
+            StartLocation,
+            EndLocation,
             Normal,
             ScaledRadius,
             VfxDuration,
@@ -147,19 +173,15 @@ void UDynamicVFXSubsystem::PlayDynamicVFX(
 }
 
 void UDynamicVFXSubsystem::PushToNiagaraDataChannel_Implementation(
-    FName ChannelName, int32 PayloadTypeID, const FVector& Location, const FVector& Normal, float ScaledRadius, float Duration, FLinearColor Color, UNiagaraSystem* FallbackSystem)
+    FName ChannelName, int32 PayloadTypeID, FGuid ChannelID, const FVector& StartLocation, const FVector& EndLocation, const FVector& Normal, float ScaledRadius, float Duration, FLinearColor Color, UNiagaraSystem* FallbackSystem)
 {
     if (ChannelName.IsNone() || !FallbackSystem)
     {
-        if (FallbackSystem)
+        if (FallbackSystem && !ChannelID.IsValid()) // Only spawn fallback if it's a discrete impact, avoid spawning 60 times a second for channels
         {
-            UNiagaraComponent* NC = UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), FallbackSystem, Location, Normal.Rotation(), FVector(ScaledRadius / 100.0f));
-            if (NC)
-            {
-                NC->SetColorParameter(FName("PrimaryColor"), Color);
-            }
+            UNiagaraComponent* NC = UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), FallbackSystem, EndLocation, Normal.Rotation(), FVector(ScaledRadius / 100.0f));
+            if (NC) NC->SetColorParameter(FName("PrimaryColor"), Color);
         }
         return;
     }
-    // Blueprint Native Event implemented in editor using UNiagaraDataChannelLibrary::WriteToNiagaraDataChannel
 }

@@ -6,6 +6,7 @@
 #include "DynamicBuildingSubsystem.h"
 #include "AbilitySystemComponent.h"
 #include "DynamicQuestComponent.h"
+#include "DynamicWorldDirectorSubsystem.h"
 #include "DynamicContainerComponent.h"
 #include "DynamicGASManagerComponent.h"
 #include "DynamicLogicEvaluator.h"
@@ -82,29 +83,10 @@ static void BroadcastLanguageExposureAcoustic(
     const float MaxQueryRadiusSq = FMath::Square(MaxQueryRadius);
     const FVector SpeakerLoc = Speaker->GetActorLocation();
 
-    // OPTIMIZATION: Query the existing O(1) 2D Spatial Hash Grid to eliminate massive physics sweeps
-    const float GridSize = Director->VirtualSpatialGridSize;
-    const FIntPoint CenterCell(
-        FMath::FloorToInt(SpeakerLoc.X / GridSize),
-        FMath::FloorToInt(SpeakerLoc.Y / GridSize)
-    );
+    // OPTIMIZATION: Query the 2D Spatial Hash Grid via the public subsystem method
+    const TArray<FGuid> CandidateGuids = Director->GetNPCGuidsInRadius(SpeakerLoc, MaxQueryRadius);
 
-    // If MaxQueryRadius spills into adjacent spatial buckets, calculate expansion
-    const int32 SearchRange = FMath::CeilToInt(MaxQueryRadius / GridSize);
-    
-    TSet<FGuid> CandidateGuids;
-    for (int32 X = -SearchRange; X <= SearchRange; ++X)
-    {
-        for (int32 Y = -SearchRange; Y <= SearchRange; ++Y)
-        {
-            if (const TSet<FGuid>* Bucket = Director->VirtualNPCSpatialHash.Find(CenterCell + FIntPoint(X, Y)))
-            {
-                CandidateGuids.Append(*Bucket);
-            }
-        }
-    }
-
-    // Include localized players who might not be inside the VirtualNPC hash
+    // Include local player characters
     TArray<AActor*> LocalListeners;
     for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
     {
@@ -114,7 +96,7 @@ static void BroadcastLanguageExposureAcoustic(
         }
     }
 
-    // Convert GUIDs back to active physical actors (virtualized actors cannot hear acoustics)
+    // Resolve active NPCs from candidate GUIDs via GameState O(1) registry
     for (const FGuid& NpcGuid : CandidateGuids)
     {
         if (ADynamicCharacter* NpcActor = GS->FindCharacterByGuid(NpcGuid))

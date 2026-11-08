@@ -125,7 +125,7 @@ void UDynamicForceComponent::ApplyHitReactionLocal(uint8 LimbId, const FName& Bo
         }
         else if (CharacterOwner->IsLocallyControlled())
         {
-            return;
+            return; // Predictively handled
         }
 
         if (USkeletalMeshComponent* MeshComp = CharacterOwner->GetMeshComponent())
@@ -157,19 +157,12 @@ void UDynamicForceComponent::ApplyHitReactionLocal(uint8 LimbId, const FName& Bo
                 ImpulseMagnitude
             );
         }
+
+        // VFX Impact Execution (Fixed signature: passing FGuid() for ChannelID, and HitLocation for both Start and End)
         if (UDynamicVFXSubsystem* VfxSub = World->GetSubsystem<UDynamicVFXSubsystem>())
         {
-            ADynamicGameState* DynamicGS = World->GetGameState<ADynamicGameState>();
-            if (DynamicGS)
-            {
-                const FPhysicsCalculationSettings& Settings = DynamicGS->GetCalculationSettings();
-                
-                // Route the VFX Tag based on the active Impact Reaction Rule
-                // For a robust system, you would iterate the ImpactTypeTags mapped to the hit
-                // Here, we grab a default fallback for demonstration
-                FGameplayTag BoundVfxTag = FGameplayTag::RequestGameplayTag(TEXT("VFX.Impact.Physical.Crushing"), false);
-                VfxSub->PlayDynamicVFX(BoundVfxTag, HitLocation, HitNormal, ImpulseMagnitude, Owner, nullptr);
-            }
+            static const FGameplayTag BoundVfxTag = FGameplayTag::RequestGameplayTag(TEXT("VFX.Impact.Physical.Crushing"), false);
+            VfxSub->PlayDynamicVFX(BoundVfxTag, FGuid(), HitLocation, HitLocation, HitNormal, ImpulseMagnitude, Owner, nullptr);
         }
     }
 }

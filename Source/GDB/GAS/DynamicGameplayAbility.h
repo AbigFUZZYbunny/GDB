@@ -110,13 +110,19 @@ private:
     FTimerHandle TimerHandle_RecoveryWindow;
 
     UPROPERTY()
-    TObjectPtr<UAT_WaitChargeTime> ActiveChargeTask;
+    TObjectPtr<class UAT_WaitChargeTime> ActiveChargeTask;
+
+    UPROPERTY()
+    TObjectPtr<class UAT_ChannelSpatialDelivery> ActiveChannelTask;
+
     float LastComboEvalTime = -1.0f;
     
     int32 CurrentInputStepIndex = 0;
     FTimerHandle TimerHandle_QTEWindow;
     bool bIsAwaitingQTE = false;
 
-    // Stores any parameter penalties accrued if a combo is failed but allowed to proceed
     FDynamicTagFloatMapWrapper QTEParameterAdjustments;
+
+    UFUNCTION()
+    void HandleChannelFinished(bool bCompletedSuccessfully);
 };

@@ -3124,3 +3124,39 @@ void UDynamicDataSerializer::DeserializeTagToTagMapWrapper(const TSharedPtr<FJso
     }
     OutWrapper.SyncMapFromChangesArray();
 }
+
+void UDynamicDataSerializer::DeserializeVfxEventMapWrapper(const TSharedPtr<FJsonObject>& InObject, const FString& FieldName, FDynamicTagToVFXLayerMapWrapper& OutWrapper)
+{
+    OutWrapper.ReplicatedEntries.Empty();
+    if (!InObject.IsValid() || !InObject->HasField(FieldName)) return;
+    
+    TSharedPtr<FJsonObject> MapSection = InObject->GetObjectField(FieldName);
+    if (!MapSection.IsValid()) return;
+
+    if (MapSection->HasField(TEXT("EventMap")))
+    {
+        TSharedPtr<FJsonObject> EventMapObj = MapSection->GetObjectField(TEXT("EventMap"));
+        for (const auto& Pair : EventMapObj->Values)
+        {
+            FGameplayTag KeyTag = FGameplayTag::RequestGameplayTag(FName(*Pair.Key), false);
+            if (!KeyTag.IsValid()) continue;
+
+            TSharedPtr<FJsonObject> LayerObj = Pair.Value->AsObject();
+            if (!LayerObj.IsValid()) continue;
+
+            FTagVFXLayerPair NewPair;
+            NewPair.KeyTag = KeyTag;
+            
+            if (LayerObj->HasField(TEXT("VfxTags")))
+            {
+                for (const auto& TagVal : LayerObj->GetArrayField(TEXT("VfxTags")))
+                {
+                    FGameplayTag VfxTag = FGameplayTag::RequestGameplayTag(FName(*TagVal->AsString()), false);
+                    if (VfxTag.IsValid()) NewPair.ValueLayer.VfxTags.Add(VfxTag);
+                }
+            }
+            OutWrapper.ReplicatedEntries.Add(NewPair);
+        }
+    }
+    OutWrapper.SyncMapFromChangesArray();
+}

@@ -375,3 +375,39 @@ void UDynamicWorldDirectorSubsystem::UnregisterActiveNPC(ADynamicCharacter* NPC)
         }
     }
 }
+
+TArray<FGuid> UDynamicWorldDirectorSubsystem::GetNPCGuidsInRadius(const FVector& SearchOrigin, float SearchRadius) const
+{
+    TArray<FGuid> OutGuids;
+    if (SearchRadius <= 0.0f || VirtualSpatialGridSize <= 0.0f) return OutGuids;
+
+    const FIntPoint CenterCell(
+        FMath::FloorToInt(SearchOrigin.X / VirtualSpatialGridSize),
+        FMath::FloorToInt(SearchOrigin.Y / VirtualSpatialGridSize)
+    );
+
+    const int32 CellRange = FMath::CeilToInt(SearchRadius / VirtualSpatialGridSize);
+    const float SearchRadiusSq = FMath::Square(SearchRadius);
+
+    for (int32 X = -CellRange; X <= CellRange; ++X)
+    {
+        for (int32 Y = -CellRange; Y <= CellRange; ++Y)
+        {
+            if (const TSet<FGuid>* Bucket = VirtualNPCSpatialHash.Find(CenterCell + FIntPoint(X, Y)))
+            {
+                for (const FGuid& CandidateGuid : *Bucket)
+                {
+                    if (const FVirtualNPCRecord* Record = VirtualNPCRegistry.Find(CandidateGuid))
+                    {
+                        if (FVector::DistSquared(SearchOrigin, Record->WorldLocation) <= SearchRadiusSq)
+                        {
+                            OutGuids.Add(CandidateGuid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return OutGuids;
+}
